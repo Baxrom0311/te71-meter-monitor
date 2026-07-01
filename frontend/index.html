@@ -1,0 +1,1121 @@
+<!doctype html>
+<html
+  lang="uz"
+  class="layout-navbar-fixed layout-menu-fixed layout-compact"
+  dir="ltr"
+  data-skin="default"
+  data-assets-path="assets/"
+  data-template="vertical-menu-template"
+  data-bs-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>Meter Monitor — Toshelectroapparat</title>
+  <link rel="icon" type="image/x-icon" href="assets/img/favicon/favicon.ico" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet" />
+
+  <!-- BoxIcons -->
+  <link rel="stylesheet" href="assets/vendor/fonts/iconify-icons.css" />
+
+  <!-- Sneat Core CSS (Bootstrap 5 + theme) -->
+  <link rel="stylesheet" href="assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css" />
+  <link rel="stylesheet" href="assets/vendor/css/core.css" />
+  <link rel="stylesheet" href="assets/css/demo.css" />
+  <link rel="stylesheet" href="assets/vendor/libs/apex-charts/apex-charts.css" />
+
+  <!-- Helpers must be before config -->
+  <script src="assets/vendor/js/helpers.js"></script>
+  <script src="assets/js/config.js"></script>
+
+  <style>
+    /* ── Meter-specific overrides ─────────────────────────────── */
+
+    /* Status badge */
+    .ws-live  { color: var(--bs-success) !important; }
+    .ws-dead  { color: var(--bs-secondary) !important; }
+
+    /* Metric display */
+    .metric-big { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
+    .metric-sm  { font-size: 1.1rem;  font-weight: 700; }
+    .metric-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); }
+    .metric-unit  { font-size: .7rem; color: var(--bs-secondary-color); }
+
+    /* Phase cells */
+    .phase-cell { text-align: center; }
+    .phase-cell .phase-v { font-size: 1rem; font-weight: 700; }
+    .phase-cell .phase-i { font-size: .75rem; color: var(--bs-secondary-color); }
+
+    /* Voltage color states */
+    .v-ok   { color: var(--bs-success) !important; }
+    .v-warn { color: var(--bs-warning) !important; }
+    .v-bad  { color: var(--bs-danger)  !important; }
+    .v-na   { color: var(--bs-secondary-color) !important; }
+
+    /* Device grid */
+    #devices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); gap: 1rem; }
+
+    /* Alert left-border colors */
+    .alert-border-offline     { border-left: 3px solid var(--bs-secondary) !important; }
+    .alert-border-undervoltage{ border-left: 3px solid var(--bs-danger)    !important; }
+    .alert-border-overvoltage { border-left: 3px solid var(--bs-warning)   !important; }
+    .alert-border-frequency   { border-left: 3px solid var(--bs-info)      !important; }
+
+    /* OTA list row */
+    .ota-row td { vertical-align: middle; }
+
+    /* Pulse animation for live dot */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .pulse { animation: pulse 2s infinite; }
+
+    /* Chart modal */
+    .chart-modal-body { min-height: 300px; }
+
+    @media (max-width: 480px) {
+      #devices-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+<!-- Layout wrapper -->
+<div class="layout-wrapper layout-content-navbar">
+  <div class="layout-container">
+
+    <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+    <aside id="layout-menu" class="layout-menu menu-vertical menu">
+
+      <div class="app-brand demo">
+        <a href="#" class="app-brand-link">
+          <span class="app-brand-logo demo me-2">
+            <!-- Lightning bolt icon for electricity -->
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 2L4.09 12.96C3.74 13.41 3.96 14 4.5 14H11L10 22L19.91 11.04C20.26 10.59 20.04 10 19.5 10H13L13 2Z" fill="currentColor" class="text-primary"/>
+            </svg>
+          </span>
+          <span class="app-brand-text demo menu-text fw-bold">MeterMon</span>
+        </a>
+        <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
+          <i class="icon-base bx bx-chevron-left"></i>
+        </a>
+      </div>
+
+      <div class="menu-inner-shadow"></div>
+
+      <ul class="menu-inner py-1">
+        <li class="menu-header small">
+          <span class="menu-header-text">Asosiy</span>
+        </li>
+
+        <li class="menu-item active">
+          <a href="#section-overview" class="menu-link" onclick="scrollTo('#section-overview')">
+            <i class="menu-icon icon-base bx bx-home-circle"></i>
+            <div>Dashboard</div>
+          </a>
+        </li>
+        <li class="menu-item">
+          <a href="#section-devices" class="menu-link" onclick="scrollTo('#section-devices')">
+            <i class="menu-icon icon-base bx bx-chip"></i>
+            <div>Qurilmalar</div>
+            <div class="badge text-bg-primary rounded-pill ms-auto" id="sidebar-device-count">0</div>
+          </a>
+        </li>
+        <li class="menu-item">
+          <a href="#section-alerts" class="menu-link" onclick="scrollTo('#section-alerts')">
+            <i class="menu-icon icon-base bx bx-bell"></i>
+            <div>Ogohlantirishlar</div>
+            <div class="badge text-bg-danger rounded-pill ms-auto" id="sidebar-alert-count" style="display:none">0</div>
+          </a>
+        </li>
+
+        <li class="menu-header small">
+          <span class="menu-header-text">Boshqaruv</span>
+        </li>
+
+        <li class="menu-item">
+          <a href="#section-ota" class="menu-link" onclick="scrollTo('#section-ota')">
+            <i class="menu-icon icon-base bx bx-upload"></i>
+            <div>OTA Yangilash</div>
+          </a>
+        </li>
+      </ul>
+    </aside>
+    <!-- / Sidebar -->
+
+    <!-- ═══════════════════ MAIN PAGE ═══════════════════ -->
+    <div class="layout-page">
+
+      <!-- ─── Navbar ─── -->
+      <nav class="layout-navbar container-xxl navbar-detached navbar navbar-expand-xl align-items-center bg-navbar-theme" id="layout-navbar">
+
+        <!-- Mobile menu toggle -->
+        <div class="layout-menu-toggle navbar-nav align-items-xl-center me-4 me-xl-0 d-xl-none">
+          <a class="nav-item nav-link px-0 me-xl-6" href="javascript:void(0)">
+            <i class="icon-base bx bx-menu icon-md"></i>
+          </a>
+        </div>
+
+        <div class="navbar-nav-right d-flex align-items-center justify-content-between w-100" id="navbar-collapse">
+          <!-- Left: title -->
+          <span class="fw-semibold text-heading d-none d-md-block">Elektr Hisoblagich Monitoring Tizimi</span>
+
+          <!-- Right: WS status + refresh -->
+          <ul class="navbar-nav flex-row align-items-center ms-auto">
+            <li class="nav-item me-3">
+              <span id="ws-badge" class="badge bg-label-secondary">
+                <span class="pulse bx bx-radio-circle-marked me-1"></span>
+                Ulanmoqda…
+              </span>
+            </li>
+            <li class="nav-item">
+              <button class="btn btn-sm btn-outline-secondary" onclick="refresh()" title="Yangilash">
+                <i class="bx bx-refresh"></i>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </nav>
+      <!-- / Navbar -->
+
+      <!-- ─── Content ─── -->
+      <div class="content-wrapper">
+        <div class="container-xxl flex-grow-1 container-p-y">
+
+          <!-- ══ 1. OVERVIEW STATS ══ -->
+          <div id="section-overview">
+            <div class="row g-4 mb-4">
+
+              <div class="col-lg col-md-4 col-sm-6">
+                <div class="card card-border-shadow-primary h-100">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2 pb-1">
+                      <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-primary">
+                          <i class="icon-base bx bx-devices icon-lg"></i>
+                        </span>
+                      </div>
+                      <h4 class="ms-1 mb-0" id="stat-total">—</h4>
+                    </div>
+                    <p class="mb-1">Jami qurilmalar</p>
+                    <p class="mb-0 text-body-secondary small">Barcha ESP32 lar</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg col-md-4 col-sm-6">
+                <div class="card card-border-shadow-success h-100">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2 pb-1">
+                      <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-success">
+                          <i class="icon-base bx bx-wifi icon-lg"></i>
+                        </span>
+                      </div>
+                      <h4 class="ms-1 mb-0 text-success" id="stat-online">—</h4>
+                    </div>
+                    <p class="mb-1">Online</p>
+                    <p class="mb-0 text-body-secondary small">Faol qurilmalar</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg col-md-4 col-sm-6">
+                <div class="card card-border-shadow-secondary h-100">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2 pb-1">
+                      <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-secondary">
+                          <i class="icon-base bx bx-wifi-off icon-lg"></i>
+                        </span>
+                      </div>
+                      <h4 class="ms-1 mb-0" id="stat-offline">—</h4>
+                    </div>
+                    <p class="mb-1">Offline</p>
+                    <p class="mb-0 text-body-secondary small">Javob bermayotgan</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg col-md-4 col-sm-6">
+                <div class="card card-border-shadow-danger h-100">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2 pb-1">
+                      <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-danger">
+                          <i class="icon-base bx bx-error-alt icon-lg"></i>
+                        </span>
+                      </div>
+                      <h4 class="ms-1 mb-0 text-danger" id="stat-alerts">—</h4>
+                    </div>
+                    <p class="mb-1">Ogohlantirishlar</p>
+                    <p class="mb-0 text-body-secondary small">Aktiv xatolar</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-lg col-md-4 col-sm-6">
+                <div class="card card-border-shadow-warning h-100">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2 pb-1">
+                      <div class="avatar me-3">
+                        <span class="avatar-initial rounded bg-label-warning">
+                          <i class="icon-base bx bx-bolt-circle icon-lg"></i>
+                        </span>
+                      </div>
+                      <h4 class="ms-1 mb-0 text-warning" id="stat-energy">—</h4>
+                    </div>
+                    <p class="mb-1">Jami energiya</p>
+                    <p class="mb-0 text-body-secondary small">kWh (bugun)</p>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /row stats -->
+          </div>
+
+          <!-- ══ 2. DEVICES ══ -->
+          <div id="section-devices" class="mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+              <h5 class="mb-0">
+                <i class="bx bx-chip me-2 text-primary"></i>Qurilmalar
+              </h5>
+              <!-- Filters -->
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button class="btn btn-sm btn-outline-secondary" id="filter-online-btn" onclick="toggleOnlineFilter()">
+                  <i class="bx bx-wifi me-1"></i>Faqat Online
+                </button>
+                <select class="form-select form-select-sm" id="filter-type" onchange="applyFilters()" style="width:auto">
+                  <option value="">Barcha tur</option>
+                  <option value="TE71">TE71 (1-faza)</option>
+                  <option value="TE73">TE73 (3-faza)</option>
+                </select>
+                <input type="text" class="form-control form-control-sm" id="filter-group" placeholder="Guruh…" oninput="applyFilters()" style="width:120px">
+                <button class="btn btn-sm btn-secondary" onclick="clearFilters()">
+                  <i class="bx bx-x"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="devices-grid">
+              <div class="text-center py-4 text-body-secondary">
+                <i class="bx bx-loader-alt bx-spin icon-lg mb-2"></i><br>Yuklanmoqda…
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ 3. ALERTS ══ -->
+          <div id="section-alerts" class="mb-4">
+            <div class="card">
+              <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="mb-0">
+                  <i class="bx bx-bell me-2 text-danger"></i>Ogohlantirishlar
+                </h5>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearAllAlerts()">
+                  <i class="bx bx-trash me-1"></i>Barchasini tozalash
+                </button>
+              </div>
+              <div class="card-body p-0">
+                <div id="alerts-list" class="p-3">
+                  <div class="text-center py-3 text-body-secondary">
+                    <i class="bx bx-loader-alt bx-spin"></i> Yuklanmoqda…
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ 4. OTA ══ -->
+          <div id="section-ota" class="mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="mb-0">
+                  <i class="bx bx-upload me-2 text-primary"></i>OTA Firmware Yangilash
+                </h5>
+              </div>
+              <div class="card-body">
+                <div class="row g-3 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label">Versiya</label>
+                    <input type="text" class="form-control" id="ota-version" placeholder="2.1.0" style="width:130px">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Firmware .bin</label>
+                    <input type="file" class="form-control" id="ota-file" accept=".bin">
+                  </div>
+                  <div class="col-auto">
+                    <button class="btn btn-primary" onclick="uploadFirmware()">
+                      <i class="bx bx-upload me-1"></i>Yuklash
+                    </button>
+                  </div>
+                  <div class="col-auto">
+                    <span id="ota-status" class="text-body-secondary small"></span>
+                  </div>
+                </div>
+
+                <!-- Firmware list -->
+                <div id="ota-fw-list">
+                  <p class="text-body-secondary small mb-0">Firmware versiyalar yuklanmoqda…</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /container-xxl -->
+
+        <!-- Footer -->
+        <footer class="content-footer footer bg-footer-theme">
+          <div class="container-xxl d-flex flex-wrap justify-content-between py-2 flex-md-row flex-column">
+            <div class="mb-2 mb-md-0 text-body-secondary small">
+              Meter Monitor — Toshelectroapparat &copy; 2025
+            </div>
+            <div class="text-body-secondary small">
+              <span id="footer-ws-status">WebSocket: Ulanmoqda…</span>
+            </div>
+          </div>
+        </footer>
+      </div><!-- /content-wrapper -->
+
+    </div><!-- /layout-page -->
+  </div><!-- /layout-container -->
+
+  <div class="layout-overlay layout-menu-toggle"></div>
+</div>
+<!-- / Layout wrapper -->
+
+
+<!-- ═══════════════════ MODALS ═══════════════════ -->
+
+<!-- Edit Device Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Qurilmani tahrirlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-device-id">
+        <div class="mb-3"><label class="form-label">Nomi</label>
+          <input class="form-control" id="edit-name" placeholder="1-bino 3-qavat hisoblagich"></div>
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label">Bino</label>
+            <input class="form-control" id="edit-building" placeholder="Asosiy bino"></div>
+          <div class="col-3"><label class="form-label">Qavat</label>
+            <input class="form-control" id="edit-floor" placeholder="3"></div>
+          <div class="col-3"><label class="form-label">Xona</label>
+            <input class="form-control" id="edit-room" placeholder="304"></div>
+        </div>
+        <div class="mt-3"><label class="form-label">Guruh</label>
+          <input class="form-control" id="edit-group" placeholder="A-korpus"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Bekor</button>
+        <button class="btn btn-primary" onclick="saveDevice()">Saqlash</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart Modal -->
+<div class="modal fade" id="chartModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="chartModalTitle">Graf</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body chart-modal-body">
+        <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+          <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-secondary" onclick="loadChart(currentChartId,6)">6s</button>
+            <button class="btn btn-primary" onclick="loadChart(currentChartId,24)">24s</button>
+            <button class="btn btn-outline-secondary" onclick="loadChart(currentChartId,72)">3kun</button>
+          </div>
+          <select class="form-select form-select-sm" id="chart-metric" onchange="redrawChart()" style="width:auto">
+            <option value="voltage_l1">Kuchlanish L1 (V)</option>
+            <option value="current_l1">Tok L1 (A)</option>
+            <option value="power_w">Quvvat (W)</option>
+            <option value="energy_kwh">Energiya (kWh)</option>
+            <option value="frequency">Chastota (Hz)</option>
+          </select>
+          <span id="chart-loading" class="text-body-secondary small ms-2" style="display:none">
+            <i class="bx bx-loader-alt bx-spin"></i> Yuklanmoqda…
+          </span>
+        </div>
+        <div id="apex-chart" style="min-height:280px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OTA Push Modal -->
+<div class="modal fade" id="otaPushModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">OTA Firmware Yuborish</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ota-push-device-id">
+        <div class="alert alert-primary d-flex align-items-center mb-3">
+          <i class="bx bx-info-circle me-2"></i>
+          <div id="ota-push-device-name">—</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Firmware versiyasi</label>
+          <select class="form-select" id="ota-push-version">
+            <option value="">Versiya tanlang…</option>
+          </select>
+        </div>
+        <p class="text-body-secondary small">ESP32 firmware yuklab qayta ishga tushadi.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Bekor</button>
+        <button class="btn btn-warning" onclick="sendOtaPush()">
+          <i class="bx bx-upload me-1"></i>Yuborish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="bs-toast toast toast-placement-ex m-4 position-fixed bottom-0 end-0" role="alert" id="liveToast" style="z-index:9999">
+  <div class="toast-header">
+    <i class="bx bx-bell me-2" id="toast-icon"></i>
+    <div class="me-auto fw-semibold" id="toast-title">Xabar</div>
+    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+  </div>
+  <div class="toast-body" id="toast-body">—</div>
+</div>
+
+
+<!-- ═══════════════════ JS ═══════════════════ -->
+<script src="assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.js"></script>
+<script src="assets/vendor/js/bootstrap.js"></script>
+<script src="assets/vendor/js/menu.js"></script>
+<script src="assets/vendor/libs/apex-charts/apexcharts.js"></script>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const WS_URL = `ws://${location.host}/ws`;
+const REFRESH = 15;  // polling interval (seconds, when WS dead)
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let devices    = {};  // id → device
+let readings   = {};  // id → latest reading
+let alerts     = [];  // alert list
+let otaVersions = [];
+let wsAlive    = false;
+let countdown  = REFRESH;
+let filterOnline = false;
+let filterType   = '';
+let filterGroup  = '';
+
+// Chart
+let currentChartId   = null;
+let currentChartData = [];
+let apexChart        = null;
+
+// Bootstrap modal instances (lazy)
+let editModal, chartModal, otaPushModal, toastEl;
+
+// ── Init Bootstrap components ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  editModal    = new bootstrap.Modal(document.getElementById('editModal'));
+  chartModal   = new bootstrap.Modal(document.getElementById('chartModal'));
+  otaPushModal = new bootstrap.Modal(document.getElementById('otaPushModal'));
+  toastEl      = new bootstrap.Toast(document.getElementById('liveToast'), {delay:3000});
+
+  document.getElementById('chartModal').addEventListener('hidden.bs.modal', () => {
+    if (apexChart) { apexChart.destroy(); apexChart = null; }
+  });
+
+  connectWS();
+  refresh();
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  const ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    wsAlive = true;
+    setWsBadge(true);
+  };
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+
+    if (msg.type === 'snapshot') {
+      const devList = msg.devices || [];
+      devList.forEach(d => { devices[d.id] = d; readings[d.id] = d.latest_reading || null; });
+      alerts = msg.alerts || [];
+      renderDevicesGrid();
+      renderAlerts();
+      updateStatsLocal(devList, alerts);
+      fetchSummary();
+    }
+    else if (msg.type === 'reading') {
+      readings[msg.device_id] = msg.data;
+      if (devices[msg.device_id]) devices[msg.device_id].last_seen = Math.floor(Date.now()/1000);
+      renderCard(msg.device_id);
+    }
+    else if (msg.type === 'status') {
+      if (devices[msg.device_id]) devices[msg.device_id].online = msg.online;
+      renderCard(msg.device_id);
+      fetchSummary();
+    }
+    else if (msg.type === 'alert') {
+      const a = msg.alert;
+      if (a) {
+        alerts = alerts.filter(x => x.id !== a.id);
+        if (!a.cleared) alerts.unshift(a);
+        renderAlerts();
+        updateAlertCount();
+      }
+    }
+    else if (msg.type === 'device_online') {
+      const d = msg.device;
+      if (d) { devices[d.id] = d; renderDevicesGrid(); toast(`Yangi qurilma: ${d.name||d.id}`, 'ok'); }
+    }
+  };
+
+  ws.onclose = () => {
+    wsAlive = false;
+    setWsBadge(false);
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setWsBadge(live) {
+  const b = document.getElementById('ws-badge');
+  const f = document.getElementById('footer-ws-status');
+  if (live) {
+    b.className = 'badge bg-label-success ws-live';
+    b.innerHTML = '<i class="bx bx-radio-circle-marked pulse me-1"></i>Real-time';
+    if (f) f.textContent = 'WebSocket: Ulangan ✓';
+  } else {
+    b.className = 'badge bg-label-secondary ws-dead';
+    b.innerHTML = '<i class="bx bx-radio-circle me-1"></i>Offline';
+    if (f) f.textContent = 'WebSocket: Ulanmagan';
+  }
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  try {
+    const r = await fetch(path, opts);
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const icon  = document.getElementById('toast-icon');
+  const title = document.getElementById('toast-title');
+  const body  = document.getElementById('toast-body');
+  icon.className  = type === 'ok' ? 'bx bx-check-circle me-2 text-success' : 'bx bx-error me-2 text-danger';
+  title.textContent = type === 'ok' ? 'Muvaffaqiyat' : 'Xato';
+  body.textContent  = msg;
+  toastEl.show();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function vClass(v) {
+  if (v == null || isNaN(v)) return 'v-na';
+  if (v < 180 || v > 260)   return 'v-bad';
+  if (v < 195 || v > 253)   return 'v-warn';
+  return 'v-ok';
+}
+function fmt(v, d = 1) { return v == null ? '—' : Number(v).toFixed(d); }
+function timeAgo(ts) {
+  if (!ts) return '?';
+  const s = Math.floor(Date.now()/1000) - ts;
+  if (s < 5)    return 'hozir';
+  if (s < 60)   return s + 's oldin';
+  if (s < 3600) return Math.floor(s/60) + 'min oldin';
+  return Math.floor(s/3600) + 'soat oldin';
+}
+function scrollTo(id) {
+  document.querySelector(id)?.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Build device card (Bootstrap 5 + Sneat) ───────────────────────────────────
+function buildCard(dev, r) {
+  r = r || {};
+  const isTE73 = dev.meter_type === 'TE73';
+  const online = dev.online;
+  const id     = dev.id;
+
+  const loc = [dev.building, dev.floor ? dev.floor+'q' : null, dev.room ? dev.room+'x' : null]
+               .filter(Boolean).join(' · ');
+
+  // Phase section
+  let phaseHtml = '';
+  if (isTE73) {
+    phaseHtml = `<div class="row g-2 mb-3">
+      ${['L1','L2','L3'].map((ph,i) => `
+      <div class="col-4">
+        <div class="bg-body-secondary rounded-2 p-2 phase-cell">
+          <div class="text-body-secondary fw-semibold" style="font-size:.7rem">${ph}</div>
+          <div class="phase-v ${vClass(r[`voltage_l${i+1}`])}">${r[`voltage_l${i+1}`]!=null?fmt(r[`voltage_l${i+1}`])+'V':'—'}</div>
+          <div class="phase-i">${r[`current_l${i+1}`]!=null?fmt(r[`current_l${i+1}`],2)+'A':'—'}</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  } else {
+    phaseHtml = `<div class="row g-2 mb-3">
+      <div class="col-6">
+        <div class="bg-body-secondary rounded-2 p-2 text-center">
+          <div class="metric-label">Kuchlanish</div>
+          <div class="metric-big ${vClass(r.voltage_l1)}">${fmt(r.voltage_l1)}</div>
+          <div class="metric-unit">Volt</div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="bg-body-secondary rounded-2 p-2 text-center">
+          <div class="metric-label">Tok</div>
+          <div class="metric-big">${fmt(r.current_l1,2)}</div>
+          <div class="metric-unit">Amper</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const relayOn = r.relay_on;
+  const relayBadge = relayOn == null
+    ? '<span class="badge bg-label-secondary">?</span>'
+    : relayOn
+      ? '<span class="badge bg-label-success">YOQIQ</span>'
+      : '<span class="badge bg-label-danger">O\'CHIQ</span>';
+
+  return `
+  <div class="card h-100 ${online?'':'opacity-60'}" id="card-${id}">
+    <div class="card-header d-flex align-items-start justify-content-between pb-2">
+      <div class="min-w-0 flex-fill me-2">
+        <h6 class="mb-1 text-truncate">${dev.name || id}</h6>
+        <p class="text-body-secondary mb-0 small text-truncate">${dev.meter_serial||id}${loc?' · '+loc:''}</p>
+      </div>
+      <div class="d-flex gap-1 flex-shrink-0">
+        <span class="badge bg-label-primary">${dev.meter_type||'?'}</span>
+        <span class="badge ${online?'bg-label-success':'bg-label-secondary'}">${online?'Online':'Offline'}</span>
+      </div>
+    </div>
+
+    <div class="card-body pt-2 pb-2">
+      ${phaseHtml}
+
+      <div class="row g-2 mb-3">
+        <div class="col-4">
+          <div class="text-center">
+            <div class="metric-label">Quvvat</div>
+            <div class="metric-sm">${fmt(r.power_w,0)}</div>
+            <div class="metric-unit">W</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="text-center">
+            <div class="metric-label">Energiya</div>
+            <div class="metric-sm">${fmt(r.energy_kwh,2)}</div>
+            <div class="metric-unit">kWh</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="text-center">
+            <div class="metric-label">Chastota</div>
+            <div class="metric-sm">${fmt(r.frequency,2)}</div>
+            <div class="metric-unit">Hz</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Relay -->
+      <div class="d-flex align-items-center justify-content-between bg-body-secondary rounded-2 px-3 py-2 mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-body-secondary small fw-semibold">RELE:</span>
+          ${relayBadge}
+        </div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-success" onclick="relayCmd('${id}','on')">Yoq</button>
+          <button class="btn btn-sm btn-danger"  onclick="relayCmd('${id}','off')">O'ch</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex gap-1 flex-wrap">
+        <button class="btn btn-sm btn-outline-primary" onclick="openChart('${id}')">
+          <i class="bx bx-line-chart me-1"></i>Graf
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="exportCSV('${id}')">
+          <i class="bx bx-download me-1"></i>CSV
+        </button>
+        <button class="btn btn-sm btn-outline-info" onclick="rebootDevice('${id}')">
+          <i class="bx bx-refresh me-1"></i>Reboot
+        </button>
+        <button class="btn btn-sm btn-outline-warning" onclick="openOtaPush('${id}')">
+          <i class="bx bx-upload me-1"></i>OTA
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="openEditModal('${id}')">
+          <i class="bx bx-edit me-1"></i>Tahrir
+        </button>
+      </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center py-2">
+      <small class="text-body-secondary">
+        <i class="bx bx-network-chart me-1"></i>${dev.ip||'?'} · v${dev.fw_version||'?'} · ${dev.baud_rate||'?'}bd
+      </small>
+      <small class="text-body-secondary">${timeAgo(dev.last_seen)}</small>
+    </div>
+  </div>`;
+}
+
+// ── Render single card ────────────────────────────────────────────────────────
+function renderCard(device_id) {
+  const dev = devices[device_id];
+  if (!dev) return;
+  const existing = document.getElementById(`card-${device_id}`);
+  if (!existing) { renderDevicesGrid(); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = buildCard(dev, readings[device_id]);
+  existing.replaceWith(tmp.firstElementChild);
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+function toggleOnlineFilter() {
+  filterOnline = !filterOnline;
+  const btn = document.getElementById('filter-online-btn');
+  btn.className = filterOnline
+    ? 'btn btn-sm btn-success'
+    : 'btn btn-sm btn-outline-secondary';
+  renderDevicesGrid();
+}
+function applyFilters() {
+  filterType  = document.getElementById('filter-type').value;
+  filterGroup = document.getElementById('filter-group').value.trim().toLowerCase();
+  renderDevicesGrid();
+}
+function clearFilters() {
+  filterOnline = false;
+  filterType = ''; filterGroup = '';
+  document.getElementById('filter-online-btn').className = 'btn btn-sm btn-outline-secondary';
+  document.getElementById('filter-type').value = '';
+  document.getElementById('filter-group').value = '';
+  renderDevicesGrid();
+}
+
+function renderDevicesGrid() {
+  const grid = document.getElementById('devices-grid');
+  let list = Object.values(devices);
+  if (filterOnline) list = list.filter(d => d.online);
+  if (filterType)   list = list.filter(d => d.meter_type === filterType);
+  if (filterGroup)  list = list.filter(d => (d.group_name||'').toLowerCase().includes(filterGroup));
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="text-center py-5 text-body-secondary"><i class="bx bx-plug icon-lg mb-2 d-block"></i>ESP32 ulashini kutmoqda…</div>';
+    return;
+  }
+  grid.innerHTML = list.map(d => `<div>${buildCard(d, readings[d.id])}</div>`).join('');
+
+  // Update sidebar badge
+  const total = Object.keys(devices).length;
+  document.getElementById('sidebar-device-count').textContent = total;
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function fetchSummary() {
+  const s = await api('/api/summary');
+  if (!s) return;
+  document.getElementById('stat-total').textContent   = s.total_devices ?? '—';
+  document.getElementById('stat-online').textContent  = s.online_count  ?? '—';
+  document.getElementById('stat-offline').textContent = s.offline_count ?? '—';
+  document.getElementById('stat-alerts').textContent  = s.active_alerts ?? '—';
+  const kwh = s.total_energy_kwh;
+  document.getElementById('stat-energy').textContent  = kwh != null ? Number(kwh).toFixed(1) : '—';
+}
+
+function updateStatsLocal(devList, alertList) {
+  document.getElementById('stat-total').textContent   = devList.length;
+  document.getElementById('stat-online').textContent  = devList.filter(d=>d.online).length;
+  document.getElementById('stat-offline').textContent = devList.filter(d=>!d.online).length;
+  updateAlertCount();
+}
+
+function updateAlertCount() {
+  const cnt = alerts.filter(a=>!a.cleared).length;
+  document.getElementById('stat-alerts').textContent = cnt;
+  const badge = document.getElementById('sidebar-alert-count');
+  badge.textContent = cnt;
+  badge.style.display = cnt > 0 ? '' : 'none';
+}
+
+// ── Fetch (polling) ───────────────────────────────────────────────────────────
+async function fetchDevices() {
+  const resp = await api('/api/devices');
+  if (!resp) return;
+  const list = resp.devices || [];
+  const latest = await Promise.all(list.map(d => api(`/api/devices/${d.id}/latest`).catch(()=>null)));
+  list.forEach((d, i) => { devices[d.id] = d; readings[d.id] = latest[i]; });
+  renderDevicesGrid();
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+const ALERT_META = {
+  offline:      { icon: 'bx-plug',             cls: 'alert-border-offline',      badge: 'bg-label-secondary', label: 'Offline' },
+  undervoltage: { icon: 'bx-arrow-from-top',   cls: 'alert-border-undervoltage', badge: 'bg-label-danger',    label: 'Kuchlanish past' },
+  overvoltage:  { icon: 'bx-bolt-circle',      cls: 'alert-border-overvoltage',  badge: 'bg-label-warning',   label: 'Kuchlanish yuqori' },
+  frequency:    { icon: 'bx-pulse',            cls: 'alert-border-frequency',    badge: 'bg-label-info',      label: 'Chastota anomaliyasi' },
+};
+
+async function fetchAlerts() {
+  const resp = await api('/api/alerts?limit=20');
+  if (!resp) return;
+  alerts = resp.alerts || [];
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alerts-list');
+  const active = alerts.filter(a => !a.cleared);
+  updateAlertCount();
+  if (!active.length) {
+    el.innerHTML = '<div class="text-center py-3 text-body-secondary"><i class="bx bx-check-circle icon-lg text-success d-block mb-1"></i>Ogohlantirishlar yo\'q</div>';
+    return;
+  }
+  el.innerHTML = active.map(a => {
+    const dt   = new Date(a.ts*1000).toLocaleString('uz-UZ');
+    const meta = ALERT_META[a.kind] || { icon:'bx-error', cls:'alert-border-overvoltage', badge:'bg-label-warning', label: a.kind };
+    const devName = devices[a.device_id]?.name || a.device_id;
+    return `<div class="d-flex align-items-center gap-3 p-3 mb-2 rounded-2 bg-body-secondary ${meta.cls}">
+      <span class="badge ${meta.badge} rounded-2 p-2">
+        <i class="bx ${meta.icon} icon-md"></i>
+      </span>
+      <div class="flex-fill min-w-0">
+        <div class="fw-semibold small text-truncate">${a.message}</div>
+        <div class="text-body-secondary" style="font-size:.7rem">${devName} · ${dt}</div>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary flex-shrink-0" onclick="clearAlert(${a.id})">
+        <i class="bx bx-x"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function clearAlert(alertId) {
+  const r = await api(`/api/alerts/${alertId}/clear`, { method:'POST' });
+  if (r?.ok) {
+    alerts = alerts.map(a => a.id === alertId ? {...a, cleared:true} : a);
+    renderAlerts();
+    toast('Ogohlantirish tozalandi', 'ok');
+  } else toast('Xato!', 'err');
+}
+
+async function clearAllAlerts() {
+  if (!confirm('Barcha ogohlantirishlarni tozalash?')) return;
+  const r = await api('/api/alerts/clear-all', { method:'POST' });
+  if (r?.ok) {
+    alerts = alerts.map(a => ({...a, cleared:true}));
+    renderAlerts();
+    toast(`${r.cleared} ta ogohlantirish tozalandi`, 'ok');
+  } else toast('Xato!', 'err');
+}
+
+// ── Relay ─────────────────────────────────────────────────────────────────────
+async function relayCmd(deviceId, action) {
+  const r = await api(`/api/devices/${deviceId}/relay`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action})
+  });
+  if (r?.ok) toast(`Rele ${action==='on'?'YOQILDI':"O'CHIRILDI"}`, 'ok');
+  else toast('Buyruq yuborilmadi!', 'err');
+}
+
+// ── Reboot ────────────────────────────────────────────────────────────────────
+async function rebootDevice(deviceId) {
+  const name = devices[deviceId]?.name || deviceId;
+  if (!confirm(`"${name}" qurilmasini qayta yuklash?`)) return;
+  const r = await api(`/api/devices/${deviceId}/reboot`, { method:'POST' });
+  if (r?.ok) toast(`Reboot buyrug'i yuborildi`, 'ok');
+  else toast('Buyruq yuborilmadi!', 'err');
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+function exportCSV(deviceId) {
+  window.open(`/api/devices/${deviceId}/export?hours=24`, '_blank');
+}
+
+// ── Chart (ApexCharts) ────────────────────────────────────────────────────────
+async function openChart(deviceId) {
+  currentChartId = deviceId;
+  const dev = devices[deviceId];
+  document.getElementById('chartModalTitle').textContent = `Graf — ${dev?.name || deviceId}`;
+  chartModal.show();
+  await loadChart(deviceId, 24);
+}
+
+async function loadChart(deviceId, hours) {
+  document.getElementById('chart-loading').style.display = '';
+  const resp = await api(`/api/devices/${deviceId}/stats?hours=${hours}`);
+  document.getElementById('chart-loading').style.display = 'none';
+  if (!resp) { toast('Ma\'lumot topilmadi', 'err'); return; }
+  currentChartData = resp.stats || [];
+  redrawChart();
+}
+
+function redrawChart() {
+  const metric = document.getElementById('chart-metric').value;
+  const labels = currentChartData.map(d => d.hour);
+  const values = currentChartData.map(d => d[metric] ?? null);
+
+  const COLOR_MAP = {
+    voltage_l1: '#696cff', current_l1: '#71dd37',
+    power_w: '#ffab00', energy_kwh: '#03c3ec', frequency: '#ff3e1d',
+  };
+  const color = COLOR_MAP[metric] || '#696cff';
+
+  if (apexChart) apexChart.destroy();
+  apexChart = new ApexCharts(document.getElementById('apex-chart'), {
+    chart: { type: 'area', height: 280, toolbar: { show: false }, animations: { enabled: false } },
+    series: [{ name: document.getElementById('chart-metric').options[document.getElementById('chart-metric').selectedIndex].text, data: values }],
+    xaxis: { categories: labels, labels: { style: { colors: '#8592a3', fontSize: '11px' }, rotate: -30 }, tickAmount: 12 },
+    yaxis: { labels: { style: { colors: '#8592a3', fontSize: '11px' } } },
+    colors: [color],
+    fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+    stroke: { width: 2 },
+    dataLabels: { enabled: false },
+    grid: { borderColor: 'rgba(255,255,255,.1)' },
+    theme: { mode: 'dark' },
+    tooltip: { theme: 'dark' },
+  });
+  apexChart.render();
+}
+
+// ── OTA Push per device ───────────────────────────────────────────────────────
+function openOtaPush(deviceId) {
+  document.getElementById('ota-push-device-id').value = deviceId;
+  const dev = devices[deviceId];
+  document.getElementById('ota-push-device-name').textContent =
+    `${dev?.name || deviceId} · Joriy: v${dev?.fw_version || '?'}`;
+  const sel = document.getElementById('ota-push-version');
+  sel.innerHTML = '<option value="">Versiya tanlang…</option>' +
+    otaVersions.map(v => `<option value="${v.version}">v${v.version} (${(v.size/1024).toFixed(0)} KB)</option>`).join('');
+  otaPushModal.show();
+}
+
+async function sendOtaPush() {
+  const deviceId = document.getElementById('ota-push-device-id').value;
+  const version  = document.getElementById('ota-push-version').value;
+  if (!version) { toast('Versiya tanlang!', 'err'); return; }
+  const r = await api(`/api/ota/push/${deviceId}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({version})
+  });
+  if (r?.ok) { otaPushModal.hide(); toast(`OTA v${version} yuborildi`, 'ok'); }
+  else toast('OTA yuborilmadi!', 'err');
+}
+
+// ── OTA Upload ────────────────────────────────────────────────────────────────
+async function uploadFirmware() {
+  const version = document.getElementById('ota-version').value.trim();
+  const file    = document.getElementById('ota-file').files[0];
+  if (!version || !file) { toast('Versiya va .bin fayl kerak!', 'err'); return; }
+  document.getElementById('ota-status').textContent = 'Yuklanmoqda…';
+  const fd = new FormData();
+  fd.append('version', version); fd.append('file', file);
+  try {
+    const r = await fetch('/api/ota/upload', { method:'POST', body:fd });
+    const j = await r.json();
+    if (j.ok) {
+      toast(`v${j.version} yuklandi!`, 'ok');
+      document.getElementById('ota-status').textContent = `v${j.version} aktiv`;
+      fetchOtaVersions();
+    } else { toast('Yuklash xato!', 'err'); document.getElementById('ota-status').textContent = ''; }
+  } catch { toast('Yuklash xato!', 'err'); document.getElementById('ota-status').textContent = ''; }
+}
+
+async function fetchOtaVersions() {
+  const resp = await api('/api/ota/list');
+  if (!resp) return;
+  otaVersions = resp.versions || [];
+  const el = document.getElementById('ota-fw-list');
+  if (!otaVersions.length) {
+    el.innerHTML = '<p class="text-body-secondary small mb-0">Hech qanday firmware yuklanmagan.</p>';
+    return;
+  }
+  el.innerHTML = `<table class="table table-sm table-hover mt-2">
+    <thead><tr><th>Versiya</th><th>Hajm</th><th>Yuklangan</th><th></th></tr></thead>
+    <tbody>${otaVersions.map(v => `<tr class="ota-row">
+      <td><span class="badge bg-label-primary">v${v.version}</span></td>
+      <td class="text-body-secondary">${(v.size/1024).toFixed(1)} KB</td>
+      <td class="text-body-secondary">${new Date(v.uploaded*1000).toLocaleDateString('uz-UZ')}</td>
+      <td><button class="btn btn-sm btn-outline-danger" onclick="deleteOta('${v.id}')"><i class="bx bx-trash"></i></button></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function deleteOta(otaId) {
+  if (!confirm('Firmwareni o\'chirish?')) return;
+  const r = await api(`/api/ota/${otaId}`, { method:'DELETE' });
+  if (r?.ok) { toast('O\'chirildi', 'ok'); fetchOtaVersions(); }
+  else toast('Xato!', 'err');
+}
+
+// ── Edit Modal ────────────────────────────────────────────────────────────────
+function openEditModal(id) {
+  const dev = devices[id];
+  if (!dev) return;
+  document.getElementById('edit-device-id').value = id;
+  document.getElementById('edit-name').value     = dev.name || '';
+  document.getElementById('edit-building').value = dev.building || '';
+  document.getElementById('edit-floor').value    = dev.floor || '';
+  document.getElementById('edit-room').value     = dev.room || '';
+  document.getElementById('edit-group').value    = dev.group_name || '';
+  editModal.show();
+}
+
+async function saveDevice() {
+  const id = document.getElementById('edit-device-id').value;
+  const body = {
+    name:       document.getElementById('edit-name').value.trim()     || undefined,
+    building:   document.getElementById('edit-building').value.trim() || undefined,
+    floor:      document.getElementById('edit-floor').value.trim()    || undefined,
+    room:       document.getElementById('edit-room').value.trim()     || undefined,
+    group_name: document.getElementById('edit-group').value.trim()    || undefined,
+  };
+  const r = await api(`/api/devices/${id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (r?.ok) {
+    Object.assign(devices[id], body);
+    editModal.hide();
+    renderCard(id);
+    toast('Saqlandi!', 'ok');
+  } else toast('Xato!', 'err');
+}
+
+// ── Polling fallback ──────────────────────────────────────────────────────────
+async function refresh() {
+  await Promise.all([fetchDevices(), fetchAlerts(), fetchSummary(), fetchOtaVersions()]);
+  countdown = REFRESH;
+}
+
+// Polling only when WS is dead
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) {
+    if (!wsAlive) refresh();
+    else countdown = REFRESH;
+  }
+}, 1000);
+</script>
+</body>
+</html>

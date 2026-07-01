@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Meter Monitor — To'liq stack
+#
+# Ishga tushirish:
+#   docker-compose up -d
+#
+# Dashboard:
+#   http://localhost:8000
+#
+# MQTT broker:
+#   localhost:1883 (TCP — ESP32 uchun)
+#   localhost:9001 (WebSocket — browser uchun, ixtiyoriy)
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MQTT Broker ─────────────────────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: meter-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"    # TCP — ESP32 ulashadi
+      - "9001:9001"    # WebSocket — browser mqtt.js uchun
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "health", "-m", "ok"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  backend:
+    image: python:3.12-slim
+    container_name: meter-backend
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt -q &&
+             uvicorn app:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./frontend:/frontend
+      - backend_data:/app/data
+      - firmware_store:/app/firmware
+    environment:
+      - DB_PATH=/app/data/meters.db
+      - OTA_DIR=/app/firmware
+      - STATIC_DIR=/frontend
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+    depends_on:
+      - mosquitto
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mqtt_data:
+  mqtt_log:
+  backend_data:
+  firmware_store:

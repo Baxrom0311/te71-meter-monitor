@@ -1,0 +1,3 @@
+# PHY kalibrasiyani o'chir — default embedded data ishlatiladi
+# Full kalibrasiya hang qiladi, shuning uchun butunlay o'chiramiz
+CONFIG_ESP32_PHY_CALIBRATION_AND_DATA_STORAGE=n
