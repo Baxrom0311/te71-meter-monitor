@@ -5,14 +5,14 @@ from sqlalchemy import text
 
 from core.config import settings
 from core.database import SessionLocal
-from services import platform
+from services import monitoring
 
 router = APIRouter()
 
 
 @router.get("/health")
 async def health():
-    return await platform.health()
+    return await monitoring.health()
 
 
 @router.get("/ready")
@@ -34,4 +34,4 @@ async def ready():
 
 @router.get("/metrics", response_class=PlainTextResponse)
 async def metrics():
-    return PlainTextResponse(await platform.metrics_text(), media_type="text/plain; version=0.0.4")
+    return PlainTextResponse(await monitoring.metrics_text(), media_type="text/plain; version=0.0.4")

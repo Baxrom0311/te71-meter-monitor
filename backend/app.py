@@ -25,7 +25,7 @@ from routers.health import router as health_router
 from routers.websocket import router as websocket_router
 from services.auth import bootstrap_admin
 from services.background import data_cleanup, offline_detector
-from services.platform import build_snapshot
+from services.monitoring import build_snapshot
 from services.websocket import ws_manager
 
 configure_logging()

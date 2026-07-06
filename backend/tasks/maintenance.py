@@ -3,8 +3,9 @@ import asyncio
 from core.celery_app import celery_app
 from core.database import init_db
 from services.audit import cleanup_old_logs_once
+from services.analytics import aggregate_hourly_stats_once
 from services.background import cleanup_old_data_once, detect_offline_devices_once
-from services.platform import aggregate_hourly_stats_once, cleanup_expired_commands_once
+from services.commands import cleanup_expired_commands_once
 
 
 async def _with_db(coro):
