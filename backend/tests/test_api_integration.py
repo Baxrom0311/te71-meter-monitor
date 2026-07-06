@@ -106,6 +106,57 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
 
+    async def test_backup_management_api_lifecycle(self) -> None:
+        admin_headers = await self._admin_headers()
+        unauthenticated = await self.client.get("/api/backups")
+        self.assertEqual(unauthenticated.status_code, 401, unauthenticated.text)
+
+        backup_result = await backup.create_backup_once("api-management-test")
+        filename = backup_result["filename"]
+
+        listed = await self.client.get("/api/backups", headers=admin_headers)
+        self.assertEqual(listed.status_code, 200, listed.text)
+        filenames = [item["filename"] for item in listed.json()["backups"]]
+        self.assertIn(filename, filenames)
+
+        downloaded = await self.client.get(f"/api/backups/download/{filename}", headers=admin_headers)
+        self.assertEqual(downloaded.status_code, 200, downloaded.text)
+        self.assertGreater(len(downloaded.content), 0)
+
+        class FakeCreateTask:
+            id = "backup-create-api-test"
+
+        class FakeCleanupTask:
+            id = "backup-cleanup-api-test"
+
+        original_create_delay = backup_routes.create_backup_task.delay
+        original_cleanup_delay = backup_routes.cleanup_old_backups_task.delay
+        backup_routes.create_backup_task.delay = lambda reason: FakeCreateTask()
+        backup_routes.cleanup_old_backups_task.delay = lambda keep_days: FakeCleanupTask()
+        try:
+            created = await self.client.post("/api/backups?reason=api-test", headers=admin_headers)
+            cleaned = await self.client.post("/api/backups/cleanup?keep_days=7", headers=admin_headers)
+        finally:
+            backup_routes.create_backup_task.delay = original_create_delay
+            backup_routes.cleanup_old_backups_task.delay = original_cleanup_delay
+
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["task_id"], "backup-create-api-test")
+        self.assertEqual(cleaned.status_code, 200, cleaned.text)
+        self.assertEqual(cleaned.json()["task_id"], "backup-cleanup-api-test")
+
+        create_audit = await self.client.get("/api/audit-logs?action=backup.create", headers=admin_headers)
+        self.assertEqual(create_audit.status_code, 200, create_audit.text)
+        self.assertEqual(create_audit.json()["audit_logs"][0]["entity_id"], "backup-create-api-test")
+
+        removed = await self.client.delete(f"/api/backups/{filename}", headers=admin_headers)
+        self.assertEqual(removed.status_code, 200, removed.text)
+        self.assertTrue(removed.json()["ok"])
+        self.assertEqual(removed.json()["filename"], filename)
+
+        missing_download = await self.client.get(f"/api/backups/download/{filename}", headers=admin_headers)
+        self.assertEqual(missing_download.status_code, 404, missing_download.text)
+
     async def test_device_ingestion_ota_commands_and_audit_over_http(self) -> None:
         admin_headers = await self._admin_headers()
 
