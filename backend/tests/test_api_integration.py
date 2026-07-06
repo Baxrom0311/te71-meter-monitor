@@ -79,6 +79,18 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(building.status_code, 200, building.text)
         building_id = building.json()["id"]
 
+        invalid_point_create = await self.client.post(
+            "/api/measurement-points",
+            headers=admin_headers,
+            json={
+                "building_id": 999999,
+                "utility_type": "water",
+                "role": "water_pressure_top",
+                "name": "Invalid point",
+            },
+        )
+        self.assertEqual(invalid_point_create.status_code, 404)
+
         point = await self.client.post(
             "/api/measurement-points",
             headers=admin_headers,
@@ -94,6 +106,12 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(point.status_code, 200, point.text)
         point_id = point.json()["id"]
+        invalid_point_parent = await self.client.put(
+            f"/api/measurement-points/{point_id}",
+            headers=admin_headers,
+            json={"parent_id": 999999},
+        )
+        self.assertEqual(invalid_point_parent.status_code, 404)
 
         provision = await self.client.post(
             "/api/devices/provisioning-tokens",

@@ -514,6 +514,35 @@ async def list_premises(building_id: int | None = None) -> dict:
     return {"premises": [_as_dict(row) for row in rows]}
 
 
+async def _validate_measurement_point_refs(
+    session,
+    *,
+    building_id: int | None = None,
+    utility_module_id: int | None = None,
+    premise_id: int | None = None,
+    parent_id: int | None = None,
+    device_id: str | None = None,
+) -> None:
+    if building_id and not await session.get(Building, building_id):
+        raise HTTPException(404, "Building topilmadi")
+    if utility_module_id:
+        utility = await session.get(BuildingUtility, utility_module_id)
+        if not utility:
+            raise HTTPException(404, "Utility topilmadi")
+        if building_id and utility.building_id != building_id:
+            raise HTTPException(422, "Utility boshqa buildingga tegishli")
+    if premise_id:
+        premise = await session.get(Premise, premise_id)
+        if not premise:
+            raise HTTPException(404, "Premise topilmadi")
+        if building_id and premise.building_id != building_id:
+            raise HTTPException(422, "Premise boshqa buildingga tegishli")
+    if parent_id and not await session.get(MeasurementPoint, parent_id):
+        raise HTTPException(404, "Parent measurement point topilmadi")
+    if device_id and not await session.get(Device, device_id):
+        raise HTTPException(404, "Qurilma topilmadi")
+
+
 async def create_measurement_point(body: MeasurementPointCreate) -> dict:
     ts = now_ts()
     point = MeasurementPoint(
@@ -534,6 +563,14 @@ async def create_measurement_point(body: MeasurementPointCreate) -> dict:
         updated_at=ts,
     )
     async with SessionLocal() as session:
+        await _validate_measurement_point_refs(
+            session,
+            building_id=body.building_id,
+            utility_module_id=body.utility_module_id,
+            premise_id=body.premise_id,
+            parent_id=body.parent_id,
+            device_id=body.device_id,
+        )
         session.add(point)
         await session.flush()
         if body.device_id:
@@ -562,6 +599,15 @@ async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) 
         point = await session.get(MeasurementPoint, point_id)
         if not point:
             raise HTTPException(404, "Measurement point topilmadi")
+        next_building_id = fields.get("building_id", point.building_id)
+        await _validate_measurement_point_refs(
+            session,
+            building_id=next_building_id,
+            utility_module_id=fields.get("utility_module_id", point.utility_module_id),
+            premise_id=fields.get("premise_id", point.premise_id),
+            parent_id=fields.get("parent_id", point.parent_id),
+            device_id=fields.get("device_id"),
+        )
         for key, value in fields.items():
             setattr(point, key, value)
         if "device_id" in fields and fields["device_id"]:
