@@ -74,9 +74,9 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _is_device_path(path: str) -> bool:
-        return path in {"/api/register", "/api/readings"} or path.startswith(
+        return path in {"/api/register", "/api/device-status"} or path.startswith(
             ("/api/status/", "/api/commands/", "/api/device-config/", "/api/ota/check/", "/api/ota/firmware/")
-        )
+        ) or path.startswith("/api/readings")
 
     @staticmethod
     def _client_key(request: Request) -> str:

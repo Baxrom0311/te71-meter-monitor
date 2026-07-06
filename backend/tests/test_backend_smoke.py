@@ -353,6 +353,9 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(security_response.headers["X-Frame-Options"], "DENY")
 
             limiter = InMemoryRateLimitMiddleware(_noop_app)
+            self.assertTrue(limiter._is_device_path("/api/device-status"))
+            self.assertTrue(limiter._is_device_path("/api/readings/batch"))
+            self.assertFalse(limiter._is_device_path("/api/devices"))
             first = await limiter.dispatch(_request(), _ok_response)
             second = await limiter.dispatch(_request(), _ok_response)
             self.assertEqual(first.status_code, 200)
