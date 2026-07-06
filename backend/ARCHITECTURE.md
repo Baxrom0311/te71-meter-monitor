@@ -1081,6 +1081,7 @@ Local development:
 - CORS `CORS_ORIGINS` env orqali boshqariladi
 - `TRUSTED_HOSTS` env orqali Host header himoyasi
 - API va ESP32 endpointlari uchun alohida rate limit
+- `MAX_REQUEST_BODY_BYTES` bilan katta payloadlardan himoya
 - Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
 - `APP_ENV=production` bo'lsa default `SECRET_KEY`, `DEVICE_API_TOKEN`, `BOOTSTRAP_ADMIN_PASSWORD`, wildcard CORS/hosts bilan backend start bo'lmaydi
 

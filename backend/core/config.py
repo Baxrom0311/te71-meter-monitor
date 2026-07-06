@@ -30,6 +30,7 @@ class Settings:
     ]
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
     device_rate_limit_per_minute: int = int(os.getenv("DEVICE_RATE_LIMIT_PER_MINUTE", "600"))
+    max_request_body_bytes: int = int(os.getenv("MAX_REQUEST_BODY_BYTES", "26214400"))
     telemetry_interval_sec: int = int(os.getenv("TELEMETRY_INTERVAL_SEC", "30"))
     status_interval_sec: int = int(os.getenv("STATUS_INTERVAL_SEC", "60"))
     command_poll_interval_sec: int = int(os.getenv("COMMAND_POLL_INTERVAL_SEC", "10"))

@@ -13,7 +13,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.config import settings
 from core.logging import configure_logging
 from core.database import init_db
-from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
+from core.middleware import (
+    InMemoryRateLimitMiddleware,
+    RequestContextMiddleware,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from routers.auth import router as auth_router
 from routers.api import router as api_router
 from routers.health import router as health_router
@@ -41,6 +46,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 app.add_middleware(

@@ -70,6 +70,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        content_length = request.headers.get("Content-Length")
+        if content_length and settings.max_request_body_bytes > 0:
+            try:
+                size = int(content_length)
+            except ValueError:
+                size = 0
+            if size > settings.max_request_body_bytes:
+                return JSONResponse(
+                    {"detail": "Request body juda katta"},
+                    status_code=413,
+                )
+        return await call_next(request)
+
+
 class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)

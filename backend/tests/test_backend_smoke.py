@@ -26,7 +26,12 @@ from core.config import settings
 from core.database import init_db
 from core.logging import JsonFormatter
 from core.metrics import reset_http_metrics
-from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
+from core.middleware import (
+    InMemoryRateLimitMiddleware,
+    RequestContextMiddleware,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from core.security import decode_access_token
 from core.database import SessionLocal
 from models.entities import Alert, Building
@@ -70,6 +75,12 @@ def _request(path: str = "/limited") -> Request:
         },
         receive=_empty_receive,
     )
+
+
+def _request_with_length(path: str, content_length: int) -> Request:
+    request = _request(path)
+    request.scope["headers"].append((b"content-length", str(content_length).encode()))
+    return request
 
 
 async def _ok_response(_: Request):
@@ -362,7 +373,9 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("meter_monitor_open_alerts", metrics)
 
         old_limit = settings.rate_limit_per_minute
+        old_body_limit = settings.max_request_body_bytes
         settings.rate_limit_per_minute = 1
+        settings.max_request_body_bytes = 10
         reset_http_metrics()
         try:
             context = RequestContextMiddleware(_noop_app)
@@ -395,6 +408,12 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(security_response.headers["X-Content-Type-Options"], "nosniff")
             self.assertEqual(security_response.headers["X-Frame-Options"], "DENY")
 
+            size_limit = RequestSizeLimitMiddleware(_noop_app)
+            too_large = await size_limit.dispatch(_request_with_length("/api/readings", 11), _ok_response)
+            self.assertEqual(too_large.status_code, 413)
+            accepted = await size_limit.dispatch(_request_with_length("/api/readings", 10), _ok_response)
+            self.assertEqual(accepted.status_code, 200)
+
             limiter = InMemoryRateLimitMiddleware(_noop_app)
             self.assertTrue(limiter._is_device_path("/api/device-status"))
             self.assertTrue(limiter._is_device_path("/api/readings/batch"))
@@ -405,6 +424,7 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(second.status_code, 429)
         finally:
             settings.rate_limit_per_minute = old_limit
+            settings.max_request_body_bytes = old_body_limit
 
     async def test_production_runtime_validation(self) -> None:
         old_env = settings.app_env
