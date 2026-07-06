@@ -434,7 +434,22 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         old_cors = settings.cors_origins
         old_hosts = settings.trusted_hosts
         old_log_format = settings.log_format
+        old_command_ttl = settings.command_ttl_sec
+        old_gas_max = settings.gas_pressure_max_bar
+        old_gas_min = settings.gas_pressure_min_bar
         try:
+            settings.app_env = "development"
+            settings.command_ttl_sec = 0
+            with self.assertRaises(RuntimeError):
+                settings.validate_runtime()
+            settings.command_ttl_sec = old_command_ttl
+            settings.gas_pressure_min_bar = 5.0
+            settings.gas_pressure_max_bar = 1.0
+            with self.assertRaises(RuntimeError):
+                settings.validate_runtime()
+            settings.gas_pressure_min_bar = old_gas_min
+            settings.gas_pressure_max_bar = old_gas_max
+
             settings.app_env = "production"
             settings.secret_key = "change-me"
             settings.device_api_token = "change-device-token"
@@ -462,6 +477,9 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             settings.cors_origins = old_cors
             settings.trusted_hosts = old_hosts
             settings.log_format = old_log_format
+            settings.command_ttl_sec = old_command_ttl
+            settings.gas_pressure_min_bar = old_gas_min
+            settings.gas_pressure_max_bar = old_gas_max
 
 
 if __name__ == "__main__":

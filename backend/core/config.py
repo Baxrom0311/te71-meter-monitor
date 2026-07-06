@@ -74,10 +74,34 @@ class Settings:
         return self.app_env in {"prod", "production"}
 
     def validate_runtime(self) -> None:
-        if not self.is_production:
-            return
-        insecure_values = {"", "change-me", "change-me-in-production", "change-device-token", "Admin123", "Admin1234"}
         errors = []
+        if self.log_format not in {"json", "text"}:
+            errors.append("LOG_FORMAT faqat 'json' yoki 'text' bo'lishi kerak")
+        if self.rate_limit_per_minute < 0 or self.device_rate_limit_per_minute < 0:
+            errors.append("Rate limit qiymatlari manfiy bo'lmasligi kerak")
+        if self.max_request_body_bytes < 0:
+            errors.append("MAX_REQUEST_BODY_BYTES manfiy bo'lmasligi kerak")
+        if self.command_ttl_sec < 1:
+            errors.append("COMMAND_TTL_SEC kamida 1 bo'lishi kerak")
+        if self.command_max_pending_per_device < 1:
+            errors.append("COMMAND_MAX_PENDING_PER_DEVICE kamida 1 bo'lishi kerak")
+        if self.water_pressure_min_bar < 0 or self.gas_pressure_min_bar < 0:
+            errors.append("Bosim minimal qiymatlari manfiy bo'lmasligi kerak")
+        if self.gas_pressure_max_bar <= self.gas_pressure_min_bar:
+            errors.append("GAS_PRESSURE_MAX_BAR min qiymatdan katta bo'lishi kerak")
+        if self.frequency_max <= self.frequency_min:
+            errors.append("FREQUENCY_MAX min qiymatdan katta bo'lishi kerak")
+        if self.voltage_max <= self.voltage_min:
+            errors.append("VOLTAGE_MAX min qiymatdan katta bo'lishi kerak")
+        if self.backup_keep_days < 1 or self.audit_keep_days < 1 or self.data_keep_days < 1:
+            errors.append("Retention kunlari kamida 1 bo'lishi kerak")
+
+        if not self.is_production:
+            if errors:
+                raise RuntimeError("; ".join(errors))
+            return
+
+        insecure_values = {"", "change-me", "change-me-in-production", "change-device-token", "Admin123", "Admin1234"}
         if self.secret_key in insecure_values or len(self.secret_key) < 32:
             errors.append("SECRET_KEY production uchun kuchli va kamida 32 belgili bo'lishi kerak")
         if self.device_api_token in insecure_values or len(self.device_api_token) < 24:
@@ -88,8 +112,6 @@ class Settings:
             errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
         if self.trusted_hosts == ["*"]:
             errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
-        if self.log_format not in {"json", "text"}:
-            errors.append("LOG_FORMAT faqat 'json' yoki 'text' bo'lishi kerak")
         if errors:
             raise RuntimeError("; ".join(errors))
 

@@ -1055,6 +1055,7 @@ Docker production stack:
 - `postgres:16-alpine`
 - `redis:7-alpine`
 - backend image `backend/Dockerfile` orqali build qilinadi
+- production sozlamalari uchun `backend/.env.example` template sifatida ishlatiladi
 - FastAPI, Celery worker, Celery Beat va Flower bir xil backend image'dan ishlaydi
 - backend `DATABASE_URL=postgresql+asyncpg://...` orqali ulanadi
 - backend start vaqtida `alembic upgrade head` ishlaydi
@@ -1084,6 +1085,7 @@ Local development:
 - `MAX_REQUEST_BODY_BYTES` bilan katta payloadlardan himoya
 - Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
 - `APP_ENV=production` bo'lsa default `SECRET_KEY`, `DEVICE_API_TOKEN`, `BOOTSTRAP_ADMIN_PASSWORD`, wildcard CORS/hosts bilan backend start bo'lmaydi
+- runtime validation log format, rate limit, command TTL, retention va sensor threshold qiymatlarini ham tekshiradi
 
 ### Reliability
 
