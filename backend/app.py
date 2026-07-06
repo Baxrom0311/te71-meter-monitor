@@ -19,9 +19,10 @@ from core.middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from routers.auth import router as auth_router
 from routers.alerts import router as alerts_router
-from routers.api import router as api_router
+from routers.audit import router as audit_router
+from routers.auth import router as auth_router
+from routers.backups import router as backups_router
 from routers.buildings import router as buildings_router
 from routers.commands import router as commands_router
 from routers.devices import router as devices_router
@@ -81,8 +82,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500,
     )
 
-app.include_router(api_router)
 app.include_router(alerts_router)
+app.include_router(audit_router)
+app.include_router(backups_router)
 app.include_router(buildings_router)
 app.include_router(devices_router)
 app.include_router(commands_router)

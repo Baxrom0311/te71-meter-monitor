@@ -17,7 +17,7 @@ import httpx
 from app import app
 from core.config import settings
 from core.database import init_db
-from routers import api as api_routes
+from routers import backups as backup_routes
 from services import backup
 from services.auth import bootstrap_admin
 
@@ -70,15 +70,15 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         class FakeRestoreTask:
             id = "restore-task-api-test"
 
-        original_delay = api_routes.restore_backup_task.delay
-        api_routes.restore_backup_task.delay = lambda restore_filename, confirm: FakeRestoreTask()
+        original_delay = backup_routes.restore_backup_task.delay
+        backup_routes.restore_backup_task.delay = lambda restore_filename, confirm: FakeRestoreTask()
         try:
             queued = await self.client.post(
                 f"/api/backups/restore/{filename}?confirm=RESTORE",
                 headers=admin_headers,
             )
         finally:
-            api_routes.restore_backup_task.delay = original_delay
+            backup_routes.restore_backup_task.delay = original_delay
         self.assertEqual(queued.status_code, 200, queued.text)
         self.assertEqual(queued.json()["task_id"], "restore-task-api-test")
         self.assertEqual(queued.json()["status"], "queued")
