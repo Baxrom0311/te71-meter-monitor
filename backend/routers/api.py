@@ -319,6 +319,16 @@ async def create_device_command(device_id: str, body: CommandCreate, admin: dict
     return result
 
 
+@router.get("/commands/admin/list")
+async def list_commands(
+    device_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    _: dict = Depends(require_admin),
+):
+    return await platform.list_commands(device_id, status, limit)
+
+
 @router.get("/commands/{device_id}")
 async def get_commands(device_id: str, x_device_token: Optional[str] = Header(None)):
     await platform.verify_device_access(device_id, x_device_token)

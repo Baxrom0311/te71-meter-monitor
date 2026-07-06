@@ -160,6 +160,24 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
 
         token = await platform.rotate_device_token("esp32-water-top-01")
         await platform.verify_device_access("esp32-water-top-01", token["device_token"])
+        command = await platform.create_command("esp32-water-top-01", "reboot")
+        self.assertIn("expires_at", command)
+        pending = await platform.pending_commands("esp32-water-top-01")
+        self.assertEqual(pending["commands"][0]["attempts"], 1)
+        self.assertEqual(pending["commands"][0]["max_attempts"], 3)
+        await platform.ack_command(command["cmd_id"], "ok")
+        listed = await platform.list_commands("esp32-water-top-01", "acked")
+        self.assertEqual(listed["commands"][0]["status"], "acked")
+
+        old_ttl = settings.command_ttl_sec
+        settings.command_ttl_sec = -1
+        try:
+            expired = await platform.create_command("esp32-water-top-01", "ota_check")
+            self.assertEqual((await platform.pending_commands("esp32-water-top-01"))["commands"], [])
+            expired_list = await platform.list_commands("esp32-water-top-01", "expired")
+            self.assertEqual(expired_list["commands"][0]["id"], expired["cmd_id"])
+        finally:
+            settings.command_ttl_sec = old_ttl
 
         mismatch = UploadFile(file=BytesIO(b"bad-firmware"), filename="bad.bin")
         await platform.ota_upload(

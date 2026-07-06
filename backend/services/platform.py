@@ -1223,18 +1223,33 @@ async def create_relay_command(device_id: str, action_value: str) -> dict:
 
 
 async def create_command(device_id: str, action: str, params: dict | None = None) -> dict:
+    ts = now_ts()
     command = Command(
         device_id=device_id,
         action=action,
         param=json.dumps(params, ensure_ascii=False) if params else None,
         status="pending",
-        created=now_ts(),
+        created=ts,
+        expires_at=ts + settings.command_ttl_sec,
+        max_attempts=3,
     )
     async with SessionLocal() as session:
+        pending_count = await session.scalar(
+            select(func.count()).select_from(Command).where(
+                and_(
+                    Command.device_id == device_id,
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                    (Command.expires_at.is_(None)) | (Command.expires_at > ts),
+                )
+            )
+        ) or 0
+        if pending_count >= settings.command_max_pending_per_device:
+            raise HTTPException(429, "Bu qurilma uchun pending command limiti oshib ketdi")
         session.add(command)
         await session.commit()
         await session.refresh(command)
-    return {"ok": True, "cmd_id": command.id}
+    return {"ok": True, "cmd_id": command.id, "expires_at": command.expires_at}
 
 
 async def reboot_device(device_id: str) -> dict:
@@ -1242,21 +1257,55 @@ async def reboot_device(device_id: str) -> dict:
 
 
 async def pending_commands(device_id: str) -> dict:
+    ts = now_ts()
     async with SessionLocal() as session:
+        await session.execute(
+            update(Command)
+            .where(
+                and_(
+                    Command.device_id == device_id,
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                    Command.expires_at.is_not(None),
+                    Command.expires_at <= ts,
+                )
+            )
+            .values(status="expired", ack_result="expired")
+        )
         rows = (
             await session.scalars(
                 select(Command)
-                .where(and_(Command.device_id == device_id, Command.acked.is_(None)))
+                .where(
+                    and_(
+                        Command.device_id == device_id,
+                        Command.acked.is_(None),
+                        Command.status.in_(["pending", "sent"]),
+                        (Command.expires_at.is_(None)) | (Command.expires_at > ts),
+                        Command.attempts < Command.max_attempts,
+                    )
+                )
                 .order_by(Command.id)
                 .limit(5)
             )
         ).all()
         for row in rows:
-            if row.sent is None:
-                row.sent = now_ts()
-                row.status = "sent"
+            row.sent = ts
+            row.status = "sent"
+            row.attempts = (row.attempts or 0) + 1
         await session.commit()
-    return {"commands": [{"id": row.id, "action": row.action, "param": row.param} for row in rows]}
+    return {
+        "commands": [
+            {
+                "id": row.id,
+                "action": row.action,
+                "param": row.param,
+                "expires_at": row.expires_at,
+                "attempts": row.attempts,
+                "max_attempts": row.max_attempts,
+            }
+            for row in rows
+        ]
+    }
 
 
 async def ack_command(command_id: int, result: str) -> dict:
@@ -1268,6 +1317,36 @@ async def ack_command(command_id: int, result: str) -> dict:
             command.status = "acked"
             await session.commit()
     return {"ok": True}
+
+
+async def list_commands(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
+    stmt = select(Command).order_by(desc(Command.id)).limit(limit)
+    if device_id:
+        stmt = stmt.where(Command.device_id == device_id)
+    if status:
+        stmt = stmt.where(Command.status == status)
+    async with SessionLocal() as session:
+        rows = (await session.scalars(stmt)).all()
+    return {"commands": [_as_dict(row) for row in rows]}
+
+
+async def cleanup_expired_commands_once() -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        result = await session.execute(
+            update(Command)
+            .where(
+                and_(
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                    Command.expires_at.is_not(None),
+                    Command.expires_at <= ts,
+                )
+            )
+            .values(status="expired", ack_result="expired")
+        )
+        await session.commit()
+    return {"ok": True, "expired_commands": result.rowcount or 0}
 
 
 async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int) -> dict:
@@ -1437,7 +1516,9 @@ async def health() -> dict:
         dev_count = await session.scalar(select(func.count()).select_from(Device)) or 0
         reading_count = await session.scalar(select(func.count()).select_from(Reading)) or 0
         alert_count = await session.scalar(select(func.count()).select_from(Alert).where(Alert.cleared.is_(False))) or 0
-        command_count = await session.scalar(select(func.count()).select_from(Command).where(Command.status == "pending")) or 0
+        command_count = await session.scalar(
+            select(func.count()).select_from(Command).where(Command.status.in_(["pending", "sent"]))
+        ) or 0
     return {
         "status": "ok",
         "ts": now_ts(),

@@ -617,9 +617,19 @@ Building analytics quyidagilarni qaytaradi:
 
 ```text
 POST /api/devices/{device_id}/commands
+GET  /api/commands/admin/list
 GET  /api/commands/{device_id}
 POST /api/commands/{command_id}/ack
 ```
+
+Command lifecycle:
+
+- admin command yaratganda `expires_at` qo'yiladi
+- ESP32 command poll qilganda `sent`, `attempts`, `status=sent` yangilanadi
+- ESP32 ack yuborsa `status=acked`
+- `COMMAND_TTL_SEC` tugagan command `expired` bo'ladi
+- `COMMAND_MAX_PENDING_PER_DEVICE` bitta qurilmaga osilib qolgan commandlar limitini himoya qiladi
+- Celery `maintenance.expire_commands` har 60 sekundda expired commandlarni yopadi
 
 ### OTA
 

@@ -28,6 +28,10 @@ celery_app.conf.update(
             "task": "maintenance.cleanup_old_data",
             "schedule": 86400.0,
         },
+        "expire-commands-every-minute": {
+            "task": "maintenance.expire_commands",
+            "schedule": 60.0,
+        },
         "cleanup-old-backups-daily": {
             "task": "backup.cleanup_old",
             "schedule": 86400.0,

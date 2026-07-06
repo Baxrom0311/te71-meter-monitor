@@ -77,7 +77,10 @@ async def _ensure_sqlite_columns(conn) -> None:
         },
         "commands": {
             "status": "VARCHAR(32) DEFAULT 'pending'",
+            "expires_at": "INTEGER",
             "sent": "INTEGER",
+            "attempts": "INTEGER DEFAULT 0",
+            "max_attempts": "INTEGER DEFAULT 3",
         },
         "firmware": {
             "hardware_version": "VARCHAR(64)",
@@ -118,6 +121,7 @@ async def _ensure_sqlite_columns(conn) -> None:
         "idx_alerts_device_kind_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_device_kind_ts ON alerts (device_id, kind, ts)",
         "idx_alerts_building_cleared_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_building_cleared_ts ON alerts (building_id, cleared, ts)",
         "idx_commands_device_status": "CREATE INDEX IF NOT EXISTS idx_commands_device_status ON commands (device_id, status, id)",
+        "idx_commands_expires_status": "CREATE INDEX IF NOT EXISTS idx_commands_expires_status ON commands (expires_at, status)",
         "idx_firmware_active_uploaded": "CREATE INDEX IF NOT EXISTS idx_firmware_active_uploaded ON firmware (active, uploaded)",
     }
     for statement in indexes.values():

@@ -32,6 +32,8 @@ class Settings:
     telemetry_interval_sec: int = int(os.getenv("TELEMETRY_INTERVAL_SEC", "30"))
     status_interval_sec: int = int(os.getenv("STATUS_INTERVAL_SEC", "60"))
     command_poll_interval_sec: int = int(os.getenv("COMMAND_POLL_INTERVAL_SEC", "10"))
+    command_ttl_sec: int = int(os.getenv("COMMAND_TTL_SEC", "3600"))
+    command_max_pending_per_device: int = int(os.getenv("COMMAND_MAX_PENDING_PER_DEVICE", "20"))
     device_api_token: str = os.getenv("DEVICE_API_TOKEN", "")
     celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
     celery_result_backend: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")

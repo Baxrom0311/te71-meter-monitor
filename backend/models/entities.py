@@ -193,7 +193,6 @@ class Alert(Base):
         Index("idx_alerts_device_kind_ts", "device_id", "kind", "ts"),
         Index("idx_alerts_building_cleared_ts", "building_id", "cleared", "ts"),
     )
-    __table_args__ = (Index("idx_alerts_cleared_ts", "cleared", "ts"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     device_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -211,7 +210,10 @@ class Alert(Base):
 
 class Command(Base):
     __tablename__ = "commands"
-    __table_args__ = (Index("idx_commands_device_status", "device_id", "status", "id"),)
+    __table_args__ = (
+        Index("idx_commands_device_status", "device_id", "status", "id"),
+        Index("idx_commands_expires_status", "expires_at", "status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     device_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -219,9 +221,12 @@ class Command(Base):
     param: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     created: Mapped[int | None] = mapped_column(Integer)
+    expires_at: Mapped[int | None] = mapped_column(Integer)
     sent: Mapped[int | None] = mapped_column(Integer)
     acked: Mapped[int | None] = mapped_column(Integer)
     ack_result: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
 
 class Firmware(Base):
