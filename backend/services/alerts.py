@@ -1,11 +1,12 @@
 from fastapi import HTTPException
-from sqlalchemy import and_, desc, inspect, or_, select, update
+from sqlalchemy import and_, inspect, or_, select, update
 
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
 from models.entities import Alert, AlertNotification, AlertRule, Building
 from models.schemas import AlertRuleCreate, AlertRuleUpdate, MeterReading
+from repositories.alerts import AlertNotificationRepository, AlertRepository, AlertRuleRepository
 from services.websocket import ws_manager
 
 ALERT_RULE_KINDS = {
@@ -262,36 +263,21 @@ async def check_alerts(session, reading: MeterReading) -> None:
 
 
 async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int) -> dict:
-    stmt = select(Alert).where(Alert.cleared.is_(cleared)).order_by(desc(Alert.ts)).limit(limit)
-    if device_id:
-        stmt = stmt.where(Alert.device_id == device_id)
-    if kind:
-        stmt = stmt.where(Alert.kind == kind)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await AlertRepository(session).list_filtered(device_id, kind, cleared, limit)
     return {"alerts": [_as_dict(row) for row in rows]}
 
 
 async def list_alert_notifications(status: str | None = None, limit: int = 100) -> dict:
-    stmt = select(AlertNotification).order_by(desc(AlertNotification.created_at)).limit(limit)
-    if status:
-        stmt = stmt.where(AlertNotification.status == status)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await AlertNotificationRepository(session).list_filtered(status, limit)
     return {"notifications": [_as_dict(row) for row in rows], "total": len(rows)}
 
 
 async def dispatch_pending_notifications_once(limit: int = 100) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        rows = (
-            await session.scalars(
-                select(AlertNotification)
-                .where(AlertNotification.status == "pending")
-                .order_by(AlertNotification.created_at)
-                .limit(limit)
-            )
-        ).all()
+        rows = await AlertNotificationRepository(session).pending(limit)
         for row in rows:
             row.status = "sent"
             row.sent_at = ts
@@ -315,6 +301,7 @@ async def escalate_open_alerts_once(limit: int = 100) -> dict:
     cutoff = ts - settings.alert_escalation_after_sec
     created: list[AlertNotification] = []
     async with SessionLocal() as session:
+        notification_repo = AlertNotificationRepository(session)
         alerts = (
             await session.scalars(
                 select(Alert)
@@ -330,15 +317,7 @@ async def escalate_open_alerts_once(limit: int = 100) -> dict:
             )
         ).all()
         for alert in alerts:
-            existing = await session.scalar(
-                select(AlertNotification.id).where(
-                    and_(
-                        AlertNotification.alert_id == alert.id,
-                        AlertNotification.status == "escalated",
-                    )
-                )
-            )
-            if existing:
+            if await notification_repo.has_escalation(alert.id):
                 continue
             notification = AlertNotification(
                 alert_id=alert.id,
@@ -383,15 +362,8 @@ async def list_alert_rules(
     enabled: bool | None = None,
     limit: int = 200,
 ) -> dict:
-    stmt = select(AlertRule).order_by(desc(AlertRule.id)).limit(limit)
-    if utility_type:
-        stmt = stmt.where(AlertRule.utility_type == utility_type)
-    if building_id is not None:
-        stmt = stmt.where(AlertRule.building_id == building_id)
-    if enabled is not None:
-        stmt = stmt.where(AlertRule.enabled.is_(enabled))
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await AlertRuleRepository(session).list_filtered(utility_type, building_id, enabled, limit)
     return {"rules": [_as_dict(row) for row in rows], "total": len(rows), "allowed_kinds": sorted(ALERT_RULE_KINDS)}
 
 
