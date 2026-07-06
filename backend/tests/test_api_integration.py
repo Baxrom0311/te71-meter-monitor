@@ -17,6 +17,8 @@ import httpx
 from app import app
 from core.config import settings
 from core.database import init_db
+from routers import api as api_routes
+from services import backup
 from services.auth import bootstrap_admin
 
 
@@ -42,6 +44,48 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         token = response.json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
+
+    async def test_backup_restore_api_validation_and_audit(self) -> None:
+        admin_headers = await self._admin_headers()
+        created = await self.client.post(
+            "/api/buildings",
+            headers=admin_headers,
+            json={"name": "Backup API Building", "floors": 3, "entrances_count": 1},
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        backup_result = await backup.create_backup_once("api-restore-test")
+        filename = backup_result["filename"]
+
+        missing_confirm = await self.client.post(
+            f"/api/backups/restore/{filename}",
+            headers=admin_headers,
+        )
+        self.assertEqual(missing_confirm.status_code, 400, missing_confirm.text)
+        missing_file = await self.client.post(
+            "/api/backups/restore/missing.json.gz?confirm=RESTORE",
+            headers=admin_headers,
+        )
+        self.assertEqual(missing_file.status_code, 404, missing_file.text)
+
+        class FakeRestoreTask:
+            id = "restore-task-api-test"
+
+        original_delay = api_routes.restore_backup_task.delay
+        api_routes.restore_backup_task.delay = lambda restore_filename, confirm: FakeRestoreTask()
+        try:
+            queued = await self.client.post(
+                f"/api/backups/restore/{filename}?confirm=RESTORE",
+                headers=admin_headers,
+            )
+        finally:
+            api_routes.restore_backup_task.delay = original_delay
+        self.assertEqual(queued.status_code, 200, queued.text)
+        self.assertEqual(queued.json()["task_id"], "restore-task-api-test")
+        self.assertEqual(queued.json()["status"], "queued")
+
+        audit = await self.client.get("/api/audit-logs?action=backup.restore", headers=admin_headers)
+        self.assertEqual(audit.status_code, 200, audit.text)
+        self.assertEqual(audit.json()["audit_logs"][0]["entity_id"], filename)
 
     async def test_device_ingestion_ota_commands_and_audit_over_http(self) -> None:
         admin_headers = await self._admin_headers()
