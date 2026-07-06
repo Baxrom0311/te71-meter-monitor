@@ -1078,11 +1078,12 @@ Production querylar uchun alohida operational indexlar bor:
 - `GET /api/backups`: mavjud backup fayllar ro'yxati
 - `GET /api/backups/tasks/{task_id}`: Celery task statusini ko'rsatadi
 - `POST /api/backups/cleanup?keep_days=14`: cleanup job yaratadi
+- `POST /api/backups/restore/{filename}?confirm=RESTORE`: backupdan DB restore job yaratadi
 - `GET /api/backups/download/{filename}`: tayyor backup faylni yuklab beradi
 - `DELETE /api/backups/{filename}`: backup faylni o'chiradi
 
 Backup formati `meter-monitor-json-v1`. Har bir export ichida metadata, app version, jadval nomlari va jadval qatorlari JSON ko'rinishida saqlanadi, fayl gzip bilan siqiladi va SHA256 checksum qaytadi.
-Retention `BACKUP_KEEP_DAYS` orqali boshqariladi.
+Restore xavfli operatsiya bo'lgani uchun `confirm=RESTORE` talab qiladi. Restore boshlanishidan oldin backend avtomatik `pre_restore:<filename>` backup yaratadi. Retention `BACKUP_KEEP_DAYS` orqali boshqariladi.
 
 ### User Management API
 

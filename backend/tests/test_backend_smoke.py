@@ -25,7 +25,7 @@ from core.database import init_db
 from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from core.security import decode_access_token
 from core.database import SessionLocal
-from models.entities import Alert
+from models.entities import Alert, Building
 from models.schemas import (
     BuildingCreate,
     DeviceProvisioningTokenCreate,
@@ -249,8 +249,18 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(backups["total"], 1)
         cleanup = backup.cleanup_old_backups_once(keep_days=9999)
         self.assertEqual(cleanup["deleted_count"], 0)
+        extra = await platform.create_building(BuildingCreate(name="Extra After Backup", floors=1, entrances_count=1))
+        restore_result = await backup.restore_backup_once(backup_result["filename"], confirm="RESTORE")
+        self.assertTrue(restore_result["ok"])
+        self.assertIn("pre_restore_backup", restore_result)
+        async with SessionLocal() as session:
+            extra_building = await session.get(Building, extra["id"])
+        self.assertIsNone(extra_building)
+        pre_restore_filename = restore_result["pre_restore_backup"]
         deleted = backup.delete_backup(backup_result["filename"])
         self.assertTrue(deleted["ok"])
+        deleted_pre_restore = backup.delete_backup(pre_restore_filename)
+        self.assertTrue(deleted_pre_restore["ok"])
 
     async def test_device_provisioning_token_flow(self) -> None:
         building = await platform.create_building(BuildingCreate(name="Provision Building", floors=12, entrances_count=1))

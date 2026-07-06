@@ -2,7 +2,7 @@ import asyncio
 
 from core.celery_app import celery_app
 from core.database import init_db
-from services.backup import cleanup_old_backups_once, create_backup_once
+from services.backup import cleanup_old_backups_once, create_backup_once, restore_backup_once
 
 
 async def _run_backup(reason: str | None):
@@ -10,9 +10,19 @@ async def _run_backup(reason: str | None):
     return await create_backup_once(reason)
 
 
+async def _run_restore(filename: str, confirm: str | None):
+    await init_db()
+    return await restore_backup_once(filename, confirm)
+
+
 @celery_app.task(name="backup.create")
 def create_backup(reason: str | None = None) -> dict:
     return asyncio.run(_run_backup(reason))
+
+
+@celery_app.task(name="backup.restore")
+def restore_backup(filename: str, confirm: str | None = None) -> dict:
+    return asyncio.run(_run_restore(filename, confirm))
 
 
 @celery_app.task(name="backup.cleanup_old")

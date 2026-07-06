@@ -33,6 +33,7 @@ from services import audit
 from services.backup import backup_file_path, delete_backup, list_backups
 from tasks.backup import cleanup_old_backups as cleanup_old_backups_task
 from tasks.backup import create_backup as create_backup_task
+from tasks.backup import restore_backup as restore_backup_task
 from services.websocket import ws_manager
 
 router = APIRouter(prefix="/api")
@@ -564,6 +565,19 @@ async def backup_status(task_id: str, _: dict = Depends(require_admin)):
 async def cleanup_backups(keep_days: Optional[int] = None, admin: dict = Depends(require_admin)):
     task = cleanup_old_backups_task.delay(keep_days)
     await audit.record(admin, "backup.cleanup", "backup", task.id, {"keep_days": keep_days})
+    return {"ok": True, "task_id": task.id, "status": "queued"}
+
+
+@router.post("/backups/restore/{filename}")
+async def restore_backup(filename: str, confirm: str = "", admin: dict = Depends(require_admin)):
+    if confirm != "RESTORE":
+        raise HTTPException(400, "Restore uchun confirm=RESTORE kerak")
+    try:
+        backup_file_path(filename)
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(404, "Backup topilmadi")
+    task = restore_backup_task.delay(filename, confirm)
+    await audit.record(admin, "backup.restore", "backup", filename, {"task_id": task.id})
     return {"ok": True, "task_id": task.id, "status": "queued"}
 
 
