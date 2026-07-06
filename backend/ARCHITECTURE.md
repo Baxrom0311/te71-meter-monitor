@@ -863,6 +863,19 @@ Production uchun:
 - backup strategy
 - reading retention policy
 
+Docker production stack:
+
+- `postgres:16-alpine`
+- backend `DATABASE_URL=postgresql+asyncpg://...` orqali ulanadi
+- backend start vaqtida `alembic upgrade head` ishlaydi
+- Mosquitto ishlatilmaydi
+
+Local development:
+
+- SQLite ishlashi mumkin
+- Alembic migration temp/prod DBlar uchun ishlatiladi
+- `init_db()` fallback development uchun saqlanadi
+
 ### Security
 
 - JWT auth
@@ -943,6 +956,13 @@ Kerakli analizlar:
 - readings
 - alerts
 - OTA
+
+Frontend auth:
+
+- Login faqat username/password
+- token `Authorization: Bearer ...` header bilan yuboriladi
+- admin bo'lmagan userlarda command, edit, OTA upload, alert clear tugmalari ko'rinmaydi
+- ESP32 endpointlari frontend tokeniga bog'lanmaydi, `X-Device-Token` orqali alohida himoyalanadi
 
 ## Compatibility Rules
 
