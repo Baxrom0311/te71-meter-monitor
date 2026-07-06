@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from core.config import settings
@@ -177,17 +177,20 @@ async def delete_measurement_point(point_id: int, _: dict = Depends(require_admi
 
 
 @router.post("/register")
-async def register_device(body: DeviceRegister, _: bool = Depends(require_device_token)):
+async def register_device(body: DeviceRegister, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(body.device_id, x_device_token)
     return await platform.register_device(body)
 
 
 @router.post("/device-status")
-async def device_status(body: DeviceStatus, _: bool = Depends(require_device_token)):
+async def device_status(body: DeviceStatus, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(body.device_id, x_device_token)
     return await platform.update_device_status(body)
 
 
 @router.get("/device-config/{device_id}")
-async def device_config(device_id: str, _: bool = Depends(require_device_token)):
+async def device_config(device_id: str, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(device_id, x_device_token)
     return await platform.get_device_config(device_id)
 
 
@@ -211,6 +214,11 @@ async def get_device(device_id: str, _: dict = Depends(current_token_payload)):
 @router.put("/devices/{device_id}")
 async def update_device(device_id: str, body: DeviceUpdate, _: dict = Depends(require_admin)):
     return await platform.update_device(device_id, body)
+
+
+@router.post("/devices/{device_id}/token")
+async def rotate_device_token(device_id: str, _: dict = Depends(require_admin)):
+    return await platform.rotate_device_token(device_id)
 
 
 @router.get("/devices/{device_id}/latest")
@@ -273,17 +281,20 @@ async def create_device_command(device_id: str, body: CommandCreate, _: dict = D
 
 
 @router.get("/commands/{device_id}")
-async def get_commands(device_id: str, _: bool = Depends(require_device_token)):
+async def get_commands(device_id: str, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(device_id, x_device_token)
     return await platform.pending_commands(device_id)
 
 
 @router.post("/commands/{cmd_id}/ack")
-async def ack_command(cmd_id: int, result: str = "ok", _: bool = Depends(require_device_token)):
+async def ack_command(cmd_id: int, result: str = "ok", x_device_token: Optional[str] = Header(None)):
+    await platform.verify_command_access(cmd_id, x_device_token)
     return await platform.ack_command(cmd_id, result)
 
 
 @router.post("/readings")
-async def post_readings(body: MeterReading, _: bool = Depends(require_device_token)):
+async def post_readings(body: MeterReading, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(body.device_id, x_device_token)
     ts = await platform.save_reading(body)
     await ws_manager.broadcast(
         {"type": "reading", "device_id": body.device_id, "ts": ts, "data": body.model_dump()}
@@ -292,7 +303,9 @@ async def post_readings(body: MeterReading, _: bool = Depends(require_device_tok
 
 
 @router.post("/readings/batch")
-async def post_readings_batch(body: MeterReadingBatch, _: bool = Depends(require_device_token)):
+async def post_readings_batch(body: MeterReadingBatch, x_device_token: Optional[str] = Header(None)):
+    device_id = body.device_id or (body.readings[0].device_id if body.readings else None)
+    await platform.verify_device_access(device_id, x_device_token)
     result = await platform.save_reading_batch(body)
     await ws_manager.broadcast({"type": "readings_batch", "device_id": body.device_id, "result": result})
     return result
@@ -342,12 +355,21 @@ async def ota_delete(fw_id: int, _: dict = Depends(require_admin)):
 
 
 @router.get("/ota/check/{device_id}")
-async def ota_check(device_id: str, current_version: str = "", _: bool = Depends(require_device_token)):
+async def ota_check(device_id: str, current_version: str = "", x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(device_id, x_device_token)
     return await platform.ota_check(device_id, current_version)
 
 
 @router.get("/ota/firmware/{filename}")
-async def ota_download(filename: str, _: bool = Depends(require_device_token)):
+async def ota_download(
+    filename: str,
+    device_id: Optional[str] = None,
+    x_device_token: Optional[str] = Header(None),
+):
+    if device_id:
+        await platform.verify_device_access(device_id, x_device_token)
+    else:
+        await require_device_token(x_device_token)
     path = Path(settings.ota_dir) / filename
     if not path.exists():
         from fastapi import HTTPException

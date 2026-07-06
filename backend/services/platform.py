@@ -9,6 +9,7 @@ from sqlalchemy import Integer, and_, desc, func, inspect, select, update
 
 from core.config import settings
 from core.database import SessionLocal
+from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
 from models.entities import (
     Alert,
@@ -48,6 +49,33 @@ def _online(last_seen: int | None) -> bool:
     return (now_ts() - (last_seen or 0)) < settings.offline_sec
 
 
+def _global_device_token_ok(token: str | None) -> bool:
+    return bool(settings.device_api_token and token and token == settings.device_api_token)
+
+
+async def verify_device_access(device_id: str | None, token: str | None) -> None:
+    if not device_id:
+        raise HTTPException(400, "device_id kerak")
+    if _global_device_token_ok(token):
+        return
+    async with SessionLocal() as session:
+        device = await session.get(Device, device_id)
+    if device and device.api_token_hash:
+        if token and verify_password(token, device.api_token_hash):
+            return
+        raise HTTPException(401, "Device token noto'g'ri")
+    if settings.device_api_token:
+        raise HTTPException(401, "Device token noto'g'ri")
+
+
+async def verify_command_access(command_id: int, token: str | None) -> None:
+    async with SessionLocal() as session:
+        command = await session.get(Command, command_id)
+    if not command:
+        raise HTTPException(404, "Command topilmadi")
+    await verify_device_access(command.device_id, token)
+
+
 def _server_targets() -> list[dict]:
     return [
         {"url": url, "priority": index + 1, "enabled": True}
@@ -83,6 +111,7 @@ async def get_device_config(device_id: str) -> dict:
         "measurement_point": _as_dict(point) if point else None,
         "hardware_version": device.hardware_version if device else None,
         "software_version": device.software_version if device else None,
+        "token_required": bool(settings.device_api_token or (device and device.api_token_hash)),
         "intervals": {
             "telemetry_sec": settings.telemetry_interval_sec,
             "status_sec": settings.status_interval_sec,
@@ -572,6 +601,21 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
         await session.execute(update(Device).where(Device.id == device_id).values(**fields))
         await session.commit()
     return {"ok": True}
+
+
+async def rotate_device_token(device_id: str) -> dict:
+    token = generate_secret_token()
+    ts = now_ts()
+    async with SessionLocal() as session:
+        device = await session.get(Device, device_id)
+        if not device:
+            device = Device(id=device_id, name=device_id, registered=ts, created_at=ts)
+            session.add(device)
+        device.api_token_hash = hash_password(token)
+        device.token_created_at = ts
+        device.updated_at = ts
+        await session.commit()
+    return {"device_id": device_id, "device_token": token, "token_type": "device"}
 
 
 async def _check_alerts(session, reading: MeterReading) -> None:

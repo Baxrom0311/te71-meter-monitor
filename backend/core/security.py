@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
@@ -18,6 +19,10 @@ def hash_password(password: str) -> str:
     salt = os.urandom(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 200_000)
     return f"pbkdf2_sha256${base64.urlsafe_b64encode(salt).decode()}${base64.urlsafe_b64encode(digest).decode()}"
+
+
+def generate_secret_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def validate_password(password: str) -> None:

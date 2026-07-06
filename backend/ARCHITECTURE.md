@@ -501,6 +501,7 @@ GET  /api/ota/firmware/{filename}
 - telemetry/status/command polling intervallari
 - asosiy va backup serverlar ro'yxati
 - ishlatiladigan HTTP endpoint pathlari
+- `token_required`
 
 `POST /api/readings/batch` ESP32 local queue uchun ishlatiladi. Internet uzilib qayta tiklanganda ESP32 bir nechta readingni bitta requestda yuboradi.
 
@@ -650,9 +651,12 @@ Endpoint permission qoidalari:
 - Admin sozlash, command, OTA upload/delete/push va alert clear qila oladi.
 - Oddiy user faqat ko'radi.
 - ESP32 compatibility endpointlari user login talab qilmaydi.
-- Productionda ESP32 endpointlari `DEVICE_API_TOKEN` orqali himoyalanadi.
-- Agar `DEVICE_API_TOKEN` envda berilsa, ESP32 har so'rovda `X-Device-Token` header yuboradi.
-- Agar `DEVICE_API_TOKEN` bo'sh bo'lsa, development uchun ESP32 endpointlari ochiq ishlaydi.
+- Productionda ESP32 endpointlari `X-Device-Token` orqali himoyalanadi.
+- `DEVICE_API_TOKEN` global provisioning/emergency token sifatida ishlaydi.
+- Admin `POST /api/devices/{device_id}/token` orqali har ESP32 uchun alohida token yaratadi.
+- Device token faqat bir marta plaintext qaytadi; DBda hash saqlanadi.
+- Agar devicega alohida token berilgan bo'lsa, ESP32 o'sha token bilan ishlaydi.
+- Agar tokenlar sozlanmagan bo'lsa, development uchun ESP32 endpointlari ochiq ishlaydi.
 - ESP32 endpointlari:
   - `GET /api/device-config/{device_id}`
   - `POST /api/register`
@@ -663,6 +667,22 @@ Endpoint permission qoidalari:
   - `POST /api/commands/{command_id}/ack`
   - `GET /api/ota/check/{device_id}`
   - `GET /api/ota/firmware/{filename}`
+
+Admin device token endpoint:
+
+```text
+POST /api/devices/{device_id}/token
+```
+
+Response:
+
+```json
+{
+  "device_id": "WATER-01",
+  "device_token": "plain-token-only-once",
+  "token_type": "device"
+}
+```
 
 ### Admin
 

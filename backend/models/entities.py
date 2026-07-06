@@ -102,6 +102,8 @@ class Device(Base, TimestampMixin):
     hardware_version: Mapped[str | None] = mapped_column(String(64))
     software_version: Mapped[str | None] = mapped_column(String(64))
     build_number: Mapped[str | None] = mapped_column(String(64))
+    api_token_hash: Mapped[str | None] = mapped_column(String(255))
+    token_created_at: Mapped[int | None] = mapped_column(Integer)
     baud_rate: Mapped[int | None] = mapped_column(Integer, default=9600)
     chip_model: Mapped[str | None] = mapped_column(String(64))
     rssi: Mapped[int | None] = mapped_column(Integer)

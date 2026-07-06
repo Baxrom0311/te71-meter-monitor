@@ -52,6 +52,8 @@ async def _ensure_sqlite_columns(conn) -> None:
             "hardware_version": "VARCHAR(64)",
             "software_version": "VARCHAR(64)",
             "build_number": "VARCHAR(64)",
+            "api_token_hash": "VARCHAR(255)",
+            "token_created_at": "INTEGER",
             "created_at": "INTEGER",
             "updated_at": "INTEGER",
         },

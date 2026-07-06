@@ -155,6 +155,12 @@ class DeviceUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class DeviceTokenResponse(BaseModel):
+    device_id: str
+    device_token: str
+    token_type: str = "device"
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None
