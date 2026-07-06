@@ -41,6 +41,16 @@ class Settings:
     voltage_max: float = float(os.getenv("VOLTAGE_MAX", "253.0"))
     frequency_min: float = float(os.getenv("FREQUENCY_MIN", "49.0"))
     frequency_max: float = float(os.getenv("FREQUENCY_MAX", "51.0"))
+    max_voltage: float = float(os.getenv("MAX_VOLTAGE", "500.0"))
+    max_current: float = float(os.getenv("MAX_CURRENT", "10000.0"))
+    max_pressure_bar: float = float(os.getenv("MAX_PRESSURE_BAR", "100.0"))
+    min_temperature_c: float = float(os.getenv("MIN_TEMPERATURE_C", "-80.0"))
+    max_temperature_c: float = float(os.getenv("MAX_TEMPERATURE_C", "150.0"))
+    water_pressure_min_bar: float = float(os.getenv("WATER_PRESSURE_MIN_BAR", "0.5"))
+    water_bottom_pressure_for_top_check_bar: float = float(os.getenv("WATER_BOTTOM_PRESSURE_FOR_TOP_CHECK_BAR", "1.0"))
+    gas_pressure_min_bar: float = float(os.getenv("GAS_PRESSURE_MIN_BAR", "0.02"))
+    gas_pressure_max_bar: float = float(os.getenv("GAS_PRESSURE_MAX_BAR", "5.0"))
+    alert_dedupe_sec: int = int(os.getenv("ALERT_DEDUPE_SEC", "600"))
 
     app_name: str = "Meter Monitor"
     app_version: str = "4.0"

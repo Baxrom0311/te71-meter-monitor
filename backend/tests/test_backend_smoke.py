@@ -4,6 +4,9 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 
+from fastapi import HTTPException
+from sqlalchemy import func, select
+
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEVICE_API_TOKEN", "global-device-token")
 os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "120")
@@ -21,11 +24,14 @@ from core.config import settings
 from core.database import init_db
 from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from core.security import decode_access_token
+from core.database import SessionLocal
+from models.entities import Alert
 from models.schemas import (
     BuildingCreate,
     DeviceRegister,
     DeviceRole,
     FirmwareMode,
+    MeterReading,
     MeasurementPointCreate,
     UtilityType,
 )
@@ -119,6 +125,38 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
                 point_id=point["id"],
             )
         )
+        with self.assertRaises(HTTPException):
+            await platform.save_reading(
+                MeterReading(
+                    device_id="esp32-water-top-01",
+                    utility_type=UtilityType.water,
+                    pressure_bar=-1,
+                )
+            )
+
+        await platform.save_reading(
+            MeterReading(
+                device_id="esp32-water-top-01",
+                utility_type=UtilityType.water,
+                building_id=building["id"],
+                point_id=point["id"],
+                pressure_bar=0.1,
+            )
+        )
+        await platform.save_reading(
+            MeterReading(
+                device_id="esp32-water-top-01",
+                utility_type=UtilityType.water,
+                building_id=building["id"],
+                point_id=point["id"],
+                pressure_bar=0.1,
+            )
+        )
+        async with SessionLocal() as session:
+            low_pressure_alerts = await session.scalar(
+                select(func.count()).select_from(Alert).where(Alert.kind == "water_low_pressure")
+            )
+        self.assertEqual(low_pressure_alerts, 1)
 
         token = await platform.rotate_device_token("esp32-water-top-01")
         await platform.verify_device_access("esp32-water-top-01", token["device_token"])

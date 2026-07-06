@@ -907,6 +907,17 @@ FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishl
 9. Dashboardga real-time yoki polling orqali ma'lumot chiqadi
 ```
 
+### Reading Validation
+
+Backend ESP32 payloadlarini saqlashdan oldin fizik range bo'yicha tekshiradi:
+
+- voltage/current/frequency/pf uchun maksimal/minimal guard
+- energiya, bosim, flow, volume manfiy bo'lmasligi
+- pressure qiymatlari `MAX_PRESSURE_BAR`dan oshmasligi
+- temperature `MIN_TEMPERATURE_C` va `MAX_TEMPERATURE_C` oralig'ida bo'lishi
+
+Noto'g'ri qiymat 422 bilan qaytariladi va DBga yozilmaydi. Eski elektr payloadlar buzilmasligi uchun optional fieldlar majburiy qilinmaydi.
+
 ## Alert Rules
 
 ### Elektr
@@ -933,6 +944,8 @@ FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishl
 - leak detected
 - valve error
 - device offline
+
+Bir xil `device_id + alert kind` bo'yicha ochiq alert `ALERT_DEDUPE_SEC` ichida qayta yaratilmaydi. Bu sensor bir xil muammoni har 30 sekundda yuborganda alert spam bo'lishining oldini oladi.
 
 ## Production Talablar
 

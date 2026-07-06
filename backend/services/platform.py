@@ -139,6 +139,34 @@ def _online(last_seen: int | None) -> bool:
     return (now_ts() - (last_seen or 0)) < settings.offline_sec
 
 
+def _validate_range(name: str, value: float | None, minimum: float | None = None, maximum: float | None = None) -> None:
+    if value is None:
+        return
+    if minimum is not None and value < minimum:
+        raise HTTPException(422, f"{name} minimal qiymatdan kichik: {value}")
+    if maximum is not None and value > maximum:
+        raise HTTPException(422, f"{name} maksimal qiymatdan katta: {value}")
+
+
+def _validate_reading(body: MeterReading) -> None:
+    if not body.device_id.strip():
+        raise HTTPException(422, "device_id kerak")
+
+    for name in ("voltage_l1", "voltage_l2", "voltage_l3"):
+        _validate_range(name, getattr(body, name), 0, settings.max_voltage)
+    for name in ("current_l1", "current_l2", "current_l3"):
+        _validate_range(name, getattr(body, name), 0, settings.max_current)
+    _validate_range("frequency", body.frequency, 0, 100)
+    _validate_range("pf", body.pf, -1, 1)
+    for name in ("energy_kwh", "energy_t1", "energy_t2", "energy_t3", "energy_t4"):
+        _validate_range(name, getattr(body, name), 0, None)
+    for name in ("pressure_bar", "pressure_bottom_bar", "pressure_top_bar"):
+        _validate_range(name, getattr(body, name), 0, settings.max_pressure_bar)
+    for name in ("flow_rate", "volume_m3"):
+        _validate_range(name, getattr(body, name), 0, None)
+    _validate_range("temperature_c", body.temperature_c, settings.min_temperature_c, settings.max_temperature_c)
+
+
 def _global_device_token_ok(token: str | None) -> bool:
     return bool(settings.device_api_token and token and token == settings.device_api_token)
 
@@ -753,8 +781,26 @@ async def _check_alerts(session, reading: MeterReading) -> None:
                 )
             )
     elif reading.utility_type == "water":
+        pressure = reading.pressure_bar
+        if pressure is not None and pressure < settings.water_pressure_min_bar:
+            alerts.append(
+                Alert(
+                    device_id=reading.device_id,
+                    building_id=reading.building_id,
+                    point_id=reading.point_id,
+                    utility_type="water",
+                    severity="warning",
+                    ts=ts,
+                    kind="water_low_pressure",
+                    value=pressure,
+                    message=f"Suv bosimi past: {pressure:.2f} bar",
+                )
+            )
         if reading.pressure_bottom_bar is not None and reading.pressure_top_bar is not None:
-            if reading.pressure_bottom_bar > 1.0 and reading.pressure_top_bar < 0.5:
+            if (
+                reading.pressure_bottom_bar > settings.water_bottom_pressure_for_top_check_bar
+                and reading.pressure_top_bar < settings.water_pressure_min_bar
+            ):
                 alerts.append(
                     Alert(
                         device_id=reading.device_id,
@@ -768,21 +814,51 @@ async def _check_alerts(session, reading: MeterReading) -> None:
                         message="Pastda bosim bor, yuqorida suv bosimi past",
                     )
                 )
-    elif reading.utility_type == "gas" and reading.leak_detected:
-        alerts.append(
-            Alert(
-                device_id=reading.device_id,
-                building_id=reading.building_id,
-                point_id=reading.point_id,
-                utility_type="gas",
-                severity="critical",
-                ts=ts,
-                kind="gas_leak",
-                message="Gaz sizishi aniqlandi",
+    elif reading.utility_type == "gas":
+        if reading.pressure_bar is not None and (
+            reading.pressure_bar < settings.gas_pressure_min_bar
+            or reading.pressure_bar > settings.gas_pressure_max_bar
+        ):
+            alerts.append(
+                Alert(
+                    device_id=reading.device_id,
+                    building_id=reading.building_id,
+                    point_id=reading.point_id,
+                    utility_type="gas",
+                    severity="critical",
+                    ts=ts,
+                    kind="gas_pressure",
+                    value=reading.pressure_bar,
+                    message=f"Gaz bosimi normadan tashqari: {reading.pressure_bar:.3f} bar",
+                )
             )
-        )
+        if reading.leak_detected:
+            alerts.append(
+                Alert(
+                    device_id=reading.device_id,
+                    building_id=reading.building_id,
+                    point_id=reading.point_id,
+                    utility_type="gas",
+                    severity="critical",
+                    ts=ts,
+                    kind="gas_leak",
+                    message="Gaz sizishi aniqlandi",
+                )
+            )
 
     for alert in alerts:
+        recent = await session.scalar(
+            select(Alert.id).where(
+                and_(
+                    Alert.device_id == alert.device_id,
+                    Alert.kind == alert.kind,
+                    Alert.cleared.is_(False),
+                    Alert.ts > ts - settings.alert_dedupe_sec,
+                )
+            )
+        )
+        if recent:
+            continue
         session.add(alert)
         await ws_manager.broadcast(
             {
@@ -797,6 +873,7 @@ async def _check_alerts(session, reading: MeterReading) -> None:
 
 
 async def save_reading(body: MeterReading) -> int:
+    _validate_reading(body)
     ts = now_ts()
     async with SessionLocal() as session:
         if body.reading_id:
