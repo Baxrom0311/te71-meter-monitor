@@ -12,6 +12,12 @@ class UserCreate(BaseModel):
     role: str = "user"
 
 
+class UserUpdate(BaseModel):
+    password: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+
+
 class UserResponse(BaseModel):
     id: int
     username: str

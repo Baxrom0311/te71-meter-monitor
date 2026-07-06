@@ -7,7 +7,7 @@ from core.security import create_access_token, hash_password, validate_password,
 from core.time import now_ts
 from models.entities import User
 from repositories.base import model_to_dict
-from schemas.auth import LoginRequest, UserCreate
+from schemas.auth import LoginRequest, UserCreate, UserUpdate
 
 
 def _public_user(user: User) -> dict:
@@ -105,3 +105,43 @@ async def list_users() -> dict:
     async with SessionLocal() as session:
         users = (await session.scalars(select(User).order_by(User.id))).all()
     return {"users": [_public_user(user) for user in users]}
+
+
+async def get_user(user_id: int) -> dict:
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User topilmadi")
+    return _public_user(user)
+
+
+async def update_user(user_id: int, body: UserUpdate, actor_id: int | None = None) -> dict:
+    fields = body.model_dump(exclude_none=True)
+    if not fields:
+        raise HTTPException(400, "Yangilanadigan maydon yo'q")
+    if "role" in fields and fields["role"] not in ("admin", "user"):
+        raise HTTPException(400, "role faqat admin yoki user bo'lishi mumkin")
+    if "password" in fields:
+        validate_password(fields["password"])
+
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            raise HTTPException(404, "User topilmadi")
+        if actor_id == user_id and fields.get("is_active") is False:
+            raise HTTPException(400, "Admin o'zini deaktiv qila olmaydi")
+        if actor_id == user_id and fields.get("role") == "user":
+            raise HTTPException(400, "Admin o'z rolini pasaytira olmaydi")
+
+        if "password" in fields:
+            user.password_hash = hash_password(fields["password"])
+            user.failed_login_count = 0
+            user.locked_until = None
+        if "role" in fields:
+            user.role = fields["role"]
+        if "is_active" in fields:
+            user.is_active = fields["is_active"]
+        user.updated_at = now_ts()
+        await session.commit()
+        await session.refresh(user)
+    return _public_user(user)

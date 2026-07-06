@@ -965,6 +965,8 @@ Local development:
 
 - JWT auth
 - admin/user role
+- admin user yaratadi, role/password/status update qiladi
+- admin o'zini deaktiv qila olmaydi yoki o'z rolini pasaytira olmaydi
 - ESP32 uchun device token
 - API request signature yoki token
 - OTA faqat admin uchun
@@ -1014,6 +1016,15 @@ Production querylar uchun alohida operational indexlar bor:
 
 Backup formati `meter-monitor-json-v1`. Har bir export ichida metadata, app version, jadval nomlari va jadval qatorlari JSON ko'rinishida saqlanadi, fayl gzip bilan siqiladi va SHA256 checksum qaytadi.
 Retention `BACKUP_KEEP_DAYS` orqali boshqariladi.
+
+### User Management API
+
+- `GET /api/auth/users`: admin userlar ro'yxati
+- `POST /api/auth/users`: yangi admin yoki oddiy user yaratish
+- `GET /api/auth/users/{user_id}`: user profilini ko'rish
+- `PUT /api/auth/users/{user_id}`: password, role, active status update
+
+User update audit logga yoziladi, password qiymati audit detail ichiga yozilmaydi.
 
 ### Analytics
 

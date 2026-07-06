@@ -29,7 +29,7 @@ from models.schemas import (
     MeasurementPointCreate,
     UtilityType,
 )
-from schemas.auth import LoginRequest, UserCreate
+from schemas.auth import LoginRequest, UserCreate, UserUpdate
 from services import audit, auth, backup, platform
 
 
@@ -84,6 +84,16 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
 
         viewer = await auth.create_user(UserCreate(username="viewer", password="Viewer1234", role="user"))
         self.assertEqual(viewer["role"], "user")
+        updated_viewer = await auth.update_user(
+            viewer["id"],
+            UserUpdate(password="Viewer5678", role="user", is_active=True),
+            actor_id=token_payload["sub"],
+        )
+        self.assertEqual(updated_viewer["username"], "viewer")
+        viewer_login = await auth.login(LoginRequest(username="viewer", password="Viewer5678"))
+        self.assertEqual(viewer_login["user"]["role"], "user")
+        disabled_viewer = await auth.update_user(viewer["id"], UserUpdate(is_active=False), actor_id=token_payload["sub"])
+        self.assertFalse(disabled_viewer["is_active"])
 
         building = await platform.create_building(BuildingCreate(name="Smoke Building", floors=9, entrances_count=1))
         point = await platform.create_measurement_point(
