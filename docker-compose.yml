@@ -72,6 +72,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
       - BACKUP_DIR=/app/backups
+      - BACKUP_KEEP_DAYS=14
       - STATIC_DIR=/frontend
       - SECRET_KEY=change-me
       - BOOTSTRAP_ADMIN_USERNAME=admin
@@ -112,6 +113,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
       - BACKUP_DIR=/app/backups
+      - BACKUP_KEEP_DAYS=14
       - SECRET_KEY=change-me
       - DEVICE_API_TOKEN=change-device-token
       - CELERY_BROKER_URL=redis://redis:6379/0

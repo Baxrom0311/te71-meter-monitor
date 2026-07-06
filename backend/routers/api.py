@@ -29,7 +29,8 @@ from models.schemas import (
 )
 from services import platform
 from services import audit
-from services.backup import backup_file_path
+from services.backup import backup_file_path, delete_backup, list_backups
+from tasks.backup import cleanup_old_backups as cleanup_old_backups_task
 from tasks.backup import create_backup as create_backup_task
 from services.websocket import ws_manager
 
@@ -477,6 +478,11 @@ async def create_backup(reason: str = "manual", admin: dict = Depends(require_ad
     return {"ok": True, "task_id": task.id, "status": "queued"}
 
 
+@router.get("/backups")
+async def backups(limit: int = Query(100, ge=1, le=500), _: dict = Depends(require_admin)):
+    return list_backups(limit)
+
+
 @router.get("/backups/tasks/{task_id}")
 async def backup_status(task_id: str, _: dict = Depends(require_admin)):
     result = AsyncResult(task_id, app=celery_app)
@@ -487,6 +493,13 @@ async def backup_status(task_id: str, _: dict = Depends(require_admin)):
         else:
             response["result"] = result.result
     return response
+
+
+@router.post("/backups/cleanup")
+async def cleanup_backups(keep_days: Optional[int] = None, admin: dict = Depends(require_admin)):
+    task = cleanup_old_backups_task.delay(keep_days)
+    await audit.record(admin, "backup.cleanup", "backup", task.id, {"keep_days": keep_days})
+    return {"ok": True, "task_id": task.id, "status": "queued"}
 
 
 @router.get("/backups/download/{filename}")
@@ -500,3 +513,13 @@ async def download_backup(filename: str, _: dict = Depends(require_admin)):
         media_type="application/gzip",
         filename=path.name,
     )
+
+
+@router.delete("/backups/{filename}")
+async def remove_backup(filename: str, admin: dict = Depends(require_admin)):
+    try:
+        result = delete_backup(filename)
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(404, "Backup topilmadi")
+    await audit.record(admin, "backup.delete", "backup", filename, {"size": result["size"]})
+    return result

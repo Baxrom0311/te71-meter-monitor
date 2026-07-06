@@ -164,6 +164,12 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(backup_result["ok"])
         self.assertTrue(backup.backup_file_path(backup_result["filename"]).exists())
         self.assertGreater(backup_result["tables"]["devices"], 0)
+        backups = backup.list_backups()
+        self.assertGreaterEqual(backups["total"], 1)
+        cleanup = backup.cleanup_old_backups_once(keep_days=9999)
+        self.assertEqual(cleanup["deleted_count"], 0)
+        deleted = backup.delete_backup(backup_result["filename"])
+        self.assertTrue(deleted["ok"])
 
     async def test_readiness_and_middleware_hardening(self) -> None:
         from routers.health import ready

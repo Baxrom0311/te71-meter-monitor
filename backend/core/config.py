@@ -8,6 +8,7 @@ class Settings:
     ota_dir: Path = Path(os.getenv("OTA_DIR", "firmware"))
     backup_dir: Path = Path(os.getenv("BACKUP_DIR", "backups"))
     static_dir: Path = Path(os.getenv("STATIC_DIR", "../frontend"))
+    backup_keep_days: int = int(os.getenv("BACKUP_KEEP_DAYS", "14"))
 
     offline_sec: int = int(os.getenv("OFFLINE_SEC", "120"))
     data_keep_days: int = int(os.getenv("DATA_KEEP_DAYS", "30"))

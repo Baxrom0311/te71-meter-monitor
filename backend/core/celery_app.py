@@ -28,5 +28,9 @@ celery_app.conf.update(
             "task": "maintenance.cleanup_old_data",
             "schedule": 86400.0,
         },
+        "cleanup-old-backups-daily": {
+            "task": "backup.cleanup_old",
+            "schedule": 86400.0,
+        },
     },
 )
