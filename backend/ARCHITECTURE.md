@@ -974,8 +974,12 @@ Production uchun:
 Docker production stack:
 
 - `postgres:16-alpine`
+- `redis:7-alpine`
+- backend image `backend/Dockerfile` orqali build qilinadi
+- FastAPI, Celery worker, Celery Beat va Flower bir xil backend image'dan ishlaydi
 - backend `DATABASE_URL=postgresql+asyncpg://...` orqali ulanadi
 - backend start vaqtida `alembic upgrade head` ishlaydi
+- dependency install runtime startda emas, image build vaqtida bajariladi
 - Mosquitto ishlatilmaydi
 
 Local development:

@@ -2,7 +2,7 @@
 # Meter Monitor — To'liq stack
 #
 # Ishga tushirish:
-#   docker-compose up -d
+#   docker compose up -d --build
 #
 # Dashboard:
 #   http://localhost:8000
@@ -13,6 +13,42 @@
 # Database:
 #   PostgreSQL 5432
 # ──────────────────────────────────────────────────────────────────────────────
+
+x-backend-common: &backend-common
+  build:
+    context: ./backend
+  image: meter-monitor-backend:latest
+  restart: unless-stopped
+  environment: &backend-env
+    - APP_ENV=development
+    - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
+    - OTA_DIR=/app/firmware
+    - BACKUP_DIR=/app/backups
+    - BACKUP_KEEP_DAYS=14
+    - STATIC_DIR=/frontend
+    - SECRET_KEY=change-me
+    - BOOTSTRAP_ADMIN_USERNAME=admin
+    - BOOTSTRAP_ADMIN_PASSWORD=Admin123
+    - DEVICE_API_TOKEN=change-device-token
+    - CORS_ORIGINS=*
+    - TRUSTED_HOSTS=*
+    - RATE_LIMIT_PER_MINUTE=120
+    - DEVICE_RATE_LIMIT_PER_MINUTE=600
+    - COMMAND_TTL_SEC=3600
+    - COMMAND_MAX_PENDING_PER_DEVICE=20
+    - WATER_PRESSURE_MIN_BAR=0.5
+    - WATER_BOTTOM_PRESSURE_FOR_TOP_CHECK_BAR=1.0
+    - GAS_PRESSURE_MIN_BAR=0.02
+    - GAS_PRESSURE_MAX_BAR=5.0
+    - ALERT_DEDUPE_SEC=600
+    - CELERY_BROKER_URL=redis://redis:6379/0
+    - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    - RUN_INLINE_WORKERS=false
+  depends_on: &backend-depends
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
 
@@ -53,51 +89,17 @@ services:
 
   # ── FastAPI Backend ──────────────────────────────────────────────────────────
   backend:
-    image: python:3.12-slim
+    <<: *backend-common
     container_name: meter-backend
-    restart: unless-stopped
-    working_dir: /app
     command: >
-      sh -c "pip install -r requirements.txt -q &&
-             alembic upgrade head &&
-             uvicorn app:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "alembic upgrade head &&
+             uvicorn app:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - ./frontend:/frontend
+      - ./frontend:/frontend:ro
       - firmware_store:/app/firmware
       - backup_store:/app/backups
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
-      - OTA_DIR=/app/firmware
-      - BACKUP_DIR=/app/backups
-      - BACKUP_KEEP_DAYS=14
-      - STATIC_DIR=/frontend
-      - SECRET_KEY=change-me
-      - BOOTSTRAP_ADMIN_USERNAME=admin
-      - BOOTSTRAP_ADMIN_PASSWORD=Admin123
-      - DEVICE_API_TOKEN=change-device-token
-      - CORS_ORIGINS=*
-      - TRUSTED_HOSTS=*
-      - RATE_LIMIT_PER_MINUTE=120
-      - DEVICE_RATE_LIMIT_PER_MINUTE=600
-      - COMMAND_TTL_SEC=3600
-      - COMMAND_MAX_PENDING_PER_DEVICE=20
-      - WATER_PRESSURE_MIN_BAR=0.5
-      - WATER_BOTTOM_PRESSURE_FOR_TOP_CHECK_BAR=1.0
-      - GAS_PRESSURE_MIN_BAR=0.02
-      - GAS_PRESSURE_MAX_BAR=5.0
-      - ALERT_DEDUPE_SEC=600
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - RUN_INLINE_WORKERS=false
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=5)\""]
       interval: 30s
@@ -106,78 +108,27 @@ services:
 
   # ── Celery Worker ───────────────────────────────────────────────────────────
   celery-worker:
-    image: python:3.12-slim
+    <<: *backend-common
     container_name: meter-celery-worker
-    restart: unless-stopped
-    working_dir: /app
-    command: >
-      sh -c "pip install -r requirements.txt -q &&
-             celery -A core.celery_app.celery_app worker --loglevel=INFO --concurrency=2"
+    command: celery -A core.celery_app.celery_app worker --loglevel=INFO --concurrency=2
     volumes:
-      - ./backend:/app
       - firmware_store:/app/firmware
       - backup_store:/app/backups
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
-      - OTA_DIR=/app/firmware
-      - BACKUP_DIR=/app/backups
-      - BACKUP_KEEP_DAYS=14
-      - SECRET_KEY=change-me
-      - DEVICE_API_TOKEN=change-device-token
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - RUN_INLINE_WORKERS=false
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   # ── Celery Beat Scheduler ───────────────────────────────────────────────────
   celery-beat:
-    image: python:3.12-slim
+    <<: *backend-common
     container_name: meter-celery-beat
-    restart: unless-stopped
-    working_dir: /app
     command: >
-      sh -c "pip install -r requirements.txt -q &&
-             celery -A core.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule"
-    volumes:
-      - ./backend:/app
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
-      - SECRET_KEY=change-me
-      - DEVICE_API_TOKEN=change-device-token
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - RUN_INLINE_WORKERS=false
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      celery -A core.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
 
   # ── Flower Celery Monitor ───────────────────────────────────────────────────
   flower:
-    image: python:3.12-slim
+    <<: *backend-common
     container_name: meter-flower
-    restart: unless-stopped
-    working_dir: /app
-    command: >
-      sh -c "pip install -r requirements.txt -q &&
-             celery -A core.celery_app.celery_app flower --port=5555"
+    command: celery -A core.celery_app.celery_app flower --port=5555
     ports:
       - "5555:5555"
-    volumes:
-      - ./backend:/app
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
-      redis:
-        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -224,12 +224,13 @@ cd te71-meter-monitor
 
 # 2. Konfiguratsiya
 cp .env.example .env
-# .env faylni tahrirlang: MQTT_HOST, DB_PATH, va boshqalar
+# .env faylni tahrirlang: SECRET_KEY, DEVICE_API_TOKEN, DATABASE_URL va boshqalar
 
 # 3. Ishga tushirish
-docker-compose up -d
+docker compose up -d --build
 
 # Dashboard: http://localhost:8000
+# Flower: http://localhost:5555
 ```
 
 ### ESP32 Firmware
@@ -248,7 +249,7 @@ pio device monitor
 **Birinchi marta ishga tushganda:**
 1. ESP32 `MeterSetup` WiFi tarmog'ini ochadi (parol: `meter1234`)
 2. Telefon yoki noutbukdan ulanib `192.168.4.1` ga kiring
-3. WiFi tarmog'ini, Server URL va MQTT Host ni kiriting
+3. WiFi tarmog'i, asosiy Server URL va backup Server URLlarni kiriting
 4. Saqlash — ESP32 qayta ishga tushadi va hisoblagichni topadi
 
 ### Windows Desktop Tool
@@ -284,6 +285,7 @@ python desktop/main.py
 | GET | `/api/ota/list` | Firmware versiyalar ro'yxati |
 | POST | `/api/ota/push/{id}` | OTA buyrug'i yuborish |
 | DELETE | `/api/ota/{id}` | Firmwareni o'chirish |
+| GET | `/metrics` | Prometheus text metrics |
 | WS | `/ws` | WebSocket real-time stream |
 
 ---
@@ -295,11 +297,11 @@ python desktop/main.py
 | Mikrokontroller | ESP32 DevKit v1 |
 | RS-485 interfeys | MAX485ESA |
 | Firmware | Arduino (PlatformIO), C++17 |
-| Backend | Python 3.12, FastAPI, aiosqlite, aiomqtt |
-| MQTT Broker | Eclipse Mosquitto 2.0 |
+| Backend | Python 3.12, FastAPI, SQLAlchemy asyncio, Alembic |
+| Queue | Redis, Celery, Celery Beat, Flower |
 | Frontend | Bootstrap 5 (Sneat), ApexCharts, WebSocket |
 | Desktop | Python 3.x, PyQt6, pyserial |
-| Deploy | Docker + docker-compose |
+| Deploy | Dockerfile + Docker Compose |
 
 ---
 
