@@ -9,27 +9,27 @@ version: "3.9"
 # Dashboard:
 #   http://localhost:8000
 #
-# MQTT broker:
-#   localhost:1883 (TCP — ESP32 uchun)
-#   localhost:9001 (WebSocket — browser uchun, ixtiyoriy)
+# Database:
+#   PostgreSQL 5432
 # ──────────────────────────────────────────────────────────────────────────────
 
 services:
 
-  # ── MQTT Broker ─────────────────────────────────────────────────────────────
-  mosquitto:
-    image: eclipse-mosquitto:2.0
-    container_name: meter-mqtt
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: meter-postgres
     restart: unless-stopped
     ports:
-      - "1883:1883"    # TCP — ESP32 ulashadi
-      - "9001:9001"    # WebSocket — browser mqtt.js uchun
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=meter_monitor
+      - POSTGRES_USER=meter
+      - POSTGRES_PASSWORD=meter_password
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mqtt_data:/mosquitto/data
-      - mqtt_log:/mosquitto/log
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "health", "-m", "ok"]
+      test: ["CMD-SHELL", "pg_isready -U meter -d meter_monitor"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -42,22 +42,25 @@ services:
     working_dir: /app
     command: >
       sh -c "pip install -r requirements.txt -q &&
+             alembic upgrade head &&
              uvicorn app:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - ./frontend:/frontend
-      - backend_data:/app/data
       - firmware_store:/app/firmware
     environment:
-      - DB_PATH=/app/data/meters.db
+      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
       - STATIC_DIR=/frontend
-      - MQTT_HOST=mosquitto
-      - MQTT_PORT=1883
+      - SECRET_KEY=change-me
+      - BOOTSTRAP_ADMIN_USERNAME=admin
+      - BOOTSTRAP_ADMIN_PASSWORD=Admin123
+      - DEVICE_API_TOKEN=change-device-token
     depends_on:
-      - mosquitto
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -65,7 +68,5 @@ services:
       retries: 3
 
 volumes:
-  mqtt_data:
-  mqtt_log:
-  backend_data:
+  postgres_data:
   firmware_store:
