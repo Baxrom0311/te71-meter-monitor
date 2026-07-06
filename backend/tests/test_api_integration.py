@@ -90,8 +90,13 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         schemas = openapi["components"]["schemas"]
         self.assertIn("TaskQueuedResponse", schemas)
         self.assertIn("BackupListResponse", schemas)
+        self.assertIn("AlertListResponse", schemas)
+        self.assertIn("AlertNotificationListResponse", schemas)
+        self.assertIn("AlertRuleMutationResponse", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(restore_schema["$ref"], "#/components/schemas/TaskQueuedResponse")
+        alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
 
     async def test_device_ingestion_ota_commands_and_audit_over_http(self) -> None:
         admin_headers = await self._admin_headers()

@@ -10,6 +10,10 @@ from core.celery_app import celery_app
 from core.config import settings
 from core.security import current_token_payload, require_admin, require_device_token
 from models.schemas import (
+    AlertListResponse,
+    AlertNotificationListResponse,
+    AlertRuleListResponse,
+    AlertRuleMutationResponse,
     AlertRuleCreate,
     AlertRuleUpdate,
     BackupDeleteResponse,
@@ -31,6 +35,7 @@ from models.schemas import (
     MeterReadingBatch,
     MeterReading,
     OtaInstallReport,
+    OkResponse,
     PremiseCreate,
     RelayCommand,
     TaskQueuedResponse,
@@ -438,7 +443,7 @@ async def post_readings_batch(body: MeterReadingBatch, x_device_token: Optional[
     return result
 
 
-@router.get("/alerts")
+@router.get("/alerts", response_model=AlertListResponse)
 async def get_alerts(
     device_id: Optional[str] = None,
     kind: Optional[str] = None,
@@ -449,7 +454,7 @@ async def get_alerts(
     return await platform.get_alerts(device_id, kind, cleared, limit)
 
 
-@router.get("/alert-notifications")
+@router.get("/alert-notifications", response_model=AlertNotificationListResponse)
 async def list_alert_notifications(
     status: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
@@ -458,7 +463,7 @@ async def list_alert_notifications(
     return await platform.list_alert_notifications(status, limit)
 
 
-@router.get("/alert-rules")
+@router.get("/alert-rules", response_model=AlertRuleListResponse)
 async def list_alert_rules(
     utility_type: Optional[str] = None,
     building_id: Optional[int] = None,
@@ -469,35 +474,35 @@ async def list_alert_rules(
     return await platform.list_alert_rules(utility_type, building_id, enabled, limit)
 
 
-@router.post("/alert-rules")
+@router.post("/alert-rules", response_model=AlertRuleMutationResponse)
 async def create_alert_rule(body: AlertRuleCreate, admin: dict = Depends(require_admin)):
     result = await platform.create_alert_rule(body)
     await audit.record(admin, "alert_rule.create", "alert_rule", result["rule"]["id"], result["rule"])
     return result
 
 
-@router.put("/alert-rules/{rule_id}")
+@router.put("/alert-rules/{rule_id}", response_model=AlertRuleMutationResponse)
 async def update_alert_rule(rule_id: int, body: AlertRuleUpdate, admin: dict = Depends(require_admin)):
     result = await platform.update_alert_rule(rule_id, body)
     await audit.record(admin, "alert_rule.update", "alert_rule", rule_id, result["rule"])
     return result
 
 
-@router.delete("/alert-rules/{rule_id}")
+@router.delete("/alert-rules/{rule_id}", response_model=OkResponse)
 async def disable_alert_rule(rule_id: int, admin: dict = Depends(require_admin)):
     result = await platform.disable_alert_rule(rule_id)
     await audit.record(admin, "alert_rule.disable", "alert_rule", rule_id)
     return result
 
 
-@router.post("/alerts/{alert_id}/clear")
+@router.post("/alerts/{alert_id}/clear", response_model=OkResponse)
 async def clear_alert(alert_id: int, admin: dict = Depends(require_admin)):
     result = await platform.clear_alert(alert_id)
     await audit.record(admin, "alert.clear", "alert", alert_id)
     return result
 
 
-@router.post("/alerts/clear-all")
+@router.post("/alerts/clear-all", response_model=OkResponse)
 async def clear_all_alerts(device_id: Optional[str] = None, admin: dict = Depends(require_admin)):
     result = await platform.clear_all_alerts(device_id)
     await audit.record(admin, "alert.clear_all", "alert", device_id, {"device_id": device_id})
