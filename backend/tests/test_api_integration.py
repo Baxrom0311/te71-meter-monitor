@@ -50,6 +50,27 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(protected.status_code, 401)
         self.assertIn("X-Request-ID", protected.headers)
 
+        viewer = await self.client.post(
+            "/api/auth/users",
+            headers=admin_headers,
+            json={"username": "api-viewer", "password": "Viewer1234", "role": "user"},
+        )
+        self.assertEqual(viewer.status_code, 200, viewer.text)
+        viewer_login = await self.client.post(
+            "/api/auth/login",
+            json={"username": "api-viewer", "password": "Viewer1234"},
+        )
+        self.assertEqual(viewer_login.status_code, 200, viewer_login.text)
+        viewer_headers = {"Authorization": f"Bearer {viewer_login.json()['access_token']}"}
+        disabled_viewer = await self.client.put(
+            f"/api/auth/users/{viewer.json()['id']}",
+            headers=admin_headers,
+            json={"is_active": False},
+        )
+        self.assertEqual(disabled_viewer.status_code, 200, disabled_viewer.text)
+        stale_viewer = await self.client.get("/api/buildings", headers=viewer_headers)
+        self.assertEqual(stale_viewer.status_code, 401)
+
         building = await self.client.post(
             "/api/buildings",
             headers=admin_headers,

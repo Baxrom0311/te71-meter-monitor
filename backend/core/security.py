@@ -9,7 +9,9 @@ from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from core.config import settings
+from core.database import SessionLocal
 from core.time import now_ts
+from models.entities import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 device_token_scheme = APIKeyHeader(name="X-Device-Token", auto_error=False)
@@ -76,7 +78,14 @@ async def current_token_payload(
 ) -> dict:
     if not credentials:
         raise HTTPException(401, "Authorization token kerak")
-    return decode_access_token(credentials.credentials)
+    payload = decode_access_token(credentials.credentials)
+    async with SessionLocal() as session:
+        user = await session.get(User, payload.get("sub"))
+    if not user or not user.is_active:
+        raise HTTPException(401, "User aktiv emas")
+    if user.username != payload.get("username") or user.role != payload.get("role"):
+        raise HTTPException(401, "Token eskirgan, qayta login qiling")
+    return payload
 
 
 async def require_admin(payload: dict = Depends(current_token_payload)) -> dict:
