@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-
 class Settings:
+    app_env: str = os.getenv("APP_ENV", "development").lower()
     db_path: Path = Path(os.getenv("DB_PATH", "data/meters.db"))
     database_url: str = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
     ota_dir: Path = Path(os.getenv("OTA_DIR", "firmware"))
@@ -63,6 +63,28 @@ class Settings:
     min_password_len: int = int(os.getenv("MIN_PASSWORD_LEN", "8"))
     bootstrap_admin_username: str = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
     bootstrap_admin_password: str = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env in {"prod", "production"}
+
+    def validate_runtime(self) -> None:
+        if not self.is_production:
+            return
+        insecure_values = {"", "change-me", "change-me-in-production", "change-device-token", "Admin123", "Admin1234"}
+        errors = []
+        if self.secret_key in insecure_values or len(self.secret_key) < 32:
+            errors.append("SECRET_KEY production uchun kuchli va kamida 32 belgili bo'lishi kerak")
+        if self.device_api_token in insecure_values or len(self.device_api_token) < 24:
+            errors.append("DEVICE_API_TOKEN production uchun kuchli va kamida 24 belgili bo'lishi kerak")
+        if self.bootstrap_admin_password and self.bootstrap_admin_password in insecure_values:
+            errors.append("BOOTSTRAP_ADMIN_PASSWORD default qiymatda qolmasligi kerak")
+        if self.cors_origins == ["*"]:
+            errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
+        if self.trusted_hosts == ["*"]:
+            errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
+        if errors:
+            raise RuntimeError("; ".join(errors))
 
 
 settings = Settings()

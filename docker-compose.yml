@@ -69,6 +69,7 @@ services:
       - firmware_store:/app/firmware
       - backup_store:/app/backups
     environment:
+      - APP_ENV=development
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
       - BACKUP_DIR=/app/backups
@@ -117,6 +118,7 @@ services:
       - firmware_store:/app/firmware
       - backup_store:/app/backups
     environment:
+      - APP_ENV=development
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
       - BACKUP_DIR=/app/backups
@@ -144,6 +146,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
+      - APP_ENV=development
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - SECRET_KEY=change-me
       - DEVICE_API_TOKEN=change-device-token

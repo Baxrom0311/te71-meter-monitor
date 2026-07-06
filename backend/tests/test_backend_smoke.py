@@ -265,6 +265,37 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         finally:
             settings.rate_limit_per_minute = old_limit
 
+    async def test_production_runtime_validation(self) -> None:
+        old_env = settings.app_env
+        old_secret = settings.secret_key
+        old_device_token = settings.device_api_token
+        old_admin_password = settings.bootstrap_admin_password
+        old_cors = settings.cors_origins
+        old_hosts = settings.trusted_hosts
+        try:
+            settings.app_env = "production"
+            settings.secret_key = "change-me"
+            settings.device_api_token = "change-device-token"
+            settings.bootstrap_admin_password = "Admin1234"
+            settings.cors_origins = ["*"]
+            settings.trusted_hosts = ["*"]
+            with self.assertRaises(RuntimeError):
+                settings.validate_runtime()
+
+            settings.secret_key = "s" * 40
+            settings.device_api_token = "d" * 32
+            settings.bootstrap_admin_password = "StrongAdmin1234"
+            settings.cors_origins = ["https://meter.example.uz"]
+            settings.trusted_hosts = ["meter.example.uz"]
+            settings.validate_runtime()
+        finally:
+            settings.app_env = old_env
+            settings.secret_key = old_secret
+            settings.device_api_token = old_device_token
+            settings.bootstrap_admin_password = old_admin_password
+            settings.cors_origins = old_cors
+            settings.trusted_hosts = old_hosts
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_runtime()
     await init_db()
     await bootstrap_admin()
     ws_manager.set_snapshot_provider(build_snapshot)
