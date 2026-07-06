@@ -6,14 +6,19 @@ from pathlib import Path
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DEVICE_API_TOKEN", "global-device-token")
+os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "120")
+os.environ.setdefault("DEVICE_RATE_LIMIT_PER_MINUTE", "600")
 os.environ["DB_PATH"] = tempfile.mktemp(prefix="electr-test-", suffix=".db")
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{os.environ['DB_PATH']}"
 os.environ["OTA_DIR"] = tempfile.mkdtemp(prefix="electr-test-fw-")
 
 from starlette.datastructures import UploadFile
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 from core.config import settings
 from core.database import init_db
+from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from core.security import decode_access_token
 from models.schemas import (
     BuildingCreate,
@@ -25,6 +30,38 @@ from models.schemas import (
 )
 from schemas.auth import LoginRequest, UserCreate
 from services import audit, auth, platform
+
+
+async def _noop_app(scope, receive, send):
+    return None
+
+
+async def _empty_receive():
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+def _request(path: str = "/limited") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": [(b"host", b"testserver"), (b"x-request-id", b"req-1")],
+            "client": ("127.0.0.1", 1234),
+            "server": ("testserver", 80),
+            "root_path": "",
+        },
+        receive=_empty_receive,
+    )
+
+
+async def _ok_response(_: Request):
+    return PlainTextResponse("ok")
 
 
 class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
@@ -121,6 +158,31 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         await audit.record(token_payload, "smoke.audit", "firmware", uploaded["id"])
         logs = await audit.list_logs(10)
         self.assertEqual(logs["audit_logs"][0]["action"], "smoke.audit")
+
+    async def test_readiness_and_middleware_hardening(self) -> None:
+        from routers.health import ready
+
+        self.assertEqual(await ready(), {"status": "ready"})
+
+        old_limit = settings.rate_limit_per_minute
+        settings.rate_limit_per_minute = 1
+        try:
+            context = RequestContextMiddleware(_noop_app)
+            context_response = await context.dispatch(_request(), _ok_response)
+            self.assertEqual(context_response.headers["X-Request-ID"], "req-1")
+
+            security = SecurityHeadersMiddleware(_noop_app)
+            security_response = await security.dispatch(_request(), _ok_response)
+            self.assertEqual(security_response.headers["X-Content-Type-Options"], "nosniff")
+            self.assertEqual(security_response.headers["X-Frame-Options"], "DENY")
+
+            limiter = InMemoryRateLimitMiddleware(_noop_app)
+            first = await limiter.dispatch(_request(), _ok_response)
+            second = await limiter.dispatch(_request(), _ok_response)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(second.status_code, 429)
+        finally:
+            settings.rate_limit_per_minute = old_limit
 
 
 if __name__ == "__main__":

@@ -967,6 +967,10 @@ Local development:
 - API request signature yoki token
 - OTA faqat admin uchun
 - command faqat admin uchun
+- CORS `CORS_ORIGINS` env orqali boshqariladi
+- `TRUSTED_HOSTS` env orqali Host header himoyasi
+- API va ESP32 endpointlari uchun alohida rate limit
+- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
 
 ### Reliability
 
@@ -978,6 +982,9 @@ Local development:
 - Celery Beat data cleanup
 - Flower worker monitoring
 - health endpoint
+- readiness endpoint: `/ready`
+- request id: har response'da `X-Request-ID`
+- access log: method, path, status, latency, request id
 - audit logs
 
 ### Analytics

@@ -15,6 +15,18 @@ class Settings:
         for item in os.getenv("PUBLIC_SERVER_URLS", "").split(",")
         if item.strip()
     ]
+    cors_origins: list[str] = [
+        item.strip()
+        for item in os.getenv("CORS_ORIGINS", "*").split(",")
+        if item.strip()
+    ]
+    trusted_hosts: list[str] = [
+        item.strip()
+        for item in os.getenv("TRUSTED_HOSTS", "*").split(",")
+        if item.strip()
+    ]
+    rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+    device_rate_limit_per_minute: int = int(os.getenv("DEVICE_RATE_LIMIT_PER_MINUTE", "600"))
     telemetry_interval_sec: int = int(os.getenv("TELEMETRY_INTERVAL_SEC", "30"))
     status_interval_sec: int = int(os.getenv("STATUS_INTERVAL_SEC", "60"))
     command_poll_interval_sec: int = int(os.getenv("COMMAND_POLL_INTERVAL_SEC", "10"))

@@ -2,13 +2,17 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.config import settings
 from core.database import init_db
+from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from routers.auth import router as auth_router
 from routers.api import router as api_router
 from routers.health import router as health_router
@@ -33,7 +37,35 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestContextMiddleware)
+app.add_middleware(InMemoryRateLimitMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_origins != ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        {"detail": exc.detail, "request_id": getattr(request.state, "request_id", None)},
+        status_code=exc.status_code,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled error request_id=%s", getattr(request.state, "request_id", None))
+    return JSONResponse(
+        {"detail": "Ichki server xatosi", "request_id": getattr(request.state, "request_id", None)},
+        status_code=500,
+    )
 
 app.include_router(api_router)
 app.include_router(auth_router)
