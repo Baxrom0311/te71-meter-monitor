@@ -176,14 +176,18 @@ def _global_device_token_ok(token: str | None) -> bool:
 async def verify_device_access(device_id: str | None, token: str | None) -> None:
     if not device_id:
         raise HTTPException(400, "device_id kerak")
-    if _global_device_token_ok(token):
-        return
     async with SessionLocal() as session:
         device = await session.get(Device, device_id)
+    if device and not device.is_active:
+        raise HTTPException(403, "Qurilma o'chirilgan")
     if device and device.api_token_hash:
         if token and verify_password(token, device.api_token_hash):
             return
         raise HTTPException(401, "Device token noto'g'ri")
+    if device and device.token_revoked_at:
+        raise HTTPException(401, "Device token bekor qilingan")
+    if _global_device_token_ok(token):
+        return
     if settings.device_api_token:
         raise HTTPException(401, "Device token noto'g'ri")
 
@@ -644,6 +648,9 @@ async def register_device(body: DeviceRegister) -> dict:
             device_token = generate_secret_token()
             device.api_token_hash = hash_password(device_token)
             device.token_created_at = ts
+            device.token_revoked_at = None
+            device.token_revoked_by_user_id = None
+            device.token_revoked_by_username = None
 
         device.name = device.name or body.name or body.device_id
         device.utility_type = applied_utility_type
@@ -766,9 +773,30 @@ async def rotate_device_token(device_id: str) -> dict:
             session.add(device)
         device.api_token_hash = hash_password(token)
         device.token_created_at = ts
+        device.token_revoked_at = None
+        device.token_revoked_by_user_id = None
+        device.token_revoked_by_username = None
         device.updated_at = ts
         await session.commit()
     return {"device_id": device_id, "device_token": token, "token_type": "device"}
+
+
+async def revoke_device_token(device_id: str, admin: dict) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        device = await session.get(Device, device_id)
+        if not device:
+            raise HTTPException(404, "Qurilma topilmadi")
+        if not device.api_token_hash and device.token_revoked_at:
+            return {"ok": True, "device_id": device_id, "token_revoked_at": device.token_revoked_at}
+        device.api_token_hash = None
+        device.token_created_at = None
+        device.token_revoked_at = ts
+        device.token_revoked_by_user_id = admin.get("sub")
+        device.token_revoked_by_username = admin.get("username")
+        device.updated_at = ts
+        await session.commit()
+    return {"ok": True, "device_id": device_id, "token_revoked_at": ts}
 
 
 async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: dict) -> dict:

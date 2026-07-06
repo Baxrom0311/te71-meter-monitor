@@ -218,6 +218,21 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metrics.status_code, 200, metrics.text)
         self.assertIn("meter_monitor_devices_total", metrics.text)
 
+        global_config = await self.client.get(
+            "/api/device-config/esp32-api-water-01",
+            headers={"X-Device-Token": settings.device_api_token},
+        )
+        self.assertEqual(global_config.status_code, 401)
+
+        token_revoke = await self.client.delete(
+            "/api/devices/esp32-api-water-01/token",
+            headers=admin_headers,
+        )
+        self.assertEqual(token_revoke.status_code, 200, token_revoke.text)
+        self.assertTrue(token_revoke.json()["token_revoked_at"])
+        revoked_config = await self.client.get("/api/device-config/esp32-api-water-01", headers=device_headers)
+        self.assertEqual(revoked_config.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

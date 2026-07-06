@@ -12,7 +12,7 @@ X-Device-Token: <device-token>
 
 Token tekshirish tartibi:
 
-1. Agar device uchun per-device token bor bo'lsa, shu token ishlatiladi.
+1. Agar device uchun per-device token bor bo'lsa, faqat shu token ishlatiladi.
 2. Aks holda global `DEVICE_API_TOKEN` provisioning/emergency token sifatida ishlaydi.
 3. Birinchi install paytida admin yaratgan `provisioning_token` bilan `POST /api/register` chaqirilsa `X-Device-Token` shart emas.
 4. Token noto'g'ri bo'lsa `401`.
@@ -149,6 +149,15 @@ DELETE /api/devices/provisioning-tokens/{token_id}
 ```
 
 Revoke qilingan yoki ishlatilgan provisioning token bilan register qilinsa `401` qaytadi.
+
+Admin device token API:
+
+```http
+POST /api/devices/{device_id}/token
+DELETE /api/devices/{device_id}/token
+```
+
+`POST` yangi per-device token yaratadi yoki eski tokenni rotate qiladi. `DELETE` device tokenni bekor qiladi; undan keyin ESP32 eski token bilan `401` oladi.
 
 ## Reading
 

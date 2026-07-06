@@ -283,6 +283,13 @@ async def rotate_device_token(device_id: str, admin: dict = Depends(require_admi
     return result
 
 
+@router.delete("/devices/{device_id}/token")
+async def revoke_device_token(device_id: str, admin: dict = Depends(require_admin)):
+    result = await platform.revoke_device_token(device_id, admin)
+    await audit.record(admin, "device.revoke_token", "device", device_id)
+    return result
+
+
 @router.get("/devices/{device_id}/latest")
 async def device_latest(device_id: str, _: dict = Depends(current_token_payload)):
     return await platform.latest_reading(device_id)

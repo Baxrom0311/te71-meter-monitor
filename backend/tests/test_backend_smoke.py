@@ -161,6 +161,8 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
 
         token = await platform.rotate_device_token("esp32-water-top-01")
         await platform.verify_device_access("esp32-water-top-01", token["device_token"])
+        with self.assertRaises(HTTPException):
+            await platform.verify_device_access("esp32-water-top-01", settings.device_api_token)
         command = await platform.create_command("esp32-water-top-01", "reboot")
         self.assertIn("expires_at", command)
         pending = await platform.pending_commands("esp32-water-top-01")
@@ -169,6 +171,13 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         await platform.ack_command(command["cmd_id"], "ok")
         listed = await platform.list_commands("esp32-water-top-01", "acked")
         self.assertEqual(listed["commands"][0]["status"], "acked")
+        revoked_token = await platform.revoke_device_token(
+            "esp32-water-top-01",
+            {"sub": 1, "username": "admin", "role": "admin"},
+        )
+        self.assertTrue(revoked_token["token_revoked_at"])
+        with self.assertRaises(HTTPException):
+            await platform.verify_device_access("esp32-water-top-01", token["device_token"])
 
         old_ttl = settings.command_ttl_sec
         settings.command_ttl_sec = -1

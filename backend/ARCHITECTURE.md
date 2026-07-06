@@ -697,9 +697,12 @@ Endpoint permission qoidalari:
 - ESP32 compatibility endpointlari user login talab qilmaydi.
 - Productionda ESP32 endpointlari `X-Device-Token` orqali himoyalanadi.
 - `DEVICE_API_TOKEN` global provisioning/emergency token sifatida ishlaydi.
-- Admin `POST /api/devices/{device_id}/token` orqali har ESP32 uchun alohida token yaratadi.
+- Admin `POST /api/devices/{device_id}/token` orqali har ESP32 uchun alohida token yaratadi yoki rotate qiladi.
+- Admin `DELETE /api/devices/{device_id}/token` orqali yo'qolgan yoki chiqib ketgan device tokenni bekor qiladi.
 - Device token faqat bir marta plaintext qaytadi; DBda hash saqlanadi.
 - Agar devicega alohida token berilgan bo'lsa, ESP32 o'sha token bilan ishlaydi.
+- Agar devicega alohida token berilgan bo'lsa, global `DEVICE_API_TOKEN` uni bypass qilmaydi.
+- Agar device `is_active=false` bo'lsa, device endpointlari token bilan ham ishlamaydi.
 - Agar tokenlar sozlanmagan bo'lsa, development uchun ESP32 endpointlari ochiq ishlaydi.
 - ESP32 endpointlari:
   - `GET /api/device-config/{device_id}`
@@ -716,6 +719,7 @@ Admin device token endpoint:
 
 ```text
 POST /api/devices/{device_id}/token
+DELETE /api/devices/{device_id}/token
 ```
 
 Response:
