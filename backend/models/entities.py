@@ -215,6 +215,34 @@ class Reading(Base):
     measurement_point: Mapped["MeasurementPoint | None"] = relationship(back_populates="readings")
 
 
+class HourlyUtilityStats(Base):
+    __tablename__ = "hourly_utility_stats"
+    __table_args__ = (
+        UniqueConstraint("bucket_ts", "device_id", "utility_type", name="uq_hourly_stats_device_utility"),
+        Index("idx_hourly_stats_building_utility_bucket", "building_id", "utility_type", "bucket_ts"),
+        Index("idx_hourly_stats_device_bucket", "device_id", "bucket_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bucket_ts: Mapped[int] = mapped_column(Integer, nullable=False)
+    building_id: Mapped[int | None] = mapped_column(ForeignKey("buildings.id"))
+    point_id: Mapped[int | None] = mapped_column(ForeignKey("measurement_points.id"))
+    device_id: Mapped[str] = mapped_column(String(128), ForeignKey("devices.id"), nullable=False)
+    utility_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    samples: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_voltage_l1: Mapped[float | None] = mapped_column(Float)
+    avg_power_w: Mapped[float | None] = mapped_column(Float)
+    max_energy_kwh: Mapped[float | None] = mapped_column(Float)
+    avg_pressure_bar: Mapped[float | None] = mapped_column(Float)
+    avg_pressure_bottom_bar: Mapped[float | None] = mapped_column(Float)
+    avg_pressure_top_bar: Mapped[float | None] = mapped_column(Float)
+    avg_flow_rate: Mapped[float | None] = mapped_column(Float)
+    max_volume_m3: Mapped[float | None] = mapped_column(Float)
+    leak_count: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (

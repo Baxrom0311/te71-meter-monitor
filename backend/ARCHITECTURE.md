@@ -939,6 +939,7 @@ Joriy periodik tasklar:
 - `backup.create`: admin trigger qiladigan JSON gzip backup export
 - `backup.cleanup_old`: `BACKUP_KEEP_DAYS` bo'yicha eski backup fayllarni o'chiradi
 - `maintenance.cleanup_old_audit_logs`: `AUDIT_KEEP_DAYS` bo'yicha eski audit loglarni o'chiradi
+- `maintenance.aggregate_hourly_stats`: har soatda oxirgi 48 soat readinglardan `hourly_utility_stats` aggregate table yaratadi
 
 FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishlaydi. Docker production stackda `RUN_INLINE_WORKERS=false`, shuning uchun offline detector va cleanup faqat Celery orqali yuradi.
 
@@ -1085,6 +1086,11 @@ Production querylar uchun alohida operational indexlar bor:
 
 Backup formati `meter-monitor-json-v1`. Har bir export ichida metadata, app version, jadval nomlari va jadval qatorlari JSON ko'rinishida saqlanadi, fayl gzip bilan siqiladi va SHA256 checksum qaytadi.
 Restore xavfli operatsiya bo'lgani uchun `confirm=RESTORE` talab qiladi. Restore boshlanishidan oldin backend avtomatik `pre_restore:<filename>` backup yaratadi. Retention `BACKUP_KEEP_DAYS` orqali boshqariladi.
+
+Analytics aggregate API:
+
+- `POST /api/analytics/hourly/aggregate?hours=48`: admin qo'lda hourly aggregate qayta hisoblaydi
+- `GET /api/analytics/hourly?building_id=1&utility_type=water&hours=24`: dashboard uchun tayyor hourly statistika qaytaradi
 
 ### User Management API
 

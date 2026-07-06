@@ -32,6 +32,11 @@ celery_app.conf.update(
             "task": "maintenance.expire_commands",
             "schedule": 60.0,
         },
+        "aggregate-hourly-stats-hourly": {
+            "task": "maintenance.aggregate_hourly_stats",
+            "schedule": 3600.0,
+            "args": (48,),
+        },
         "cleanup-old-backups-daily": {
             "task": "backup.cleanup_old",
             "schedule": 86400.0,

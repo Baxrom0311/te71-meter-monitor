@@ -250,6 +250,16 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(mixed_batch.status_code, 403)
 
+        aggregate = await self.client.post("/api/analytics/hourly/aggregate?hours=24", headers=admin_headers)
+        self.assertEqual(aggregate.status_code, 200, aggregate.text)
+        self.assertGreaterEqual(aggregate.json()["buckets"], 1)
+        hourly = await self.client.get(
+            "/api/analytics/hourly?device_id=esp32-api-water-01&hours=24",
+            headers=admin_headers,
+        )
+        self.assertEqual(hourly.status_code, 200, hourly.text)
+        self.assertEqual(hourly.json()["stats"][0]["device_id"], "esp32-api-water-01")
+
         alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
         self.assertEqual(alerts.status_code, 200, alerts.text)
         self.assertEqual(alerts.json()["alerts"][0]["kind"], "water_low_pressure")

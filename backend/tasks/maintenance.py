@@ -4,7 +4,7 @@ from core.celery_app import celery_app
 from core.database import init_db
 from services.audit import cleanup_old_logs_once
 from services.background import cleanup_old_data_once, detect_offline_devices_once
-from services.platform import cleanup_expired_commands_once
+from services.platform import aggregate_hourly_stats_once, cleanup_expired_commands_once
 
 
 async def _with_db(coro):
@@ -26,6 +26,11 @@ def cleanup_old_data() -> dict:
 @celery_app.task(name="maintenance.expire_commands")
 def expire_commands() -> dict:
     return asyncio.run(_with_db(cleanup_expired_commands_once()))
+
+
+@celery_app.task(name="maintenance.aggregate_hourly_stats")
+def aggregate_hourly_stats(hours: int = 48) -> dict:
+    return asyncio.run(_with_db(aggregate_hourly_stats_once(hours)))
 
 
 @celery_app.task(name="maintenance.cleanup_old_audit_logs")

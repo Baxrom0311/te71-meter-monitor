@@ -347,6 +347,28 @@ async def summary(_: dict = Depends(current_token_payload)):
     return await platform.summary()
 
 
+@router.get("/analytics/hourly")
+async def hourly_stats(
+    building_id: Optional[int] = None,
+    utility_type: Optional[str] = None,
+    device_id: Optional[str] = None,
+    hours: int = Query(24, ge=1, le=720),
+    limit: int = Query(500, ge=1, le=2000),
+    _: dict = Depends(current_token_payload),
+):
+    return await platform.list_hourly_stats(building_id, utility_type, device_id, hours, limit)
+
+
+@router.post("/analytics/hourly/aggregate")
+async def aggregate_hourly_stats(
+    hours: int = Query(48, ge=1, le=720),
+    admin: dict = Depends(require_admin),
+):
+    result = await platform.aggregate_hourly_stats_once(hours)
+    await audit.record(admin, "analytics.aggregate_hourly", "hourly_utility_stats", None, {"hours": hours, **result})
+    return result
+
+
 @router.post("/devices/{device_id}/relay")
 async def relay_command(device_id: str, body: RelayCommand, admin: dict = Depends(require_admin)):
     result = await platform.create_relay_command(device_id, body.action)

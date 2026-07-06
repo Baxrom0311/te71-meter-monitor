@@ -158,6 +158,11 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
                 select(func.count()).select_from(Alert).where(Alert.kind == "water_low_pressure")
             )
         self.assertEqual(low_pressure_alerts, 1)
+        aggregate = await platform.aggregate_hourly_stats_once(24)
+        self.assertGreaterEqual(aggregate["buckets"], 1)
+        hourly = await platform.list_hourly_stats(device_id="esp32-water-top-01", hours=24)
+        self.assertEqual(hourly["stats"][0]["device_id"], "esp32-water-top-01")
+        self.assertGreaterEqual(hourly["stats"][0]["samples"], 2)
 
         token = await platform.rotate_device_token("esp32-water-top-01")
         await platform.verify_device_access("esp32-water-top-01", token["device_token"])

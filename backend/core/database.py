@@ -78,6 +78,7 @@ async def _ensure_sqlite_columns(conn) -> None:
             "raw_payload": "TEXT",
             "created_at": "INTEGER",
         },
+        "hourly_utility_stats": {},
         "alerts": {
             "building_id": "INTEGER",
             "severity": "VARCHAR(32) DEFAULT 'warning'",
@@ -126,6 +127,8 @@ async def _ensure_sqlite_columns(conn) -> None:
         "idx_premises_building_floor": "CREATE INDEX IF NOT EXISTS idx_premises_building_floor ON premises (building_id, floor, number)",
         "idx_readings_ts": "CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings (ts)",
         "idx_readings_building_utility_ts": "CREATE INDEX IF NOT EXISTS idx_readings_building_utility_ts ON readings (building_id, utility_type, ts)",
+        "idx_hourly_stats_building_utility_bucket": "CREATE INDEX IF NOT EXISTS idx_hourly_stats_building_utility_bucket ON hourly_utility_stats (building_id, utility_type, bucket_ts)",
+        "idx_hourly_stats_device_bucket": "CREATE INDEX IF NOT EXISTS idx_hourly_stats_device_bucket ON hourly_utility_stats (device_id, bucket_ts)",
         "idx_alerts_device_kind_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_device_kind_ts ON alerts (device_id, kind, ts)",
         "idx_alerts_building_cleared_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_building_cleared_ts ON alerts (building_id, cleared, ts)",
         "idx_commands_device_status": "CREATE INDEX IF NOT EXISTS idx_commands_device_status ON commands (device_id, status, id)",
