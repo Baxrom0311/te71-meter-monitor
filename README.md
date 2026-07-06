@@ -303,6 +303,8 @@ python desktop/main.py
 | Desktop | Python 3.x, PyQt6, pyserial |
 | Deploy | Dockerfile + Docker Compose |
 
+CI: GitHub Actions backend smoke test, py_compile va Alembic migration upgrade tekshiradi.
+
 ---
 
 ## Litsenziya

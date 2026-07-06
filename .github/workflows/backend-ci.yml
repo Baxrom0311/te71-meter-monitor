@@ -1,0 +1,64 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - "docker-compose.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - "docker-compose.yml"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile backend
+        run: |
+          python -m py_compile \
+            app.py \
+            core/config.py \
+            core/database.py \
+            core/security.py \
+            core/middleware.py \
+            core/celery_app.py \
+            models/entities.py \
+            models/schemas.py \
+            routers/api.py \
+            routers/auth.py \
+            routers/health.py \
+            services/auth.py \
+            services/platform.py \
+            services/backup.py \
+            services/background.py \
+            tasks/backup.py \
+            tasks/maintenance.py
+
+      - name: Run smoke tests
+        run: python -m unittest tests.test_backend_smoke
+
+      - name: Run Alembic migrations
+        run: |
+          tmpdb="$(mktemp /tmp/meter-ci-XXXX.db)"
+          DB_PATH="$tmpdb" DATABASE_URL="sqlite+aiosqlite:///$tmpdb" alembic upgrade head
+          rm -f "$tmpdb"
