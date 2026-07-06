@@ -79,6 +79,25 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(building.status_code, 200, building.text)
         building_id = building.json()["id"]
 
+        invalid_premise = await self.client.post(
+            "/api/premises",
+            headers=admin_headers,
+            json={"building_id": 999999, "number": "1"},
+        )
+        self.assertEqual(invalid_premise.status_code, 404)
+        utility = await self.client.post(
+            f"/api/buildings/{building_id}/utilities",
+            headers=admin_headers,
+            json={"building_id": building_id, "utility_type": "water", "name": "Water"},
+        )
+        self.assertEqual(utility.status_code, 200, utility.text)
+        duplicate_utility = await self.client.post(
+            f"/api/buildings/{building_id}/utilities",
+            headers=admin_headers,
+            json={"building_id": building_id, "utility_type": "water", "name": "Water duplicate"},
+        )
+        self.assertEqual(duplicate_utility.status_code, 409)
+
         invalid_point_create = await self.client.post(
             "/api/measurement-points",
             headers=admin_headers,

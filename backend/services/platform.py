@@ -312,15 +312,27 @@ async def delete_building(building_id: int) -> dict:
 
 async def create_building_utility(body: BuildingUtilityCreate) -> dict:
     ts = now_ts()
-    item = BuildingUtility(
-        building_id=body.building_id,
-        utility_type=body.utility_type,
-        name=body.name,
-        status=body.status,
-        created_at=ts,
-        updated_at=ts,
-    )
     async with SessionLocal() as session:
+        if not await session.get(Building, body.building_id):
+            raise HTTPException(404, "Dom topilmadi")
+        existing = await session.scalar(
+            select(BuildingUtility.id).where(
+                and_(
+                    BuildingUtility.building_id == body.building_id,
+                    BuildingUtility.utility_type == body.utility_type,
+                )
+            )
+        )
+        if existing:
+            raise HTTPException(409, "Bu utility buildingda allaqachon bor")
+        item = BuildingUtility(
+            building_id=body.building_id,
+            utility_type=body.utility_type,
+            name=body.name,
+            status=body.status,
+            created_at=ts,
+            updated_at=ts,
+        )
         session.add(item)
         await session.commit()
         await session.refresh(item)
@@ -490,15 +502,17 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
 
 async def create_premise(body: PremiseCreate) -> dict:
     ts = now_ts()
-    premise = Premise(
-        building_id=body.building_id,
-        number=body.number,
-        floor=body.floor,
-        premise_type=body.premise_type,
-        created_at=ts,
-        updated_at=ts,
-    )
     async with SessionLocal() as session:
+        if not await session.get(Building, body.building_id):
+            raise HTTPException(404, "Dom topilmadi")
+        premise = Premise(
+            building_id=body.building_id,
+            number=body.number,
+            floor=body.floor,
+            premise_type=body.premise_type,
+            created_at=ts,
+            updated_at=ts,
+        )
         session.add(premise)
         await session.commit()
         await session.refresh(premise)
