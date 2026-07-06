@@ -1189,6 +1189,7 @@ Kerakli analizlar:
 - `services/analytics.py` ajratildi: device stats, building analytics, hourly aggregation/list va CSV export shu domain service ichida.
 - `services/readings.py` ajratildi: reading validation, single/batch ingest, latest/history va building reading views shu domain service ichida.
 - `services/devices.py` ajratildi: device auth/config/register/status/list/update, device token va provisioning token lifecycle shu domain service ichida.
+- `services/commands.py` ajratildi: relay/reboot/custom command create, pending poll, ack, list va expired cleanup shu domain service ichida.
 - eski endpointlarni saqlash.
 - SQLite schema yoki SQLAlchemy model yaratish.
 
