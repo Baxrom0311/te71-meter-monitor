@@ -22,6 +22,7 @@ from core.middleware import (
 from routers.auth import router as auth_router
 from routers.api import router as api_router
 from routers.buildings import router as buildings_router
+from routers.devices import router as devices_router
 from routers.health import router as health_router
 from routers.websocket import router as websocket_router
 from services.auth import bootstrap_admin
@@ -78,6 +79,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 app.include_router(api_router)
 app.include_router(buildings_router)
+app.include_router(devices_router)
 app.include_router(auth_router)
 app.include_router(websocket_router)
 app.include_router(health_router)
