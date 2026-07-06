@@ -15,6 +15,7 @@ from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
 from models.entities import (
     Alert,
+    AlertNotification,
     AlertRule,
     Building,
     BuildingUtility,
@@ -1067,6 +1068,22 @@ def _queue_alert(alerts: list[tuple[Alert, int]], alert: Alert, rule: AlertRule 
     alerts.append((alert, _rule_dedupe_sec(rule)))
 
 
+def _notification_for_alert(alert: Alert, ts: int) -> AlertNotification:
+    return AlertNotification(
+        alert_id=alert.id,
+        device_id=alert.device_id,
+        building_id=alert.building_id,
+        point_id=alert.point_id,
+        utility_type=alert.utility_type,
+        severity=alert.severity,
+        kind=alert.kind,
+        channel="internal",
+        status="pending",
+        message=alert.message,
+        created_at=ts,
+    )
+
+
 async def _check_alerts(session, reading: MeterReading) -> None:
     ts = now_ts()
     alerts: list[tuple[Alert, int]] = []
@@ -1211,6 +1228,9 @@ async def _check_alerts(session, reading: MeterReading) -> None:
         if recent:
             continue
         session.add(alert)
+        await session.flush()
+        if alert.severity == "critical":
+            session.add(_notification_for_alert(alert, ts))
         await ws_manager.broadcast(
             {
                 "type": "alert",
@@ -1803,6 +1823,15 @@ async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, lim
     async with SessionLocal() as session:
         rows = (await session.scalars(stmt)).all()
     return {"alerts": [_as_dict(row) for row in rows]}
+
+
+async def list_alert_notifications(status: str | None = None, limit: int = 100) -> dict:
+    stmt = select(AlertNotification).order_by(desc(AlertNotification.created_at)).limit(limit)
+    if status:
+        stmt = stmt.where(AlertNotification.status == status)
+    async with SessionLocal() as session:
+        rows = (await session.scalars(stmt)).all()
+    return {"notifications": [_as_dict(row) for row in rows], "total": len(rows)}
 
 
 async def list_alert_rules(

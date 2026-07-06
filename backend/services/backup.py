@@ -28,6 +28,7 @@ RESTORE_TABLE_ORDER = [
     "hourly_utility_stats",
     "alerts",
     "alert_rules",
+    "alert_notifications",
     "commands",
     "audit_logs",
 ]

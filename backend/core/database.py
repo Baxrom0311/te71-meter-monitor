@@ -85,6 +85,7 @@ async def _ensure_sqlite_columns(conn) -> None:
             "cleared_at": "INTEGER",
         },
         "alert_rules": {},
+        "alert_notifications": {},
         "commands": {
             "status": "VARCHAR(32) DEFAULT 'pending'",
             "expires_at": "INTEGER",
@@ -135,6 +136,8 @@ async def _ensure_sqlite_columns(conn) -> None:
         "idx_alerts_building_cleared_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_building_cleared_ts ON alerts (building_id, cleared, ts)",
         "idx_alert_rules_lookup": "CREATE INDEX IF NOT EXISTS idx_alert_rules_lookup ON alert_rules (enabled, building_id, utility_type, kind)",
         "idx_alert_rules_kind": "CREATE INDEX IF NOT EXISTS idx_alert_rules_kind ON alert_rules (kind)",
+        "idx_alert_notifications_status_created": "CREATE INDEX IF NOT EXISTS idx_alert_notifications_status_created ON alert_notifications (status, created_at)",
+        "idx_alert_notifications_alert": "CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert ON alert_notifications (alert_id)",
         "idx_commands_device_status": "CREATE INDEX IF NOT EXISTS idx_commands_device_status ON commands (device_id, status, id)",
         "idx_commands_expires_status": "CREATE INDEX IF NOT EXISTS idx_commands_expires_status ON commands (expires_at, status)",
         "idx_firmware_active_uploaded": "CREATE INDEX IF NOT EXISTS idx_firmware_active_uploaded ON firmware (active, uploaded)",

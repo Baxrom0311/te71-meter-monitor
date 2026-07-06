@@ -1009,6 +1009,12 @@ Rule maydonlari:
 - `message`: custom alert matni
 - `enabled`: rule faol yoki o'chirilgan
 
+Critical alert escalation:
+
+- `severity=critical` alert yaratilganda backend `alert_notifications` outbox jadvaliga `pending` notification yozadi.
+- Admin `GET /api/alert-notifications?status=pending` orqali yuborilishi kerak bo'lgan critical holatlarni ko'radi.
+- Keyingi bosqichda Celery worker shu outboxdan Telegram/SMS/email integratsiyalarga yuborishi mumkin.
+
 ### Elektr
 
 - kuchlanish past

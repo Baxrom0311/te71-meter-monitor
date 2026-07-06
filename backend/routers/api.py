@@ -449,6 +449,15 @@ async def get_alerts(
     return await platform.get_alerts(device_id, kind, cleared, limit)
 
 
+@router.get("/alert-notifications")
+async def list_alert_notifications(
+    status: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    _: dict = Depends(require_admin),
+):
+    return await platform.list_alert_notifications(status, limit)
+
+
 @router.get("/alert-rules")
 async def list_alert_rules(
     utility_type: Optional[str] = None,

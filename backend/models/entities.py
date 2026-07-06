@@ -284,6 +284,28 @@ class AlertRule(Base, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class AlertNotification(Base):
+    __tablename__ = "alert_notifications"
+    __table_args__ = (
+        Index("idx_alert_notifications_status_created", "status", "created_at"),
+        Index("idx_alert_notifications_alert", "alert_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_id: Mapped[int | None] = mapped_column(ForeignKey("alerts.id"))
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    building_id: Mapped[int | None] = mapped_column(ForeignKey("buildings.id"))
+    point_id: Mapped[int | None] = mapped_column(ForeignKey("measurement_points.id"))
+    utility_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), default="internal", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    message: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    sent_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class Command(Base):
     __tablename__ = "commands"
     __table_args__ = (
