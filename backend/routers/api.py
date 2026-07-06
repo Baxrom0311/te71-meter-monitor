@@ -38,6 +38,18 @@ from services.websocket import ws_manager
 router = APIRouter(prefix="/api")
 
 
+def _safe_ota_path(filename: str) -> Path:
+    if Path(filename).name != filename:
+        raise HTTPException(400, "Firmware filename noto'g'ri")
+    root = Path(settings.ota_dir).resolve()
+    path = (root / filename).resolve()
+    if root not in path.parents and path != root:
+        raise HTTPException(400, "Firmware filename noto'g'ri")
+    if not path.exists() or not path.is_file():
+        raise HTTPException(404, "Firmware topilmadi")
+    return path
+
+
 @router.post("/buildings")
 async def create_building(body: BuildingCreate, admin: dict = Depends(require_admin)):
     result = await platform.create_building(body)
@@ -497,11 +509,7 @@ async def ota_download(
         await platform.verify_device_access(device_id, x_device_token)
     else:
         await require_device_token(x_device_token)
-    path = Path(settings.ota_dir) / filename
-    if not path.exists():
-        from fastapi import HTTPException
-
-        raise HTTPException(404, "Firmware topilmadi")
+    path = _safe_ota_path(filename)
     return FileResponse(str(path), media_type="application/octet-stream")
 
 

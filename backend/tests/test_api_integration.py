@@ -216,6 +216,9 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ota_check.status_code, 200, ota_check.text)
         self.assertTrue(ota_check.json()["update"])
         self.assertEqual(ota_check.json()["version"], "2.0.0")
+        ota_download = await self.client.get(ota_check.json()["url"], headers=device_headers)
+        self.assertEqual(ota_download.status_code, 200, ota_download.text)
+        self.assertEqual(ota_download.content, b"firmware-bytes")
 
         audit = await self.client.get("/api/audit-logs?action=ota.upload", headers=admin_headers)
         self.assertEqual(audit.status_code, 200, audit.text)
