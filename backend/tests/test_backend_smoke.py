@@ -1,4 +1,6 @@
 import os
+import json
+import logging
 import tempfile
 import unittest
 from io import BytesIO
@@ -22,6 +24,7 @@ from starlette.responses import PlainTextResponse
 
 from core.config import settings
 from core.database import init_db
+from core.logging import JsonFormatter
 from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from core.security import decode_access_token
 from core.database import SessionLocal
@@ -363,6 +366,24 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             context = RequestContextMiddleware(_noop_app)
             context_response = await context.dispatch(_request(), _ok_response)
             self.assertEqual(context_response.headers["X-Request-ID"], "req-1")
+            record = logging.LogRecord(
+                "meter_monitor.access",
+                logging.INFO,
+                __file__,
+                1,
+                "request completed",
+                (),
+                None,
+            )
+            record.request_id = "req-1"
+            record.method = "GET"
+            record.path = "/limited"
+            record.status_code = 200
+            record.elapsed_ms = 1.23
+            parsed_log = json.loads(JsonFormatter().format(record))
+            self.assertEqual(parsed_log["request_id"], "req-1")
+            self.assertEqual(parsed_log["status_code"], 200)
+            self.assertEqual(parsed_log["elapsed_ms"], 1.23)
 
             security = SecurityHeadersMiddleware(_noop_app)
             security_response = await security.dispatch(_request(), _ok_response)
@@ -387,6 +408,7 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         old_admin_password = settings.bootstrap_admin_password
         old_cors = settings.cors_origins
         old_hosts = settings.trusted_hosts
+        old_log_format = settings.log_format
         try:
             settings.app_env = "production"
             settings.secret_key = "change-me"
@@ -402,6 +424,10 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             settings.bootstrap_admin_password = "StrongAdmin1234"
             settings.cors_origins = ["https://meter.example.uz"]
             settings.trusted_hosts = ["meter.example.uz"]
+            settings.log_format = "yaml"
+            with self.assertRaises(RuntimeError):
+                settings.validate_runtime()
+            settings.log_format = "json"
             settings.validate_runtime()
         finally:
             settings.app_env = old_env
@@ -410,6 +436,7 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             settings.bootstrap_admin_password = old_admin_password
             settings.cors_origins = old_cors
             settings.trusted_hosts = old_hosts
+            settings.log_format = old_log_format
 
 
 if __name__ == "__main__":

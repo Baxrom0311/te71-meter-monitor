@@ -1060,6 +1060,7 @@ Docker production stack:
 - backend start vaqtida `alembic upgrade head` ishlaydi
 - dependency install runtime startda emas, image build vaqtida bajariladi
 - Mosquitto ishlatilmaydi
+- production loglar `LOG_FORMAT=json` orqali structured JSON ko'rinishida chiqariladi
 
 Local development:
 
@@ -1099,6 +1100,8 @@ Local development:
 - metrics endpoint: `/metrics` Prometheus text format
 - request id: har response'da `X-Request-ID`
 - access log: method, path, status, latency, request id
+- `LOG_LEVEL` va `LOG_FORMAT` env orqali backend log formati boshqariladi
+- JSON access loglarda `request_id`, `method`, `path`, `status_code`, `elapsed_ms`, `client_ip`, `user_agent` maydonlari bor
 - audit logs
 
 ### Database Performance

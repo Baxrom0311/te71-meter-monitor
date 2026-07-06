@@ -40,6 +40,8 @@ class Settings:
     celery_result_backend: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
     run_inline_workers: bool = os.getenv("RUN_INLINE_WORKERS", "true").lower() in {"1", "true", "yes", "on"}
     ready_check_redis: bool = os.getenv("READY_CHECK_REDIS", "false").lower() in {"1", "true", "yes", "on"}
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    log_format: str = os.getenv("LOG_FORMAT", "text").lower()
 
     voltage_min: float = float(os.getenv("VOLTAGE_MIN", "195.0"))
     voltage_max: float = float(os.getenv("VOLTAGE_MAX", "253.0"))
@@ -85,6 +87,8 @@ class Settings:
             errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
         if self.trusted_hosts == ["*"]:
             errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
+        if self.log_format not in {"json", "text"}:
+            errors.append("LOG_FORMAT faqat 'json' yoki 'text' bo'lishi kerak")
         if errors:
             raise RuntimeError("; ".join(errors))
 

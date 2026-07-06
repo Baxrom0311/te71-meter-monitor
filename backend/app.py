@@ -1,6 +1,6 @@
 import asyncio
-import logging
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.config import settings
+from core.logging import configure_logging
 from core.database import init_db
 from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from routers.auth import router as auth_router
@@ -22,7 +23,7 @@ from services.background import data_cleanup, offline_detector
 from services.platform import build_snapshot
 from services.websocket import ws_manager
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 
 
 @asynccontextmanager

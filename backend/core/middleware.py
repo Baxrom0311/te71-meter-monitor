@@ -13,6 +13,15 @@ from core.config import settings
 logger = logging.getLogger("meter_monitor.access")
 
 
+def _client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
@@ -28,6 +37,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response.status_code,
             elapsed_ms,
             request_id,
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "elapsed_ms": elapsed_ms,
+                "client_ip": _client_ip(request),
+                "user_agent": request.headers.get("User-Agent"),
+            },
         )
         return response
 
@@ -80,11 +98,5 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _client_key(request: Request) -> str:
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            host = forwarded_for.split(",", 1)[0].strip()
-        elif request.client:
-            host = request.client.host
-        else:
-            host = "unknown"
+        host = _client_ip(request)
         return f"{host}:{request.url.path}"

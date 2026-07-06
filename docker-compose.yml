@@ -46,6 +46,8 @@ x-backend-common: &backend-common
     - CELERY_RESULT_BACKEND=redis://redis:6379/1
     - RUN_INLINE_WORKERS=false
     - READY_CHECK_REDIS=true
+    - LOG_LEVEL=INFO
+    - LOG_FORMAT=text
   depends_on: &backend-depends
     postgres:
       condition: service_healthy
