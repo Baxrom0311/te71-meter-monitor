@@ -128,6 +128,19 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("device_token", register.json())
         device_headers = {"X-Device-Token": register.json()["device_token"]}
 
+        missing_update = await self.client.put(
+            "/api/devices/missing-device",
+            headers=admin_headers,
+            json={"name": "Missing"},
+        )
+        self.assertEqual(missing_update.status_code, 404)
+        invalid_point_update = await self.client.put(
+            "/api/devices/esp32-api-water-01",
+            headers=admin_headers,
+            json={"point_id": 999999},
+        )
+        self.assertEqual(invalid_point_update.status_code, 404)
+
         used_tokens = await self.client.get(
             "/api/devices/provisioning-tokens?active_only=false",
             headers=admin_headers,

@@ -756,9 +756,22 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
-    fields["updated_at"] = now_ts()
     async with SessionLocal() as session:
-        await session.execute(update(Device).where(Device.id == device_id).values(**fields))
+        device = await session.get(Device, device_id)
+        if not device:
+            raise HTTPException(404, "Qurilma topilmadi")
+        if fields.get("building_id") and not await session.get(Building, fields["building_id"]):
+            raise HTTPException(404, "Building topilmadi")
+        if fields.get("point_id"):
+            point = await session.get(MeasurementPoint, fields["point_id"])
+            if not point:
+                raise HTTPException(404, "Measurement point topilmadi")
+            building_id = fields.get("building_id") or device.building_id
+            if building_id and point.building_id and point.building_id != building_id:
+                raise HTTPException(422, "Measurement point boshqa buildingga tegishli")
+        for key, value in fields.items():
+            setattr(device, key, value)
+        device.updated_at = now_ts()
         await session.commit()
     return {"ok": True}
 
