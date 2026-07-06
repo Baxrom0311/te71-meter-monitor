@@ -1055,6 +1055,7 @@ Local development:
 - Flower worker monitoring
 - health endpoint
 - readiness endpoint: `/ready`
+- `READY_CHECK_REDIS=true` bo'lsa `/ready` Redis/Celery broker pingni ham tekshiradi
 - metrics endpoint: `/metrics` Prometheus text format
 - request id: har response'da `X-Request-ID`
 - access log: method, path, status, latency, request id

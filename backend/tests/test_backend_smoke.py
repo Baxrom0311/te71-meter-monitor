@@ -345,7 +345,9 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
     async def test_readiness_and_middleware_hardening(self) -> None:
         from routers.health import ready
 
-        self.assertEqual(await ready(), {"status": "ready"})
+        readiness = await ready()
+        self.assertEqual(readiness["status"], "ready")
+        self.assertEqual(readiness["checks"]["database"], "ok")
         metrics = await platform.metrics_text()
         self.assertIn("meter_monitor_devices_total", metrics)
         self.assertIn("meter_monitor_open_alerts", metrics)
