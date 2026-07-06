@@ -4,6 +4,7 @@ from core.celery_app import celery_app
 from core.database import init_db
 from services.audit import cleanup_old_logs_once
 from services.analytics import aggregate_hourly_stats_once
+from services.alerts import process_alert_notifications_once
 from services.background import cleanup_old_data_once, detect_offline_devices_once
 from services.commands import cleanup_expired_commands_once
 
@@ -27,6 +28,11 @@ def cleanup_old_data() -> dict:
 @celery_app.task(name="maintenance.expire_commands")
 def expire_commands() -> dict:
     return asyncio.run(_with_db(cleanup_expired_commands_once()))
+
+
+@celery_app.task(name="maintenance.process_alert_notifications")
+def process_alert_notifications(limit: int = 100) -> dict:
+    return asyncio.run(_with_db(process_alert_notifications_once(limit)))
 
 
 @celery_app.task(name="maintenance.aggregate_hourly_stats")

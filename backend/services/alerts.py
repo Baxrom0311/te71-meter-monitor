@@ -281,6 +281,102 @@ async def list_alert_notifications(status: str | None = None, limit: int = 100) 
     return {"notifications": [_as_dict(row) for row in rows], "total": len(rows)}
 
 
+async def dispatch_pending_notifications_once(limit: int = 100) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        rows = (
+            await session.scalars(
+                select(AlertNotification)
+                .where(AlertNotification.status == "pending")
+                .order_by(AlertNotification.created_at)
+                .limit(limit)
+            )
+        ).all()
+        for row in rows:
+            row.status = "sent"
+            row.sent_at = ts
+        await session.commit()
+    for row in rows:
+        await ws_manager.broadcast(
+            {
+                "type": "alert_notification",
+                "status": "sent",
+                "severity": row.severity,
+                "kind": row.kind,
+                "device_id": row.device_id,
+                "message": row.message,
+            }
+        )
+    return {"sent": len(rows)}
+
+
+async def escalate_open_alerts_once(limit: int = 100) -> dict:
+    ts = now_ts()
+    cutoff = ts - settings.alert_escalation_after_sec
+    created: list[AlertNotification] = []
+    async with SessionLocal() as session:
+        alerts = (
+            await session.scalars(
+                select(Alert)
+                .where(
+                    and_(
+                        Alert.cleared.is_(False),
+                        Alert.severity == "critical",
+                        Alert.ts <= cutoff,
+                    )
+                )
+                .order_by(Alert.ts)
+                .limit(limit)
+            )
+        ).all()
+        for alert in alerts:
+            existing = await session.scalar(
+                select(AlertNotification.id).where(
+                    and_(
+                        AlertNotification.alert_id == alert.id,
+                        AlertNotification.status == "escalated",
+                    )
+                )
+            )
+            if existing:
+                continue
+            notification = AlertNotification(
+                alert_id=alert.id,
+                device_id=alert.device_id,
+                building_id=alert.building_id,
+                point_id=alert.point_id,
+                utility_type=alert.utility_type,
+                severity=alert.severity,
+                kind=alert.kind,
+                channel="internal",
+                status="escalated",
+                message=f"ESCALATED: {alert.message}" if alert.message else "ESCALATED",
+                created_at=ts,
+                sent_at=ts,
+            )
+            session.add(notification)
+            created.append(notification)
+        await session.commit()
+    for row in created:
+        await ws_manager.broadcast(
+            {
+                "type": "alert_notification",
+                "status": "escalated",
+                "severity": row.severity,
+                "kind": row.kind,
+                "device_id": row.device_id,
+                "message": row.message,
+            }
+        )
+    return {"escalated": len(created)}
+
+
+async def process_alert_notifications_once(limit: int = 100) -> dict:
+    sent = await dispatch_pending_notifications_once(limit)
+    escalated = await escalate_open_alerts_once(limit)
+    return {"ok": True, **sent, **escalated}
+
+
 async def list_alert_rules(
     utility_type: str | None = None,
     building_id: int | None = None,

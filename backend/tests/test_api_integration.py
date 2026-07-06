@@ -18,6 +18,7 @@ from app import app
 from core.config import settings
 from core.database import init_db
 from routers import backups as backup_routes
+from services import alerts as alert_service
 from services import backup
 from services.auth import bootstrap_admin
 
@@ -419,6 +420,25 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(notifications.status_code, 200, notifications.text)
         self.assertEqual(notifications.json()["notifications"][0]["kind"], "water_low_pressure")
         self.assertEqual(notifications.json()["notifications"][0]["status"], "pending")
+        original_escalation_after_sec = settings.alert_escalation_after_sec
+        settings.alert_escalation_after_sec = 0
+        try:
+            processed_notifications = await alert_service.process_alert_notifications_once()
+            processed_again = await alert_service.process_alert_notifications_once()
+        finally:
+            settings.alert_escalation_after_sec = original_escalation_after_sec
+        self.assertGreaterEqual(processed_notifications["sent"], 1)
+        self.assertGreaterEqual(processed_notifications["escalated"], 1)
+        self.assertEqual(processed_again["escalated"], 0)
+        sent_notifications = await self.client.get("/api/alert-notifications?status=sent", headers=admin_headers)
+        self.assertEqual(sent_notifications.status_code, 200, sent_notifications.text)
+        self.assertEqual(sent_notifications.json()["notifications"][0]["status"], "sent")
+        escalated_notifications = await self.client.get(
+            "/api/alert-notifications?status=escalated",
+            headers=admin_headers,
+        )
+        self.assertEqual(escalated_notifications.status_code, 200, escalated_notifications.text)
+        self.assertEqual(escalated_notifications.json()["notifications"][0]["status"], "escalated")
         listed_rules = await self.client.get("/api/alert-rules?utility_type=water", headers=admin_headers)
         self.assertEqual(listed_rules.status_code, 200, listed_rules.text)
         self.assertGreaterEqual(listed_rules.json()["total"], 1)

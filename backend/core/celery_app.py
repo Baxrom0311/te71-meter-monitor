@@ -32,6 +32,10 @@ celery_app.conf.update(
             "task": "maintenance.expire_commands",
             "schedule": 60.0,
         },
+        "process-alert-notifications-every-minute": {
+            "task": "maintenance.process_alert_notifications",
+            "schedule": 60.0,
+        },
         "aggregate-hourly-stats-hourly": {
             "task": "maintenance.aggregate_hourly_stats",
             "schedule": 3600.0,

@@ -58,6 +58,7 @@ class Settings:
     gas_pressure_min_bar: float = float(os.getenv("GAS_PRESSURE_MIN_BAR", "0.02"))
     gas_pressure_max_bar: float = float(os.getenv("GAS_PRESSURE_MAX_BAR", "5.0"))
     alert_dedupe_sec: int = int(os.getenv("ALERT_DEDUPE_SEC", "600"))
+    alert_escalation_after_sec: int = int(os.getenv("ALERT_ESCALATION_AFTER_SEC", "300"))
 
     app_name: str = "Meter Monitor"
     app_version: str = "4.0"
@@ -95,6 +96,8 @@ class Settings:
             errors.append("VOLTAGE_MAX min qiymatdan katta bo'lishi kerak")
         if self.backup_keep_days < 1 or self.audit_keep_days < 1 or self.data_keep_days < 1:
             errors.append("Retention kunlari kamida 1 bo'lishi kerak")
+        if self.alert_escalation_after_sec < 0:
+            errors.append("ALERT_ESCALATION_AFTER_SEC manfiy bo'lmasligi kerak")
 
         if not self.is_production:
             if errors:
