@@ -257,6 +257,13 @@ async def list_device_provisioning_tokens(
     return await platform.list_provisioning_tokens(active_only=active_only, limit=limit)
 
 
+@router.delete("/devices/provisioning-tokens/{token_id}")
+async def revoke_device_provisioning_token(token_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.revoke_provisioning_token(token_id, admin)
+    await audit.record(admin, "device.provisioning_token.revoke", "device_provisioning_token", token_id)
+    return result
+
+
 @router.get("/devices/{device_id}")
 async def get_device(device_id: str, _: dict = Depends(current_token_payload)):
     return await platform.get_device(device_id)

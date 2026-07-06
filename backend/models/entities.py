@@ -137,7 +137,7 @@ class DeviceProvisioningToken(Base):
     __tablename__ = "device_provisioning_tokens"
     __table_args__ = (
         Index("idx_prov_tokens_device", "device_id"),
-        Index("idx_prov_tokens_expires_used", "expires_at", "used_at"),
+        Index("idx_prov_tokens_expires_used", "expires_at", "used_at", "revoked_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -151,6 +151,9 @@ class DeviceProvisioningToken(Base):
     expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
     used_at: Mapped[int | None] = mapped_column(Integer)
     used_by_device_id: Mapped[str | None] = mapped_column(String(128))
+    revoked_at: Mapped[int | None] = mapped_column(Integer)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    revoked_by_username: Mapped[str | None] = mapped_column(String(64))
     created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_username: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[int | None] = mapped_column(Integer)

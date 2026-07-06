@@ -115,6 +115,36 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(used_tokens.json()["tokens"][0]["used_by_device_id"], "esp32-api-water-01")
         self.assertNotIn("token_hash", used_tokens.json()["tokens"][0])
 
+        revoke_candidate = await self.client.post(
+            "/api/devices/provisioning-tokens",
+            headers=admin_headers,
+            json={
+                "device_id": "esp32-api-water-02",
+                "building_id": building_id,
+                "point_id": point_id,
+                "utility_type": "water",
+                "device_role": "water_node",
+                "firmware_mode": "water",
+                "ttl_sec": 300,
+            },
+        )
+        self.assertEqual(revoke_candidate.status_code, 200, revoke_candidate.text)
+        revoked = await self.client.delete(
+            f"/api/devices/provisioning-tokens/{revoke_candidate.json()['id']}",
+            headers=admin_headers,
+        )
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+        self.assertTrue(revoked.json()["token"]["revoked_at"])
+        revoked_register = await self.client.post(
+            "/api/register",
+            json={
+                "device_id": "esp32-api-water-02",
+                "provisioning_token": revoke_candidate.json()["provisioning_token"],
+                "utility_type": "water",
+            },
+        )
+        self.assertEqual(revoked_register.status_code, 401)
+
         invalid = await self.client.post(
             "/api/readings",
             headers=device_headers,

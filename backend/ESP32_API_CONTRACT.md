@@ -20,6 +20,7 @@ Token tekshirish tartibi:
 Production tartib:
 
 - Admin panel yoki API orqali bir martalik provisioning token yaratiladi.
+- Token noto'g'ri yaratilsa yoki hali ishlatilmagan device almashtirilsa admin uni revoke qiladi.
 - ESP32 birinchi marta shu token bilan register qiladi.
 - Backend ESP32 uchun alohida `device_token` qaytaradi.
 - ESP32 keyingi barcha requestlarda shu `device_token`ni `X-Device-Token` headerida yuboradi.
@@ -138,6 +139,16 @@ Provisioning response:
 ```
 
 `device_token` faqat shu response’da ochiq qaytadi. ESP32 uni NVS/flash ichida saqlab, keyingi `readings`, `status`, `commands`, `ota` requestlarida ishlatadi.
+
+Admin provisioning API:
+
+```http
+POST /api/devices/provisioning-tokens
+GET /api/devices/provisioning-tokens?active_only=true
+DELETE /api/devices/provisioning-tokens/{token_id}
+```
+
+Revoke qilingan yoki ishlatilgan provisioning token bilan register qilinsa `401` qaytadi.
 
 ## Reading
 

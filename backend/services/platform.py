@@ -818,7 +818,13 @@ async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -
     ts = now_ts()
     stmt = select(DeviceProvisioningToken).order_by(desc(DeviceProvisioningToken.id)).limit(limit)
     if active_only:
-        stmt = stmt.where(and_(DeviceProvisioningToken.used_at.is_(None), DeviceProvisioningToken.expires_at > ts))
+        stmt = stmt.where(
+            and_(
+                DeviceProvisioningToken.used_at.is_(None),
+                DeviceProvisioningToken.revoked_at.is_(None),
+                DeviceProvisioningToken.expires_at > ts,
+            )
+        )
     async with SessionLocal() as session:
         rows = (await session.scalars(stmt)).all()
     result = []
@@ -829,13 +835,36 @@ async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -
     return {"tokens": result}
 
 
+async def revoke_provisioning_token(token_id: int, admin: dict) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        row = await session.get(DeviceProvisioningToken, token_id)
+        if not row:
+            raise HTTPException(404, "Provisioning token topilmadi")
+        if row.used_at:
+            raise HTTPException(409, "Ishlatilgan provisioning token revoke qilinmaydi")
+        if not row.revoked_at:
+            row.revoked_at = ts
+            row.revoked_by_user_id = admin.get("sub")
+            row.revoked_by_username = admin.get("username")
+            await session.commit()
+            await session.refresh(row)
+    data = _as_dict(row)
+    data.pop("token_hash", None)
+    return {"ok": True, "token": data}
+
+
 async def _consume_provisioning_token(session, body: DeviceRegister, ts: int) -> dict | None:
     if not body.provisioning_token:
         return None
     rows = (
         await session.scalars(
             select(DeviceProvisioningToken).where(
-                and_(DeviceProvisioningToken.used_at.is_(None), DeviceProvisioningToken.expires_at > ts)
+                and_(
+                    DeviceProvisioningToken.used_at.is_(None),
+                    DeviceProvisioningToken.revoked_at.is_(None),
+                    DeviceProvisioningToken.expires_at > ts,
+                )
             )
         )
     ).all()

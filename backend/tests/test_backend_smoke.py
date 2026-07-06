@@ -296,6 +296,33 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(all_tokens["tokens"][0]["used_by_device_id"], "esp32-gas-main-01")
         self.assertNotIn("token_hash", all_tokens["tokens"][0])
 
+        revoked = await platform.create_provisioning_token(
+            DeviceProvisioningTokenCreate(
+                device_id="esp32-gas-main-02",
+                building_id=building["id"],
+                point_id=point["id"],
+                utility_type=UtilityType.gas,
+                device_role=DeviceRole.gas_node,
+                firmware_mode=FirmwareMode.gas,
+                ttl_sec=300,
+            ),
+            {"sub": 1, "username": "admin", "role": "admin"},
+        )
+        revoke_result = await platform.revoke_provisioning_token(
+            revoked["id"],
+            {"sub": 1, "username": "admin", "role": "admin"},
+        )
+        self.assertTrue(revoke_result["token"]["revoked_at"])
+        with self.assertRaises(HTTPException):
+            await platform.register_device(
+                DeviceRegister(
+                    device_id="esp32-gas-main-02",
+                    provisioning_token=revoked["provisioning_token"],
+                    utility_type=UtilityType.gas,
+                    firmware_mode=FirmwareMode.gas,
+                )
+            )
+
     async def test_readiness_and_middleware_hardening(self) -> None:
         from routers.health import ready
 

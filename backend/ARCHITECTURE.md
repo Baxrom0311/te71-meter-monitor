@@ -147,6 +147,7 @@ Tokenlar jadvali:
 - `device_provisioning_tokens`
 - token plaintext saqlanmaydi, faqat hash saqlanadi
 - `used_at` va `used_by_device_id` orqali qayta ishlatish bloklanadi
+- `revoked_at` orqali admin bekor qilgan tokenlar bloklanadi
 - list API token hash yoki plaintextni qaytarmaydi
 
 Bu printer driverlariga o'xshash provisioning modeli: admin oldindan qaysi sensor qaysi dom, qaysi nuqta, qaysi firmware mode bilan ishlashini belgilaydi; ESP32 esa birinchi register paytida shu scope’ni oladi.
