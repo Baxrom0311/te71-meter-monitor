@@ -268,6 +268,8 @@ python desktop/main.py
 
 ## Backend API
 
+ESP32 HTTP contract: [`backend/ESP32_API_CONTRACT.md`](backend/ESP32_API_CONTRACT.md)
+
 | Method | Endpoint | Tavsif |
 |--------|----------|--------|
 | GET | `/api/devices` | Qurilmalar ro'yxati (filter: online, type, group) |

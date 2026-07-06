@@ -492,6 +492,8 @@ GET  /api/ota/check/{device_id}
 GET  /api/ota/firmware/{filename}
 ```
 
+ESP32 uchun aniq HTTP contract: `backend/ESP32_API_CONTRACT.md`.
+
 `GET /api/device-config/{device_id}` ESP32 unified firmware uchun startup config qaytaradi:
 
 - `firmware_mode`: `electricity`, `water`, `gas`, `auto`
