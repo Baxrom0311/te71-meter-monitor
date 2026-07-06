@@ -3,12 +3,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from core.security import require_admin
+from models.schemas import AuditLogListResponse
 from services import audit
 
 router = APIRouter(prefix="/api")
 
 
-@router.get("/audit-logs")
+@router.get("/audit-logs", response_model=AuditLogListResponse)
 async def audit_logs(
     limit: int = Query(100, ge=1, le=500),
     page: int = Query(1, ge=1),

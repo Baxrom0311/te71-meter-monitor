@@ -6,7 +6,16 @@ from fastapi.responses import FileResponse
 
 from core.config import settings
 from core.security import current_token_payload, require_admin, require_device_token
-from models.schemas import OtaInstallReport
+from models.schemas import (
+    CommandQueuedResponse,
+    FirmwareCheckResponse,
+    FirmwareInstallEventListResponse,
+    FirmwareListResponse,
+    FirmwareUploadResponse,
+    OkResponse,
+    OtaInstallReport,
+    OtaReportResponse,
+)
 from services import audit
 from services import commands as command_service
 from services import devices as device_service
@@ -27,7 +36,7 @@ def _safe_ota_path(filename: str) -> Path:
     return path
 
 
-@router.post("/ota/upload")
+@router.post("/ota/upload", response_model=FirmwareUploadResponse)
 async def ota_upload(
     version: str = Form(...),
     notes: str = Form(""),
@@ -75,31 +84,31 @@ async def ota_upload(
     return result
 
 
-@router.get("/ota/list")
+@router.get("/ota/list", response_model=FirmwareListResponse)
 async def ota_list(_: dict = Depends(current_token_payload)):
     return await ota_service.ota_list()
 
 
-@router.delete("/ota/{fw_id}")
+@router.delete("/ota/{fw_id}", response_model=OkResponse)
 async def ota_delete(fw_id: int, admin: dict = Depends(require_admin)):
     result = await ota_service.ota_delete(fw_id)
     await audit.record(admin, "ota.delete", "firmware", fw_id)
     return result
 
 
-@router.get("/ota/check/{device_id}")
+@router.get("/ota/check/{device_id}", response_model=FirmwareCheckResponse)
 async def ota_check(device_id: str, current_version: str = "", x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(device_id, x_device_token)
     return await ota_service.ota_check(device_id, current_version)
 
 
-@router.post("/ota/report")
+@router.post("/ota/report", response_model=OtaReportResponse)
 async def ota_report(body: OtaInstallReport, x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(body.device_id, x_device_token)
     return await ota_service.ota_report(body)
 
 
-@router.get("/ota/events")
+@router.get("/ota/events", response_model=FirmwareInstallEventListResponse)
 async def ota_events(
     device_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -123,7 +132,7 @@ async def ota_download(
     return FileResponse(str(path), media_type="application/octet-stream")
 
 
-@router.post("/ota/push/{device_id}")
+@router.post("/ota/push/{device_id}", response_model=CommandQueuedResponse)
 async def ota_push(device_id: str, admin: dict = Depends(require_admin)):
     result = await command_service.create_command(device_id, "ota_check", None)
     await audit.record(admin, "ota.push", "device", device_id)

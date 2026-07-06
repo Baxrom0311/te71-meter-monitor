@@ -183,6 +183,95 @@ class OtaInstallReport(BaseModel):
     message: Optional[str] = None
 
 
+class FirmwareCompatibilityResponse(BaseModel):
+    id: int
+    firmware_id: int
+    utility_type: Optional[str] = None
+    firmware_mode: Optional[str] = None
+    device_role: Optional[str] = None
+    hardware_version: Optional[str] = None
+    sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[int] = None
+
+
+class FirmwareResponse(BaseModel):
+    id: int
+    filename: str
+    version: str
+    hardware_version: Optional[str] = None
+    firmware_mode: str
+    device_role: Optional[str] = None
+    utility_type: Optional[str] = None
+    sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
+    size: Optional[int] = None
+    sha256: Optional[str] = None
+    uploaded: Optional[int] = None
+    active: bool
+    notes: Optional[str] = None
+    description: Optional[str] = None
+    release_notes: Optional[str] = None
+    compatibility_notes: Optional[str] = None
+    compatibilities: list[FirmwareCompatibilityResponse] = Field(default_factory=list)
+    url: str
+
+
+class FirmwareUploadResponse(FirmwareResponse):
+    ok: bool
+
+
+class FirmwareListResponse(BaseModel):
+    firmware: list[FirmwareResponse]
+
+
+class FirmwareCheckResponse(BaseModel):
+    update: bool
+    id: Optional[int] = None
+    filename: Optional[str] = None
+    version: Optional[str] = None
+    hardware_version: Optional[str] = None
+    firmware_mode: Optional[str] = None
+    device_role: Optional[str] = None
+    utility_type: Optional[str] = None
+    sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
+    size: Optional[int] = None
+    sha256: Optional[str] = None
+    uploaded: Optional[int] = None
+    active: Optional[bool] = None
+    notes: Optional[str] = None
+    description: Optional[str] = None
+    release_notes: Optional[str] = None
+    compatibility_notes: Optional[str] = None
+    compatibilities: list[FirmwareCompatibilityResponse] = Field(default_factory=list)
+    url: Optional[str] = None
+
+
+class FirmwareInstallEventResponse(BaseModel):
+    id: int
+    device_id: str
+    firmware_id: Optional[int] = None
+    from_version: Optional[str] = None
+    target_version: Optional[str] = None
+    status: str
+    message: Optional[str] = None
+    ts: int
+    created_at: Optional[int] = None
+
+
+class FirmwareInstallEventListResponse(BaseModel):
+    events: list[FirmwareInstallEventResponse]
+    total: int
+
+
+class OtaReportResponse(BaseModel):
+    ok: bool
+    id: int
+    ts: int
+
+
 class AlertRuleCreate(BaseModel):
     kind: str
     utility_type: Optional[UtilityType] = None
@@ -277,6 +366,24 @@ class OkResponse(BaseModel):
     ok: bool
 
 
+class AuditLogResponse(BaseModel):
+    id: int
+    ts: int
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    action: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+    detail: Optional[str] = None
+
+
+class AuditLogListResponse(BaseModel):
+    audit_logs: list[AuditLogResponse]
+    total: int
+    page: int
+    pages: int
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None
@@ -339,6 +446,12 @@ class RelayCommand(BaseModel):
 class CommandCreate(BaseModel):
     action: str
     params: Optional[dict] = None
+
+
+class CommandQueuedResponse(BaseModel):
+    ok: bool
+    cmd_id: int
+    expires_at: Optional[int] = None
 
 
 class TaskQueuedResponse(BaseModel):
