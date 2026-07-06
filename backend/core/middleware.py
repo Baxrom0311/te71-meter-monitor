@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from core.config import settings
+from core.metrics import observe_http_request
 
 logger = logging.getLogger("meter_monitor.access")
 
@@ -22,25 +23,34 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
+def _route_path(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path or request.url.path
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.state.request_id = request_id
         started = time.perf_counter()
         response = await call_next(request)
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        elapsed_seconds = time.perf_counter() - started
+        elapsed_ms = round(elapsed_seconds * 1000, 2)
+        route = _route_path(request)
+        observe_http_request(request.method, route, response.status_code, elapsed_seconds)
         response.headers["X-Request-ID"] = request_id
         logger.info(
             "%s %s %s %.2fms request_id=%s",
             request.method,
-            request.url.path,
+            route,
             response.status_code,
             elapsed_ms,
             request_id,
             extra={
                 "request_id": request_id,
                 "method": request.method,
-                "path": request.url.path,
+                "path": route,
                 "status_code": response.status_code,
                 "elapsed_ms": elapsed_ms,
                 "client_ip": _client_ip(request),

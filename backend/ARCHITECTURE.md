@@ -1098,6 +1098,7 @@ Local development:
 - readiness endpoint: `/ready`
 - `READY_CHECK_REDIS=true` bo'lsa `/ready` Redis/Celery broker pingni ham tekshiradi
 - metrics endpoint: `/metrics` Prometheus text format
+- HTTP metrics: `meter_monitor_http_requests_total`, `meter_monitor_http_request_duration_seconds`
 - request id: har response'da `X-Request-ID`
 - access log: method, path, status, latency, request id
 - `LOG_LEVEL` va `LOG_FORMAT` env orqali backend log formati boshqariladi

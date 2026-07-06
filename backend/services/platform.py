@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from core.config import settings
 from core.database import SessionLocal
+from core.metrics import render_http_metrics
 from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
 from models.entities import (
@@ -2117,4 +2118,5 @@ async def metrics_text() -> str:
         "# TYPE meter_monitor_ws_clients gauge",
         f"meter_monitor_ws_clients {data['ws_clients']}",
     ]
+    lines.extend(render_http_metrics())
     return "\n".join(lines) + "\n"

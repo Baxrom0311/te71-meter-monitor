@@ -25,6 +25,7 @@ from starlette.responses import PlainTextResponse
 from core.config import settings
 from core.database import init_db
 from core.logging import JsonFormatter
+from core.metrics import reset_http_metrics
 from core.middleware import InMemoryRateLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from core.security import decode_access_token
 from core.database import SessionLocal
@@ -362,10 +363,14 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
 
         old_limit = settings.rate_limit_per_minute
         settings.rate_limit_per_minute = 1
+        reset_http_metrics()
         try:
             context = RequestContextMiddleware(_noop_app)
             context_response = await context.dispatch(_request(), _ok_response)
             self.assertEqual(context_response.headers["X-Request-ID"], "req-1")
+            http_metrics = await platform.metrics_text()
+            self.assertIn('meter_monitor_http_requests_total{method="GET",route="/limited",status="200"} 1', http_metrics)
+            self.assertIn('meter_monitor_http_request_duration_seconds_count{method="GET",route="/limited"} 1', http_metrics)
             record = logging.LogRecord(
                 "meter_monitor.access",
                 logging.INFO,
