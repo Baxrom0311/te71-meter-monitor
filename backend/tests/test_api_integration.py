@@ -178,6 +178,13 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(command.status_code, 200, command.text)
         command_id = command.json()["cmd_id"]
 
+        missing_command = await self.client.post(
+            "/api/devices/missing-device/commands",
+            headers=admin_headers,
+            json={"action": "reboot"},
+        )
+        self.assertEqual(missing_command.status_code, 404)
+
         pending = await self.client.get("/api/commands/esp32-api-water-01", headers=device_headers)
         self.assertEqual(pending.status_code, 200, pending.text)
         self.assertEqual(pending.json()["commands"][0]["id"], command_id)

@@ -1394,16 +1394,22 @@ async def create_relay_command(device_id: str, action_value: str) -> dict:
 
 async def create_command(device_id: str, action: str, params: dict | None = None) -> dict:
     ts = now_ts()
-    command = Command(
-        device_id=device_id,
-        action=action,
-        param=json.dumps(params, ensure_ascii=False) if params else None,
-        status="pending",
-        created=ts,
-        expires_at=ts + settings.command_ttl_sec,
-        max_attempts=3,
-    )
     async with SessionLocal() as session:
+        device = await session.get(Device, device_id)
+        if not device:
+            raise HTTPException(404, "Qurilma topilmadi")
+        if not device.is_active:
+            raise HTTPException(400, "O'chirilgan qurilmaga command yuborilmaydi")
+
+        command = Command(
+            device_id=device_id,
+            action=action,
+            param=json.dumps(params, ensure_ascii=False) if params else None,
+            status="pending",
+            created=ts,
+            expires_at=ts + settings.command_ttl_sec,
+            max_attempts=3,
+        )
         pending_count = await session.scalar(
             select(func.count()).select_from(Command).where(
                 and_(
