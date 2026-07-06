@@ -19,27 +19,19 @@ from models.schemas import (
     BackupDeleteResponse,
     BackupListResponse,
     BackupTaskStatusResponse,
-    CommandCreate,
-    MeterReadingBatch,
-    MeterReading,
     OtaInstallReport,
     OkResponse,
-    RelayCommand,
     TaskQueuedResponse,
 )
 from services import alerts as alert_service
-from services import analytics as analytics_service
 from services import commands as command_service
 from services import devices as device_service
-from services import monitoring as monitoring_service
 from services import ota as ota_service
-from services import readings as reading_service
 from services import audit
 from services.backup import backup_file_path, delete_backup, list_backups
 from tasks.backup import cleanup_old_backups as cleanup_old_backups_task
 from tasks.backup import create_backup as create_backup_task
 from tasks.backup import restore_backup as restore_backup_task
-from services.websocket import ws_manager
 
 router = APIRouter(prefix="/api")
 
@@ -54,95 +46,6 @@ def _safe_ota_path(filename: str) -> Path:
     if not path.exists() or not path.is_file():
         raise HTTPException(404, "Firmware topilmadi")
     return path
-
-
-@router.get("/summary")
-async def summary(_: dict = Depends(current_token_payload)):
-    return await monitoring_service.summary()
-
-
-@router.get("/analytics/hourly")
-async def hourly_stats(
-    building_id: Optional[int] = None,
-    utility_type: Optional[str] = None,
-    device_id: Optional[str] = None,
-    hours: int = Query(24, ge=1, le=720),
-    limit: int = Query(500, ge=1, le=2000),
-    _: dict = Depends(current_token_payload),
-):
-    return await analytics_service.list_hourly_stats(building_id, utility_type, device_id, hours, limit)
-
-
-@router.post("/analytics/hourly/aggregate")
-async def aggregate_hourly_stats(
-    hours: int = Query(48, ge=1, le=720),
-    admin: dict = Depends(require_admin),
-):
-    result = await analytics_service.aggregate_hourly_stats_once(hours)
-    await audit.record(admin, "analytics.aggregate_hourly", "hourly_utility_stats", None, {"hours": hours, **result})
-    return result
-
-
-@router.post("/devices/{device_id}/relay")
-async def relay_command(device_id: str, body: RelayCommand, admin: dict = Depends(require_admin)):
-    result = await command_service.create_relay_command(device_id, body.action)
-    await audit.record(admin, "device.relay", "device", device_id, body.model_dump())
-    return result
-
-
-@router.post("/devices/{device_id}/reboot")
-async def reboot_device(device_id: str, admin: dict = Depends(require_admin)):
-    result = await command_service.reboot_device(device_id)
-    await audit.record(admin, "device.reboot", "device", device_id)
-    return result
-
-
-@router.post("/devices/{device_id}/commands")
-async def create_device_command(device_id: str, body: CommandCreate, admin: dict = Depends(require_admin)):
-    result = await command_service.create_command(device_id, body.action, body.params)
-    await audit.record(admin, "device.command", "device", device_id, body.model_dump())
-    return result
-
-
-@router.get("/commands/admin/list")
-async def list_commands(
-    device_id: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: int = Query(100, ge=1, le=500),
-    _: dict = Depends(require_admin),
-):
-    return await command_service.list_commands(device_id, status, limit)
-
-
-@router.get("/commands/{device_id}")
-async def get_commands(device_id: str, x_device_token: Optional[str] = Header(None)):
-    await device_service.verify_device_access(device_id, x_device_token)
-    return await command_service.pending_commands(device_id)
-
-
-@router.post("/commands/{cmd_id}/ack")
-async def ack_command(cmd_id: int, result: str = "ok", x_device_token: Optional[str] = Header(None)):
-    await command_service.verify_command_access(cmd_id, x_device_token)
-    return await command_service.ack_command(cmd_id, result)
-
-
-@router.post("/readings")
-async def post_readings(body: MeterReading, x_device_token: Optional[str] = Header(None)):
-    await device_service.verify_device_access(body.device_id, x_device_token)
-    ts = await reading_service.save_reading(body)
-    await ws_manager.broadcast(
-        {"type": "reading", "device_id": body.device_id, "ts": ts, "data": body.model_dump()}
-    )
-    return {"ok": True, "ts": ts}
-
-
-@router.post("/readings/batch")
-async def post_readings_batch(body: MeterReadingBatch, x_device_token: Optional[str] = Header(None)):
-    device_id = body.device_id or (body.readings[0].device_id if body.readings else None)
-    await device_service.verify_device_access(device_id, x_device_token)
-    result = await reading_service.save_reading_batch(body)
-    await ws_manager.broadcast({"type": "readings_batch", "device_id": body.device_id, "result": result})
-    return result
 
 
 @router.get("/alerts", response_model=AlertListResponse)
