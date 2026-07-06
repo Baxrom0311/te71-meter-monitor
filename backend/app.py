@@ -26,8 +26,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     await bootstrap_admin()
     ws_manager.set_snapshot_provider(build_snapshot)
-    asyncio.create_task(offline_detector())
-    asyncio.create_task(data_cleanup())
+    if settings.run_inline_workers:
+        asyncio.create_task(offline_detector())
+        asyncio.create_task(data_cleanup())
     yield
 
 

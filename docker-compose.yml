@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Meter Monitor — To'liq stack
 #
@@ -8,6 +6,9 @@ version: "3.9"
 #
 # Dashboard:
 #   http://localhost:8000
+#
+# Flower:
+#   http://localhost:5555
 #
 # Database:
 #   PostgreSQL 5432
@@ -30,6 +31,22 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U meter -d meter_monitor"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Redis Broker ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: meter-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -58,15 +75,91 @@ services:
       - BOOTSTRAP_ADMIN_USERNAME=admin
       - BOOTSTRAP_ADMIN_PASSWORD=Admin123
       - DEVICE_API_TOKEN=change-device-token
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - RUN_INLINE_WORKERS=false
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+  celery-worker:
+    image: python:3.12-slim
+    container_name: meter-celery-worker
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt -q &&
+             celery -A core.celery_app.celery_app worker --loglevel=INFO --concurrency=2"
+    volumes:
+      - ./backend:/app
+      - firmware_store:/app/firmware
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
+      - OTA_DIR=/app/firmware
+      - SECRET_KEY=change-me
+      - DEVICE_API_TOKEN=change-device-token
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - RUN_INLINE_WORKERS=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Beat Scheduler ───────────────────────────────────────────────────
+  celery-beat:
+    image: python:3.12-slim
+    container_name: meter-celery-beat
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt -q &&
+             celery -A core.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
+      - SECRET_KEY=change-me
+      - DEVICE_API_TOKEN=change-device-token
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - RUN_INLINE_WORKERS=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Flower Celery Monitor ───────────────────────────────────────────────────
+  flower:
+    image: python:3.12-slim
+    container_name: meter-flower
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt -q &&
+             celery -A core.celery_app.celery_app flower --port=5555"
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./backend:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  redis_data:
   firmware_store:

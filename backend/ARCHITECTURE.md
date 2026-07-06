@@ -867,11 +867,29 @@ backend/
     ota.py
     health.py
   workers/
-    offline_detector.py
-    data_cleanup.py
+    celery_app.py
+    maintenance_tasks.py
     alert_processor.py
+  tasks/
+    maintenance.py
   tests/
 ```
+
+## Worker Architecture
+
+Production rejimda backend ichidagi og'ir va periodik ishlar Celery orqali yuradi:
+
+- `Redis`: Celery broker va result backend
+- `celery-worker`: tasklarni bajaradi
+- `celery-beat`: periodik tasklarni reja bo'yicha queue'ga qo'yadi
+- `Flower`: Celery task monitoring UI
+
+Joriy periodik tasklar:
+
+- `maintenance.detect_offline_devices`: har 60 sekundda offline device alertlarini yaratadi
+- `maintenance.cleanup_old_data`: har kuni eski reading va tozalangan alertlarni o'chiradi
+
+FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishlaydi. Docker production stackda `RUN_INLINE_WORKERS=false`, shuning uchun offline detector va cleanup faqat Celery orqali yuradi.
 
 ## Reading Processing Flow
 
@@ -956,7 +974,9 @@ Local development:
 - HTTP retry
 - multi-server fallback
 - duplicate reading protection
-- offline detector
+- Celery offline detector
+- Celery Beat data cleanup
+- Flower worker monitoring
 - health endpoint
 - audit logs
 

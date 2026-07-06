@@ -8,3 +8,5 @@ asyncpg==0.30.0
 python-multipart==0.0.12
 aiofiles==24.1.0
 python-dotenv==1.0.1
+celery[redis]==5.4.0
+flower==2.0.1
