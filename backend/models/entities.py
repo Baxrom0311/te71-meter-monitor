@@ -292,7 +292,12 @@ class User(Base, TimestampMixin):
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    __table_args__ = (Index("idx_audit_logs_ts", "ts"),)
+    __table_args__ = (
+        Index("idx_audit_logs_ts", "ts"),
+        Index("idx_audit_logs_action_ts", "action", "ts"),
+        Index("idx_audit_logs_entity_ts", "entity_type", "entity_id", "ts"),
+        Index("idx_audit_logs_user_ts", "user_id", "ts"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ts: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -477,8 +477,19 @@ async def ota_push(device_id: str, admin: dict = Depends(require_admin)):
 
 
 @router.get("/audit-logs")
-async def audit_logs(limit: int = Query(100, ge=1, le=500), _: dict = Depends(require_admin)):
-    return await audit.list_logs(limit)
+async def audit_logs(
+    limit: int = Query(100, ge=1, le=500),
+    page: int = Query(1, ge=1),
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    username: Optional[str] = None,
+    user_id: Optional[int] = None,
+    since_ts: Optional[int] = None,
+    until_ts: Optional[int] = None,
+    _: dict = Depends(require_admin),
+):
+    return await audit.list_logs(limit, page, action, entity_type, entity_id, username, user_id, since_ts, until_ts)
 
 
 @router.post("/backups")

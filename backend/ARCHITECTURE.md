@@ -900,6 +900,7 @@ Joriy periodik tasklar:
 - `maintenance.cleanup_old_data`: har kuni eski reading va tozalangan alertlarni o'chiradi
 - `backup.create`: admin trigger qiladigan JSON gzip backup export
 - `backup.cleanup_old`: `BACKUP_KEEP_DAYS` bo'yicha eski backup fayllarni o'chiradi
+- `maintenance.cleanup_old_audit_logs`: `AUDIT_KEEP_DAYS` bo'yicha eski audit loglarni o'chiradi
 
 FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishlaydi. Docker production stackda `RUN_INLINE_WORKERS=false`, shuning uchun offline detector va cleanup faqat Celery orqali yuradi.
 
@@ -1053,6 +1054,13 @@ Retention `BACKUP_KEEP_DAYS` orqali boshqariladi.
 - `PUT /api/auth/users/{user_id}`: password, role, active status update
 
 User update audit logga yoziladi, password qiymati audit detail ichiga yozilmaydi.
+
+### Audit API
+
+- `GET /api/audit-logs`: admin audit loglarni ko'radi
+- filterlar: `action`, `entity_type`, `entity_id`, `username`, `user_id`, `since_ts`, `until_ts`
+- pagination: `page`, `limit`
+- retention: `AUDIT_KEEP_DAYS`
 
 ### Analytics
 

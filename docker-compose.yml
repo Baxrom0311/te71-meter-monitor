@@ -25,6 +25,7 @@ x-backend-common: &backend-common
     - OTA_DIR=/app/firmware
     - BACKUP_DIR=/app/backups
     - BACKUP_KEEP_DAYS=14
+    - AUDIT_KEEP_DAYS=180
     - STATIC_DIR=/frontend
     - SECRET_KEY=change-me
     - BOOTSTRAP_ADMIN_USERNAME=admin

@@ -225,6 +225,11 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         await audit.record(token_payload, "smoke.audit", "firmware", uploaded["id"])
         logs = await audit.list_logs(10)
         self.assertEqual(logs["audit_logs"][0]["action"], "smoke.audit")
+        filtered_logs = await audit.list_logs(limit=10, action="smoke.audit", entity_type="firmware")
+        self.assertEqual(filtered_logs["total"], 1)
+        self.assertEqual(filtered_logs["audit_logs"][0]["entity_type"], "firmware")
+        audit_cleanup = await audit.cleanup_old_logs_once(keep_days=9999)
+        self.assertEqual(audit_cleanup["deleted_count"], 0)
 
         backup_result = await backup.create_backup_once("smoke")
         self.assertTrue(backup_result["ok"])

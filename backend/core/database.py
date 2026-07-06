@@ -123,6 +123,9 @@ async def _ensure_sqlite_columns(conn) -> None:
         "idx_commands_device_status": "CREATE INDEX IF NOT EXISTS idx_commands_device_status ON commands (device_id, status, id)",
         "idx_commands_expires_status": "CREATE INDEX IF NOT EXISTS idx_commands_expires_status ON commands (expires_at, status)",
         "idx_firmware_active_uploaded": "CREATE INDEX IF NOT EXISTS idx_firmware_active_uploaded ON firmware (active, uploaded)",
+        "idx_audit_logs_action_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_action_ts ON audit_logs (action, ts)",
+        "idx_audit_logs_entity_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_ts ON audit_logs (entity_type, entity_id, ts)",
+        "idx_audit_logs_user_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_ts ON audit_logs (user_id, ts)",
     }
     for statement in indexes.values():
         await conn.execute(text(statement))

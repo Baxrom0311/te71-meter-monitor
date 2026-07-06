@@ -2,6 +2,7 @@ import asyncio
 
 from core.celery_app import celery_app
 from core.database import init_db
+from services.audit import cleanup_old_logs_once
 from services.background import cleanup_old_data_once, detect_offline_devices_once
 from services.platform import cleanup_expired_commands_once
 
@@ -25,3 +26,8 @@ def cleanup_old_data() -> dict:
 @celery_app.task(name="maintenance.expire_commands")
 def expire_commands() -> dict:
     return asyncio.run(_with_db(cleanup_expired_commands_once()))
+
+
+@celery_app.task(name="maintenance.cleanup_old_audit_logs")
+def cleanup_old_audit_logs(keep_days: int | None = None) -> dict:
+    return asyncio.run(_with_db(cleanup_old_logs_once(keep_days)))

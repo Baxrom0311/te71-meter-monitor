@@ -36,5 +36,9 @@ celery_app.conf.update(
             "task": "backup.cleanup_old",
             "schedule": 86400.0,
         },
+        "cleanup-old-audit-logs-daily": {
+            "task": "maintenance.cleanup_old_audit_logs",
+            "schedule": 86400.0,
+        },
     },
 )
