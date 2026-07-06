@@ -271,6 +271,37 @@ class CommandCreate(BaseModel):
     params: Optional[dict] = None
 
 
+class TaskQueuedResponse(BaseModel):
+    ok: bool
+    task_id: str
+    status: str
+
+
+class BackupInfo(BaseModel):
+    filename: str
+    size: int
+    created_at: int
+
+
+class BackupListResponse(BaseModel):
+    backups: list[BackupInfo]
+    total: int
+    keep_days: int
+
+
+class BackupTaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    result: Optional[dict] = None
+    error: Optional[str] = None
+
+
+class BackupDeleteResponse(BaseModel):
+    ok: bool
+    filename: str
+    size: int
+
+
 class FirmwareCompatibilityCreate(BaseModel):
     utility_type: Optional[UtilityType] = None
     firmware_mode: Optional[FirmwareMode] = None

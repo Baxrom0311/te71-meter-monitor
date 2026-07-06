@@ -12,6 +12,9 @@ from core.security import current_token_payload, require_admin, require_device_t
 from models.schemas import (
     AlertRuleCreate,
     AlertRuleUpdate,
+    BackupDeleteResponse,
+    BackupListResponse,
+    BackupTaskStatusResponse,
     BuildingCreate,
     BuildingDefaultProvision,
     BuildingUtilityCreate,
@@ -30,6 +33,7 @@ from models.schemas import (
     OtaInstallReport,
     PremiseCreate,
     RelayCommand,
+    TaskQueuedResponse,
 )
 from services import platform
 from services import audit
@@ -610,19 +614,19 @@ async def audit_logs(
     return await audit.list_logs(limit, page, action, entity_type, entity_id, username, user_id, since_ts, until_ts)
 
 
-@router.post("/backups")
+@router.post("/backups", response_model=TaskQueuedResponse)
 async def create_backup(reason: str = "manual", admin: dict = Depends(require_admin)):
     task = create_backup_task.delay(reason)
     await audit.record(admin, "backup.create", "backup", task.id, {"reason": reason})
     return {"ok": True, "task_id": task.id, "status": "queued"}
 
 
-@router.get("/backups")
+@router.get("/backups", response_model=BackupListResponse)
 async def backups(limit: int = Query(100, ge=1, le=500), _: dict = Depends(require_admin)):
     return list_backups(limit)
 
 
-@router.get("/backups/tasks/{task_id}")
+@router.get("/backups/tasks/{task_id}", response_model=BackupTaskStatusResponse)
 async def backup_status(task_id: str, _: dict = Depends(require_admin)):
     result = AsyncResult(task_id, app=celery_app)
     response = {"task_id": task_id, "status": result.status}
@@ -634,14 +638,14 @@ async def backup_status(task_id: str, _: dict = Depends(require_admin)):
     return response
 
 
-@router.post("/backups/cleanup")
+@router.post("/backups/cleanup", response_model=TaskQueuedResponse)
 async def cleanup_backups(keep_days: Optional[int] = None, admin: dict = Depends(require_admin)):
     task = cleanup_old_backups_task.delay(keep_days)
     await audit.record(admin, "backup.cleanup", "backup", task.id, {"keep_days": keep_days})
     return {"ok": True, "task_id": task.id, "status": "queued"}
 
 
-@router.post("/backups/restore/{filename}")
+@router.post("/backups/restore/{filename}", response_model=TaskQueuedResponse)
 async def restore_backup(filename: str, confirm: str = "", admin: dict = Depends(require_admin)):
     if confirm != "RESTORE":
         raise HTTPException(400, "Restore uchun confirm=RESTORE kerak")
@@ -667,7 +671,7 @@ async def download_backup(filename: str, _: dict = Depends(require_admin)):
     )
 
 
-@router.delete("/backups/{filename}")
+@router.delete("/backups/{filename}", response_model=BackupDeleteResponse)
 async def remove_backup(filename: str, admin: dict = Depends(require_admin)):
     try:
         result = delete_backup(filename)
