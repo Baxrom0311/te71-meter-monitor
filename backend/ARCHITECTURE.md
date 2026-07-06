@@ -1185,6 +1185,7 @@ Kerakli analizlar:
 - `app.py`ni kichraytirish.
 - models/schemas/repositories/services/routers ajratish.
 - `services/alerts.py` ajratildi: alert rule matching, alert CRUD va notification outbox shu domain service ichida.
+- `services/ota.py` ajratildi: firmware catalog, compatibility lookup, OTA report/events shu domain service ichida.
 - eski endpointlarni saqlash.
 - SQLite schema yoki SQLAlchemy model yaratish.
 
