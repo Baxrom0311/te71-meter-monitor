@@ -6,6 +6,7 @@ class Settings:
     db_path: Path = Path(os.getenv("DB_PATH", "data/meters.db"))
     database_url: str = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
     ota_dir: Path = Path(os.getenv("OTA_DIR", "firmware"))
+    backup_dir: Path = Path(os.getenv("BACKUP_DIR", "backups"))
     static_dir: Path = Path(os.getenv("STATIC_DIR", "../frontend"))
 
     offline_sec: int = int(os.getenv("OFFLINE_SEC", "120"))
@@ -53,5 +54,5 @@ class Settings:
 
 settings = Settings()
 
-for directory in (settings.db_path.parent, settings.ota_dir):
+for directory in (settings.db_path.parent, settings.ota_dir, settings.backup_dir):
     directory.mkdir(parents=True, exist_ok=True)

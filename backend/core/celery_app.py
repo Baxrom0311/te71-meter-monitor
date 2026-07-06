@@ -7,7 +7,7 @@ celery_app = Celery(
     "meter_monitor",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["tasks.maintenance"],
+    include=["tasks.maintenance", "tasks.backup"],
 )
 
 celery_app.conf.update(

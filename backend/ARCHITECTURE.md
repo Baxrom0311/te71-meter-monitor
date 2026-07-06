@@ -888,6 +888,7 @@ Joriy periodik tasklar:
 
 - `maintenance.detect_offline_devices`: har 60 sekundda offline device alertlarini yaratadi
 - `maintenance.cleanup_old_data`: har kuni eski reading va tozalangan alertlarni o'chiradi
+- `backup.create`: admin trigger qiladigan JSON gzip backup export
 
 FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishlaydi. Docker production stackda `RUN_INLINE_WORKERS=false`, shuning uchun offline detector va cleanup faqat Celery orqali yuradi.
 
@@ -977,6 +978,7 @@ Local development:
 - ESP32 local queue
 - HTTP retry
 - multi-server fallback
+- admin-triggered JSON gzip backup export
 - duplicate reading protection
 - Celery offline detector
 - Celery Beat data cleanup
@@ -999,6 +1001,14 @@ Production querylar uchun alohida operational indexlar bor:
 - alert list/offline detector: `device_id`, `kind`, `cleared`, `ts`
 - command polling: `device_id`, `status`, `id`
 - OTA lookup: `active`, `uploaded`
+
+### Backup API
+
+- `POST /api/backups?reason=manual`: admin backup job yaratadi
+- `GET /api/backups/tasks/{task_id}`: Celery task statusini ko'rsatadi
+- `GET /api/backups/download/{filename}`: tayyor backup faylni yuklab beradi
+
+Backup formati `meter-monitor-json-v1`. Har bir export ichida metadata, app version, jadval nomlari va jadval qatorlari JSON ko'rinishida saqlanadi, fayl gzip bilan siqiladi va SHA256 checksum qaytadi.
 
 ### Analytics
 

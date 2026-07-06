@@ -1,9 +1,12 @@
 from pathlib import Path
 from typing import Optional
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from fastapi import HTTPException
 from fastapi.responses import FileResponse, Response
 
+from core.celery_app import celery_app
 from core.config import settings
 from core.security import current_token_payload, require_admin, require_device_token
 from models.schemas import (
@@ -26,6 +29,8 @@ from models.schemas import (
 )
 from services import platform
 from services import audit
+from services.backup import backup_file_path
+from tasks.backup import create_backup as create_backup_task
 from services.websocket import ws_manager
 
 router = APIRouter(prefix="/api")
@@ -463,3 +468,35 @@ async def ota_push(device_id: str, admin: dict = Depends(require_admin)):
 @router.get("/audit-logs")
 async def audit_logs(limit: int = Query(100, ge=1, le=500), _: dict = Depends(require_admin)):
     return await audit.list_logs(limit)
+
+
+@router.post("/backups")
+async def create_backup(reason: str = "manual", admin: dict = Depends(require_admin)):
+    task = create_backup_task.delay(reason)
+    await audit.record(admin, "backup.create", "backup", task.id, {"reason": reason})
+    return {"ok": True, "task_id": task.id, "status": "queued"}
+
+
+@router.get("/backups/tasks/{task_id}")
+async def backup_status(task_id: str, _: dict = Depends(require_admin)):
+    result = AsyncResult(task_id, app=celery_app)
+    response = {"task_id": task_id, "status": result.status}
+    if result.ready():
+        if result.failed():
+            response["error"] = str(result.result)
+        else:
+            response["result"] = result.result
+    return response
+
+
+@router.get("/backups/download/{filename}")
+async def download_backup(filename: str, _: dict = Depends(require_admin)):
+    try:
+        path = backup_file_path(filename)
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(404, "Backup topilmadi")
+    return FileResponse(
+        str(path),
+        media_type="application/gzip",
+        filename=path.name,
+    )

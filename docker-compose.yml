@@ -67,9 +67,11 @@ services:
       - ./backend:/app
       - ./frontend:/frontend
       - firmware_store:/app/firmware
+      - backup_store:/app/backups
     environment:
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
+      - BACKUP_DIR=/app/backups
       - STATIC_DIR=/frontend
       - SECRET_KEY=change-me
       - BOOTSTRAP_ADMIN_USERNAME=admin
@@ -105,9 +107,11 @@ services:
     volumes:
       - ./backend:/app
       - firmware_store:/app/firmware
+      - backup_store:/app/backups
     environment:
       - DATABASE_URL=postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor
       - OTA_DIR=/app/firmware
+      - BACKUP_DIR=/app/backups
       - SECRET_KEY=change-me
       - DEVICE_API_TOKEN=change-device-token
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -167,3 +171,4 @@ volumes:
   postgres_data:
   redis_data:
   firmware_store:
+  backup_store:

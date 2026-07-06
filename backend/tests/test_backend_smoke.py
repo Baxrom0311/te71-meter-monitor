@@ -11,6 +11,7 @@ os.environ.setdefault("DEVICE_RATE_LIMIT_PER_MINUTE", "600")
 os.environ["DB_PATH"] = tempfile.mktemp(prefix="electr-test-", suffix=".db")
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{os.environ['DB_PATH']}"
 os.environ["OTA_DIR"] = tempfile.mkdtemp(prefix="electr-test-fw-")
+os.environ["BACKUP_DIR"] = tempfile.mkdtemp(prefix="electr-test-backups-")
 
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
@@ -29,7 +30,7 @@ from models.schemas import (
     UtilityType,
 )
 from schemas.auth import LoginRequest, UserCreate
-from services import audit, auth, platform
+from services import audit, auth, backup, platform
 
 
 async def _noop_app(scope, receive, send):
@@ -158,6 +159,11 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         await audit.record(token_payload, "smoke.audit", "firmware", uploaded["id"])
         logs = await audit.list_logs(10)
         self.assertEqual(logs["audit_logs"][0]["action"], "smoke.audit")
+
+        backup_result = await backup.create_backup_once("smoke")
+        self.assertTrue(backup_result["ok"])
+        self.assertTrue(backup.backup_file_path(backup_result["filename"]).exists())
+        self.assertGreater(backup_result["tables"]["devices"], 0)
 
     async def test_readiness_and_middleware_hardening(self) -> None:
         from routers.health import ready
