@@ -1187,6 +1187,7 @@ Kerakli analizlar:
 - `services/alerts.py` ajratildi: alert rule matching, alert CRUD va notification outbox shu domain service ichida.
 - `services/ota.py` ajratildi: firmware catalog, compatibility lookup, OTA report/events shu domain service ichida.
 - `services/analytics.py` ajratildi: device stats, building analytics, hourly aggregation/list va CSV export shu domain service ichida.
+- `services/readings.py` ajratildi: reading validation, single/batch ingest, latest/history va building reading views shu domain service ichida.
 - eski endpointlarni saqlash.
 - SQLite schema yoki SQLAlchemy model yaratish.
 
