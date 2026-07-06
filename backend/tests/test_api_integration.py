@@ -1,0 +1,169 @@
+import os
+import tempfile
+import unittest
+from pathlib import Path
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("DEVICE_API_TOKEN", "global-device-token")
+os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "500")
+os.environ.setdefault("DEVICE_RATE_LIMIT_PER_MINUTE", "1000")
+os.environ["DB_PATH"] = tempfile.mktemp(prefix="electr-api-test-", suffix=".db")
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{os.environ['DB_PATH']}"
+os.environ["OTA_DIR"] = tempfile.mkdtemp(prefix="electr-api-fw-")
+os.environ["BACKUP_DIR"] = tempfile.mkdtemp(prefix="electr-api-backups-")
+
+import httpx
+
+from app import app
+from core.config import settings
+from core.database import init_db
+from services.auth import bootstrap_admin
+
+
+class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        Path(settings.db_path).unlink(missing_ok=True)
+        settings.bootstrap_admin_username = "admin"
+        settings.bootstrap_admin_password = "Admin1234"
+        await init_db()
+        await bootstrap_admin()
+        self.transport = httpx.ASGITransport(app=app)
+        self.client = httpx.AsyncClient(transport=self.transport, base_url="http://testserver")
+
+    async def asyncTearDown(self) -> None:
+        await self.client.aclose()
+        Path(settings.db_path).unlink(missing_ok=True)
+
+    async def _admin_headers(self) -> dict[str, str]:
+        response = await self.client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "Admin1234"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        token = response.json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    async def test_device_ingestion_ota_commands_and_audit_over_http(self) -> None:
+        admin_headers = await self._admin_headers()
+
+        protected = await self.client.get("/api/devices")
+        self.assertEqual(protected.status_code, 401)
+        self.assertIn("X-Request-ID", protected.headers)
+
+        building = await self.client.post(
+            "/api/buildings",
+            headers=admin_headers,
+            json={"name": "API Building", "floors": 9, "entrances_count": 1},
+        )
+        self.assertEqual(building.status_code, 200, building.text)
+        building_id = building.json()["id"]
+
+        point = await self.client.post(
+            "/api/measurement-points",
+            headers=admin_headers,
+            json={
+                "building_id": building_id,
+                "utility_type": "water",
+                "role": "water_pressure_top",
+                "name": "Top water",
+                "sensor_type": "pressure_4_20ma",
+                "converter_type": "ADS1115",
+                "floor": 9,
+            },
+        )
+        self.assertEqual(point.status_code, 200, point.text)
+        point_id = point.json()["id"]
+
+        device_headers = {"X-Device-Token": settings.device_api_token}
+        register = await self.client.post(
+            "/api/register",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "utility_type": "water",
+                "device_role": "water_node",
+                "firmware_mode": "water",
+                "hardware_version": "HW-1.0",
+                "software_version": "1.0.0",
+                "building_id": building_id,
+                "point_id": point_id,
+            },
+        )
+        self.assertEqual(register.status_code, 200, register.text)
+
+        invalid = await self.client.post(
+            "/api/readings",
+            headers=device_headers,
+            json={"device_id": "esp32-api-water-01", "utility_type": "water", "pressure_bar": -1},
+        )
+        self.assertEqual(invalid.status_code, 422)
+
+        reading = await self.client.post(
+            "/api/readings",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "reading_id": "api-r-1",
+                "utility_type": "water",
+                "building_id": building_id,
+                "point_id": point_id,
+                "pressure_bar": 0.1,
+            },
+        )
+        self.assertEqual(reading.status_code, 200, reading.text)
+
+        alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
+        self.assertEqual(alerts.status_code, 200, alerts.text)
+        self.assertEqual(alerts.json()["alerts"][0]["kind"], "water_low_pressure")
+
+        command = await self.client.post(
+            "/api/devices/esp32-api-water-01/commands",
+            headers=admin_headers,
+            json={"action": "reboot"},
+        )
+        self.assertEqual(command.status_code, 200, command.text)
+        command_id = command.json()["cmd_id"]
+
+        pending = await self.client.get("/api/commands/esp32-api-water-01", headers=device_headers)
+        self.assertEqual(pending.status_code, 200, pending.text)
+        self.assertEqual(pending.json()["commands"][0]["id"], command_id)
+
+        ack = await self.client.post(f"/api/commands/{command_id}/ack?result=ok", headers=device_headers)
+        self.assertEqual(ack.status_code, 200, ack.text)
+
+        ota_upload = await self.client.post(
+            "/api/ota/upload",
+            headers=admin_headers,
+            data={
+                "version": "2.0.0",
+                "hardware_version": "HW-1.0",
+                "firmware_mode": "water",
+                "utility_type": "water",
+                "device_role": "water_node",
+                "sensor_type": "pressure_4_20ma",
+                "converter_type": "ADS1115",
+                "description": "API integration firmware",
+            },
+            files={"file": ("water.bin", b"firmware-bytes", "application/octet-stream")},
+        )
+        self.assertEqual(ota_upload.status_code, 200, ota_upload.text)
+
+        ota_check = await self.client.get(
+            "/api/ota/check/esp32-api-water-01?current_version=1.0.0",
+            headers=device_headers,
+        )
+        self.assertEqual(ota_check.status_code, 200, ota_check.text)
+        self.assertTrue(ota_check.json()["update"])
+        self.assertEqual(ota_check.json()["version"], "2.0.0")
+
+        audit = await self.client.get("/api/audit-logs?action=ota.upload", headers=admin_headers)
+        self.assertEqual(audit.status_code, 200, audit.text)
+        self.assertGreaterEqual(audit.json()["total"], 1)
+
+        metrics = await self.client.get("/metrics")
+        self.assertEqual(metrics.status_code, 200, metrics.text)
+        self.assertIn("meter_monitor_devices_total", metrics.text)
+
+
+if __name__ == "__main__":
+    unittest.main()

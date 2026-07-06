@@ -52,10 +52,15 @@ jobs:
             services/backup.py \
             services/background.py \
             tasks/backup.py \
-            tasks/maintenance.py
+            tasks/maintenance.py \
+            tests/test_backend_smoke.py \
+            tests/test_api_integration.py
 
       - name: Run smoke tests
         run: python -m unittest tests.test_backend_smoke
+
+      - name: Run API integration tests
+        run: python -m unittest tests.test_api_integration
 
       - name: Run Alembic migrations
         run: |
