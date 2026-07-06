@@ -166,6 +166,19 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(reading.status_code, 200, reading.text)
 
+        mixed_batch = await self.client.post(
+            "/api/readings/batch",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "readings": [
+                    {"device_id": "esp32-api-water-01", "utility_type": "water", "pressure_bar": 0.2},
+                    {"device_id": "esp32-other-water", "utility_type": "water", "pressure_bar": 0.2},
+                ],
+            },
+        )
+        self.assertEqual(mixed_batch.status_code, 403)
+
         alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
         self.assertEqual(alerts.status_code, 200, alerts.text)
         self.assertEqual(alerts.json()["alerts"][0]["kind"], "water_low_pressure")

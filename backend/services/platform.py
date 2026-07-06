@@ -1116,6 +1116,19 @@ async def save_reading(body: MeterReading) -> int:
 
 
 async def save_reading_batch(body: MeterReadingBatch) -> dict:
+    if not body.readings:
+        raise HTTPException(422, "readings bo'sh bo'lmasin")
+    expected_device_id = body.device_id or body.readings[0].device_id
+    if not expected_device_id:
+        raise HTTPException(422, "device_id kerak")
+    mismatched = [
+        index
+        for index, reading in enumerate(body.readings)
+        if reading.device_id != expected_device_id
+    ]
+    if mismatched:
+        raise HTTPException(403, "Batch ichida boshqa device_id bor")
+
     accepted = 0
     skipped = 0
     errors: list[dict] = []
