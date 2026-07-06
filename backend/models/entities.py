@@ -52,6 +52,7 @@ class BuildingUtility(Base, TimestampMixin):
 
 class Premise(Base, TimestampMixin):
     __tablename__ = "premises"
+    __table_args__ = (Index("idx_premises_building_floor", "building_id", "floor", "number"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     building_id: Mapped[int] = mapped_column(ForeignKey("buildings.id"), nullable=False)
@@ -62,6 +63,10 @@ class Premise(Base, TimestampMixin):
 
 class MeasurementPoint(Base, TimestampMixin):
     __tablename__ = "measurement_points"
+    __table_args__ = (
+        Index("idx_measurement_points_building_utility", "building_id", "utility_type", "is_active"),
+        Index("idx_measurement_points_role", "role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     building_id: Mapped[int | None] = mapped_column(ForeignKey("buildings.id"))
@@ -88,6 +93,11 @@ class MeasurementPoint(Base, TimestampMixin):
 
 class Device(Base, TimestampMixin):
     __tablename__ = "devices"
+    __table_args__ = (
+        Index("idx_devices_active_last_seen", "is_active", "last_seen"),
+        Index("idx_devices_utility_active", "utility_type", "is_active"),
+        Index("idx_devices_building_active", "building_id", "is_active"),
+    )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     building_id: Mapped[int | None] = mapped_column(ForeignKey("buildings.id"))
@@ -129,6 +139,8 @@ class Reading(Base):
         Index("idx_readings_device_ts", "device_id", "ts"),
         Index("idx_readings_point_ts", "point_id", "ts"),
         Index("idx_readings_building_ts", "building_id", "ts"),
+        Index("idx_readings_ts", "ts"),
+        Index("idx_readings_building_utility_ts", "building_id", "utility_type", "ts"),
         UniqueConstraint("device_id", "reading_id", name="uq_device_reading_id"),
     )
 
@@ -176,6 +188,11 @@ class Reading(Base):
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = (
+        Index("idx_alerts_cleared_ts", "cleared", "ts"),
+        Index("idx_alerts_device_kind_ts", "device_id", "kind", "ts"),
+        Index("idx_alerts_building_cleared_ts", "building_id", "cleared", "ts"),
+    )
     __table_args__ = (Index("idx_alerts_cleared_ts", "cleared", "ts"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -194,6 +211,7 @@ class Alert(Base):
 
 class Command(Base):
     __tablename__ = "commands"
+    __table_args__ = (Index("idx_commands_device_status", "device_id", "status", "id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     device_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -208,6 +226,7 @@ class Command(Base):
 
 class Firmware(Base):
     __tablename__ = "firmware"
+    __table_args__ = (Index("idx_firmware_active_uploaded", "active", "uploaded"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)

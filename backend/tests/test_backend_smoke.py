@@ -163,6 +163,9 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         from routers.health import ready
 
         self.assertEqual(await ready(), {"status": "ready"})
+        metrics = await platform.metrics_text()
+        self.assertIn("meter_monitor_devices_total", metrics)
+        self.assertIn("meter_monitor_open_alerts", metrics)
 
         old_limit = settings.rate_limit_per_minute
         settings.rate_limit_per_minute = 1

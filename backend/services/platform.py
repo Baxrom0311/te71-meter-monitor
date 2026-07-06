@@ -1359,12 +1359,42 @@ async def health() -> dict:
     async with SessionLocal() as session:
         dev_count = await session.scalar(select(func.count()).select_from(Device)) or 0
         reading_count = await session.scalar(select(func.count()).select_from(Reading)) or 0
+        alert_count = await session.scalar(select(func.count()).select_from(Alert).where(Alert.cleared.is_(False))) or 0
+        command_count = await session.scalar(select(func.count()).select_from(Command).where(Command.status == "pending")) or 0
     return {
         "status": "ok",
         "ts": now_ts(),
         "devices": dev_count,
         "readings": reading_count,
+        "open_alerts": alert_count,
+        "pending_commands": command_count,
         "ws_clients": ws_manager.count,
         "version": settings.app_version,
         "data_keep_days": settings.data_keep_days,
+        "workers": {
+            "inline": settings.run_inline_workers,
+            "celery_broker": bool(settings.celery_broker_url),
+        },
     }
+
+
+async def metrics_text() -> str:
+    data = await health()
+    lines = [
+        "# HELP meter_monitor_devices_total Total registered devices.",
+        "# TYPE meter_monitor_devices_total gauge",
+        f"meter_monitor_devices_total {data['devices']}",
+        "# HELP meter_monitor_readings_total Total stored readings.",
+        "# TYPE meter_monitor_readings_total gauge",
+        f"meter_monitor_readings_total {data['readings']}",
+        "# HELP meter_monitor_open_alerts Open alerts.",
+        "# TYPE meter_monitor_open_alerts gauge",
+        f"meter_monitor_open_alerts {data['open_alerts']}",
+        "# HELP meter_monitor_pending_commands Pending commands.",
+        "# TYPE meter_monitor_pending_commands gauge",
+        f"meter_monitor_pending_commands {data['pending_commands']}",
+        "# HELP meter_monitor_ws_clients Connected websocket clients.",
+        "# TYPE meter_monitor_ws_clients gauge",
+        f"meter_monitor_ws_clients {data['ws_clients']}",
+    ]
+    return "\n".join(lines) + "\n"

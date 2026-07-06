@@ -105,3 +105,20 @@ async def _ensure_sqlite_columns(conn) -> None:
         for column, column_type in columns.items():
             if column not in existing_names:
                 await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"))
+
+    indexes = {
+        "idx_devices_active_last_seen": "CREATE INDEX IF NOT EXISTS idx_devices_active_last_seen ON devices (is_active, last_seen)",
+        "idx_devices_utility_active": "CREATE INDEX IF NOT EXISTS idx_devices_utility_active ON devices (utility_type, is_active)",
+        "idx_devices_building_active": "CREATE INDEX IF NOT EXISTS idx_devices_building_active ON devices (building_id, is_active)",
+        "idx_measurement_points_building_utility": "CREATE INDEX IF NOT EXISTS idx_measurement_points_building_utility ON measurement_points (building_id, utility_type, is_active)",
+        "idx_measurement_points_role": "CREATE INDEX IF NOT EXISTS idx_measurement_points_role ON measurement_points (role)",
+        "idx_premises_building_floor": "CREATE INDEX IF NOT EXISTS idx_premises_building_floor ON premises (building_id, floor, number)",
+        "idx_readings_ts": "CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings (ts)",
+        "idx_readings_building_utility_ts": "CREATE INDEX IF NOT EXISTS idx_readings_building_utility_ts ON readings (building_id, utility_type, ts)",
+        "idx_alerts_device_kind_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_device_kind_ts ON alerts (device_id, kind, ts)",
+        "idx_alerts_building_cleared_ts": "CREATE INDEX IF NOT EXISTS idx_alerts_building_cleared_ts ON alerts (building_id, cleared, ts)",
+        "idx_commands_device_status": "CREATE INDEX IF NOT EXISTS idx_commands_device_status ON commands (device_id, status, id)",
+        "idx_firmware_active_uploaded": "CREATE INDEX IF NOT EXISTS idx_firmware_active_uploaded ON firmware (active, uploaded)",
+    }
+    for statement in indexes.values():
+        await conn.execute(text(statement))

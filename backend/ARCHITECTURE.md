@@ -983,9 +983,22 @@ Local development:
 - Flower worker monitoring
 - health endpoint
 - readiness endpoint: `/ready`
+- metrics endpoint: `/metrics` Prometheus text format
 - request id: har response'da `X-Request-ID`
 - access log: method, path, status, latency, request id
 - audit logs
+
+### Database Performance
+
+Production querylar uchun alohida operational indexlar bor:
+
+- device online/offline querylari: `is_active`, `last_seen`
+- device filterlari: `utility_type`, `building_id`
+- measurement point filterlari: `building_id`, `utility_type`, `role`
+- reading analytics: `ts`, `building_id`, `utility_type`
+- alert list/offline detector: `device_id`, `kind`, `cleared`, `ts`
+- command polling: `device_id`, `status`, `id`
+- OTA lookup: `active`, `uploaded`
 
 ### Analytics
 
