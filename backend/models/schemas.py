@@ -183,6 +183,30 @@ class OtaInstallReport(BaseModel):
     message: Optional[str] = None
 
 
+class AlertRuleCreate(BaseModel):
+    kind: str
+    utility_type: Optional[UtilityType] = None
+    building_id: Optional[int] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    severity: str = Field("warning", pattern="^(info|warning|critical)$")
+    dedupe_sec: Optional[int] = Field(None, ge=0, le=86400)
+    message: Optional[str] = None
+    enabled: bool = True
+
+
+class AlertRuleUpdate(BaseModel):
+    kind: Optional[str] = None
+    utility_type: Optional[UtilityType] = None
+    building_id: Optional[int] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    severity: Optional[str] = Field(None, pattern="^(info|warning|critical)$")
+    dedupe_sec: Optional[int] = Field(None, ge=0, le=86400)
+    message: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None

@@ -27,6 +27,7 @@ RESTORE_TABLE_ORDER = [
     "readings",
     "hourly_utility_stats",
     "alerts",
+    "alert_rules",
     "commands",
     "audit_logs",
 ]

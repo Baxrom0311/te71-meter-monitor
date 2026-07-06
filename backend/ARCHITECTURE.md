@@ -676,6 +676,17 @@ POST   /api/ota/push/{device_id}
 DELETE /api/ota/{id}
 ```
 
+### Alert Rules API
+
+```text
+GET    /api/alert-rules
+POST   /api/alert-rules
+PUT    /api/alert-rules/{id}
+DELETE /api/alert-rules/{id}
+```
+
+Alert rule'lar env default qiymatlarni buzmaydi. Rule topilmasa backend `VOLTAGE_MIN`, `WATER_PRESSURE_MIN_BAR`, `GAS_PRESSURE_MIN_BAR` kabi default thresholdlardan foydalanadi. Rule mavjud bo'lsa `building_id`, `utility_type`, `kind` bo'yicha eng aniq moslik tanlanadi.
+
 ## User Roles
 
 Login faqat oddiy `username + password` orqali bo'ladi. Google, OAuth, Telegram yoki boshqa external login kerak emas.
@@ -977,6 +988,26 @@ Backend ESP32 payloadlarini saqlashdan oldin fizik range bo'yicha tekshiradi:
 Noto'g'ri qiymat 422 bilan qaytariladi va DBga yozilmaydi. Eski elektr payloadlar buzilmasligi uchun optional fieldlar majburiy qilinmaydi.
 
 ## Alert Rules
+
+DB orqali sozlanadigan rule kindlari:
+
+- `undervoltage`
+- `overvoltage`
+- `frequency`
+- `water_low_pressure`
+- `water_not_reaching_top`
+- `gas_pressure`
+- `gas_leak`
+
+Rule maydonlari:
+
+- `building_id`: bo'sh bo'lsa global rule, berilsa faqat shu dom uchun
+- `utility_type`: bo'sh bo'lsa umumiy rule, berilsa faqat shu utility uchun
+- `min_value`, `max_value`: threshold chegaralari
+- `severity`: `info`, `warning`, `critical`
+- `dedupe_sec`: shu rule uchun alert dedupe oynasi
+- `message`: custom alert matni
+- `enabled`: rule faol yoki o'chirilgan
 
 ### Elektr
 

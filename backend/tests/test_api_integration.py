@@ -264,6 +264,49 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(alerts.status_code, 200, alerts.text)
         self.assertEqual(alerts.json()["alerts"][0]["kind"], "water_low_pressure")
 
+        alert_rule = await self.client.post(
+            "/api/alert-rules",
+            headers=admin_headers,
+            json={
+                "building_id": building_id,
+                "utility_type": "water",
+                "kind": "water_low_pressure",
+                "min_value": 0.2,
+                "severity": "critical",
+                "message": "Custom low water pressure",
+                "dedupe_sec": 0,
+            },
+        )
+        self.assertEqual(alert_rule.status_code, 200, alert_rule.text)
+        rule_id = alert_rule.json()["rule"]["id"]
+        cleared_existing_alerts = await self.client.post(
+            "/api/alerts/clear-all?device_id=esp32-api-water-01",
+            headers=admin_headers,
+        )
+        self.assertEqual(cleared_existing_alerts.status_code, 200, cleared_existing_alerts.text)
+        rule_reading = await self.client.post(
+            "/api/readings",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "reading_id": "api-r-rule-1",
+                "utility_type": "water",
+                "building_id": building_id,
+                "point_id": point_id,
+                "pressure_bar": 0.15,
+            },
+        )
+        self.assertEqual(rule_reading.status_code, 200, rule_reading.text)
+        rule_alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
+        self.assertEqual(rule_alerts.status_code, 200, rule_alerts.text)
+        self.assertEqual(rule_alerts.json()["alerts"][0]["severity"], "critical")
+        self.assertEqual(rule_alerts.json()["alerts"][0]["message"], "Custom low water pressure")
+        listed_rules = await self.client.get("/api/alert-rules?utility_type=water", headers=admin_headers)
+        self.assertEqual(listed_rules.status_code, 200, listed_rules.text)
+        self.assertGreaterEqual(listed_rules.json()["total"], 1)
+        disabled_rule = await self.client.delete(f"/api/alert-rules/{rule_id}", headers=admin_headers)
+        self.assertEqual(disabled_rule.status_code, 200, disabled_rule.text)
+
         command = await self.client.post(
             "/api/devices/esp32-api-water-01/commands",
             headers=admin_headers,

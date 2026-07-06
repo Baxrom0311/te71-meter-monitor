@@ -10,6 +10,8 @@ from core.celery_app import celery_app
 from core.config import settings
 from core.security import current_token_payload, require_admin, require_device_token
 from models.schemas import (
+    AlertRuleCreate,
+    AlertRuleUpdate,
     BuildingCreate,
     BuildingDefaultProvision,
     BuildingUtilityCreate,
@@ -441,6 +443,38 @@ async def get_alerts(
     _: dict = Depends(current_token_payload),
 ):
     return await platform.get_alerts(device_id, kind, cleared, limit)
+
+
+@router.get("/alert-rules")
+async def list_alert_rules(
+    utility_type: Optional[str] = None,
+    building_id: Optional[int] = None,
+    enabled: Optional[bool] = None,
+    limit: int = Query(200, ge=1, le=500),
+    _: dict = Depends(current_token_payload),
+):
+    return await platform.list_alert_rules(utility_type, building_id, enabled, limit)
+
+
+@router.post("/alert-rules")
+async def create_alert_rule(body: AlertRuleCreate, admin: dict = Depends(require_admin)):
+    result = await platform.create_alert_rule(body)
+    await audit.record(admin, "alert_rule.create", "alert_rule", result["rule"]["id"], result["rule"])
+    return result
+
+
+@router.put("/alert-rules/{rule_id}")
+async def update_alert_rule(rule_id: int, body: AlertRuleUpdate, admin: dict = Depends(require_admin)):
+    result = await platform.update_alert_rule(rule_id, body)
+    await audit.record(admin, "alert_rule.update", "alert_rule", rule_id, result["rule"])
+    return result
+
+
+@router.delete("/alert-rules/{rule_id}")
+async def disable_alert_rule(rule_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.disable_alert_rule(rule_id)
+    await audit.record(admin, "alert_rule.disable", "alert_rule", rule_id)
+    return result
 
 
 @router.post("/alerts/{alert_id}/clear")
