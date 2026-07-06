@@ -87,6 +87,7 @@ class MeasurementPointCreate(BaseModel):
     utility_type: UtilityType = UtilityType.electricity
     role: MeasurementRole = MeasurementRole.electricity_main_meter
     sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
     location_name: Optional[str] = None
     building_id: Optional[int] = None
     utility_module_id: Optional[int] = None
@@ -102,6 +103,7 @@ class MeasurementPointUpdate(BaseModel):
     utility_type: Optional[UtilityType] = None
     role: Optional[MeasurementRole] = None
     sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
     location_name: Optional[str] = None
     building_id: Optional[int] = None
     utility_module_id: Optional[int] = None
@@ -223,3 +225,13 @@ class RelayCommand(BaseModel):
 class CommandCreate(BaseModel):
     action: str
     params: Optional[dict] = None
+
+
+class FirmwareCompatibilityCreate(BaseModel):
+    utility_type: Optional[UtilityType] = None
+    firmware_mode: Optional[FirmwareMode] = None
+    device_role: Optional[DeviceRole] = None
+    hardware_version: Optional[str] = None
+    sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
+    notes: Optional[str] = None

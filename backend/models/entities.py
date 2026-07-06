@@ -74,6 +74,7 @@ class MeasurementPoint(Base, TimestampMixin):
     utility_type: Mapped[str] = mapped_column(String(32), default="electricity", nullable=False)
     role: Mapped[str] = mapped_column(String(64), nullable=False)
     sensor_type: Mapped[str | None] = mapped_column(String(64))
+    converter_type: Mapped[str | None] = mapped_column(String(64))
     location_name: Mapped[str | None] = mapped_column(String(255))
     meter_serial: Mapped[str | None] = mapped_column(String(128))
     floor: Mapped[int | None] = mapped_column(Integer)
@@ -213,11 +214,43 @@ class Firmware(Base):
     version: Mapped[str] = mapped_column(String(64), nullable=False)
     hardware_version: Mapped[str | None] = mapped_column(String(64))
     firmware_mode: Mapped[str] = mapped_column(String(32), default="auto", nullable=False)
+    device_role: Mapped[str | None] = mapped_column(String(64))
+    utility_type: Mapped[str | None] = mapped_column(String(32))
+    sensor_type: Mapped[str | None] = mapped_column(String(64))
+    converter_type: Mapped[str | None] = mapped_column(String(64))
     size: Mapped[int | None] = mapped_column(Integer)
     sha256: Mapped[str | None] = mapped_column(String(128))
     uploaded: Mapped[int | None] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    release_notes: Mapped[str | None] = mapped_column(Text)
+    compatibility_notes: Mapped[str | None] = mapped_column(Text)
+
+    compatibilities: Mapped[list["FirmwareCompatibility"]] = relationship(
+        back_populates="firmware",
+        cascade="all, delete-orphan",
+    )
+
+
+class FirmwareCompatibility(Base):
+    __tablename__ = "firmware_compatibilities"
+    __table_args__ = (
+        Index("idx_fw_compat_lookup", "firmware_mode", "hardware_version", "sensor_type", "converter_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firmware_id: Mapped[int] = mapped_column(ForeignKey("firmware.id"), nullable=False)
+    utility_type: Mapped[str | None] = mapped_column(String(32))
+    firmware_mode: Mapped[str | None] = mapped_column(String(32))
+    device_role: Mapped[str | None] = mapped_column(String(64))
+    hardware_version: Mapped[str | None] = mapped_column(String(64))
+    sensor_type: Mapped[str | None] = mapped_column(String(64))
+    converter_type: Mapped[str | None] = mapped_column(String(64))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[int | None] = mapped_column(Integer)
+
+    firmware: Mapped["Firmware"] = relationship(back_populates="compatibilities")
 
 
 class User(Base, TimestampMixin):
@@ -231,3 +264,17 @@ class User(Base, TimestampMixin):
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[int | None] = mapped_column(Integer)
     last_login: Mapped[int | None] = mapped_column(Integer)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    __table_args__ = (Index("idx_audit_logs_ts", "ts"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(Integer)
+    username: Mapped[str | None] = mapped_column(String(64))
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    entity_type: Mapped[str | None] = mapped_column(String(64))
+    entity_id: Mapped[str | None] = mapped_column(String(128))
+    detail: Mapped[str | None] = mapped_column(Text)

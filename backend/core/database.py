@@ -39,6 +39,7 @@ async def _ensure_sqlite_columns(conn) -> None:
         "measurement_points": {
             "utility_module_id": "INTEGER",
             "sensor_type": "VARCHAR(64)",
+            "converter_type": "VARCHAR(64)",
             "location_name": "VARCHAR(255)",
             "floor": "INTEGER",
             "created_at": "INTEGER",
@@ -81,12 +82,21 @@ async def _ensure_sqlite_columns(conn) -> None:
         "firmware": {
             "hardware_version": "VARCHAR(64)",
             "firmware_mode": "VARCHAR(32) DEFAULT 'auto'",
+            "device_role": "VARCHAR(64)",
+            "utility_type": "VARCHAR(32)",
+            "sensor_type": "VARCHAR(64)",
+            "converter_type": "VARCHAR(64)",
+            "description": "TEXT",
+            "release_notes": "TEXT",
+            "compatibility_notes": "TEXT",
         },
+        "firmware_compatibilities": {},
         "users": {
             "failed_login_count": "INTEGER DEFAULT 0",
             "locked_until": "INTEGER",
             "last_login": "INTEGER",
         },
+        "audit_logs": {},
     }
 
     for table, columns in table_columns.items():

@@ -25,14 +25,17 @@ from models.schemas import (
     RelayCommand,
 )
 from services import platform
+from services import audit
 from services.websocket import ws_manager
 
 router = APIRouter(prefix="/api")
 
 
 @router.post("/buildings")
-async def create_building(body: BuildingCreate, _: dict = Depends(require_admin)):
-    return await platform.create_building(body)
+async def create_building(body: BuildingCreate, admin: dict = Depends(require_admin)):
+    result = await platform.create_building(body)
+    await audit.record(admin, "building.create", "building", result.get("id"), body.model_dump())
+    return result
 
 
 @router.get("/buildings")
@@ -49,24 +52,30 @@ async def get_building(building_id: int, _: dict = Depends(current_token_payload
 async def update_building(
     building_id: int,
     body: BuildingUpdate,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.update_building(building_id, body)
+    result = await platform.update_building(building_id, body)
+    await audit.record(admin, "building.update", "building", building_id, body.model_dump(exclude_none=True))
+    return result
 
 
 @router.delete("/buildings/{building_id}")
-async def delete_building(building_id: int, _: dict = Depends(require_admin)):
-    return await platform.delete_building(building_id)
+async def delete_building(building_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.delete_building(building_id)
+    await audit.record(admin, "building.delete", "building", building_id)
+    return result
 
 
 @router.post("/buildings/{building_id}/utilities")
 async def create_building_utility(
     building_id: int,
     body: BuildingUtilityCreate,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     body.building_id = building_id
-    return await platform.create_building_utility(body)
+    result = await platform.create_building_utility(body)
+    await audit.record(admin, "building_utility.create", "building", building_id, body.model_dump())
+    return result
 
 
 @router.get("/buildings/{building_id}/utilities")
@@ -79,18 +88,22 @@ async def update_building_utility(
     building_id: int,
     utility_id: int,
     body: BuildingUtilityUpdate,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.update_building_utility(building_id, utility_id, body)
+    result = await platform.update_building_utility(building_id, utility_id, body)
+    await audit.record(admin, "building_utility.update", "building_utility", utility_id, body.model_dump(exclude_none=True))
+    return result
 
 
 @router.post("/buildings/{building_id}/provision-defaults")
 async def provision_building_defaults(
     building_id: int,
     body: BuildingDefaultProvision,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.provision_building_defaults(building_id, body)
+    result = await platform.provision_building_defaults(building_id, body)
+    await audit.record(admin, "building.provision_defaults", "building", building_id, body.model_dump())
+    return result
 
 
 @router.get("/buildings/{building_id}/readings/latest")
@@ -124,8 +137,10 @@ async def building_analytics(
 
 
 @router.post("/premises")
-async def create_premise(body: PremiseCreate, _: dict = Depends(require_admin)):
-    return await platform.create_premise(body)
+async def create_premise(body: PremiseCreate, admin: dict = Depends(require_admin)):
+    result = await platform.create_premise(body)
+    await audit.record(admin, "premise.create", "premise", result.get("id"), body.model_dump())
+    return result
 
 
 @router.get("/premises")
@@ -134,8 +149,10 @@ async def list_premises(building_id: Optional[int] = None, _: dict = Depends(cur
 
 
 @router.post("/measurement-points")
-async def create_measurement_point(body: MeasurementPointCreate, _: dict = Depends(require_admin)):
-    return await platform.create_measurement_point(body)
+async def create_measurement_point(body: MeasurementPointCreate, admin: dict = Depends(require_admin)):
+    result = await platform.create_measurement_point(body)
+    await audit.record(admin, "measurement_point.create", "measurement_point", result.get("id"), body.model_dump())
+    return result
 
 
 @router.get("/measurement-points")
@@ -157,23 +174,29 @@ async def get_measurement_point(point_id: int, _: dict = Depends(current_token_p
 async def update_measurement_point(
     point_id: int,
     body: MeasurementPointUpdate,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.update_measurement_point(point_id, body)
+    result = await platform.update_measurement_point(point_id, body)
+    await audit.record(admin, "measurement_point.update", "measurement_point", point_id, body.model_dump(exclude_none=True))
+    return result
 
 
 @router.post("/measurement-points/{point_id}/bind-device")
 async def bind_measurement_point_device(
     point_id: int,
     body: MeasurementPointDeviceBind,
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.bind_measurement_point_device(point_id, body)
+    result = await platform.bind_measurement_point_device(point_id, body)
+    await audit.record(admin, "measurement_point.bind_device", "measurement_point", point_id, body.model_dump())
+    return result
 
 
 @router.delete("/measurement-points/{point_id}")
-async def delete_measurement_point(point_id: int, _: dict = Depends(require_admin)):
-    return await platform.delete_measurement_point(point_id)
+async def delete_measurement_point(point_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.delete_measurement_point(point_id)
+    await audit.record(admin, "measurement_point.delete", "measurement_point", point_id)
+    return result
 
 
 @router.post("/register")
@@ -212,13 +235,17 @@ async def get_device(device_id: str, _: dict = Depends(current_token_payload)):
 
 
 @router.put("/devices/{device_id}")
-async def update_device(device_id: str, body: DeviceUpdate, _: dict = Depends(require_admin)):
-    return await platform.update_device(device_id, body)
+async def update_device(device_id: str, body: DeviceUpdate, admin: dict = Depends(require_admin)):
+    result = await platform.update_device(device_id, body)
+    await audit.record(admin, "device.update", "device", device_id, body.model_dump(exclude_none=True))
+    return result
 
 
 @router.post("/devices/{device_id}/token")
-async def rotate_device_token(device_id: str, _: dict = Depends(require_admin)):
-    return await platform.rotate_device_token(device_id)
+async def rotate_device_token(device_id: str, admin: dict = Depends(require_admin)):
+    result = await platform.rotate_device_token(device_id)
+    await audit.record(admin, "device.rotate_token", "device", device_id)
+    return result
 
 
 @router.get("/devices/{device_id}/latest")
@@ -266,18 +293,24 @@ async def summary(_: dict = Depends(current_token_payload)):
 
 
 @router.post("/devices/{device_id}/relay")
-async def relay_command(device_id: str, body: RelayCommand, _: dict = Depends(require_admin)):
-    return await platform.create_relay_command(device_id, body.action)
+async def relay_command(device_id: str, body: RelayCommand, admin: dict = Depends(require_admin)):
+    result = await platform.create_relay_command(device_id, body.action)
+    await audit.record(admin, "device.relay", "device", device_id, body.model_dump())
+    return result
 
 
 @router.post("/devices/{device_id}/reboot")
-async def reboot_device(device_id: str, _: dict = Depends(require_admin)):
-    return await platform.reboot_device(device_id)
+async def reboot_device(device_id: str, admin: dict = Depends(require_admin)):
+    result = await platform.reboot_device(device_id)
+    await audit.record(admin, "device.reboot", "device", device_id)
+    return result
 
 
 @router.post("/devices/{device_id}/commands")
-async def create_device_command(device_id: str, body: CommandCreate, _: dict = Depends(require_admin)):
-    return await platform.create_command(device_id, body.action, body.params)
+async def create_device_command(device_id: str, body: CommandCreate, admin: dict = Depends(require_admin)):
+    result = await platform.create_command(device_id, body.action, body.params)
+    await audit.record(admin, "device.command", "device", device_id, body.model_dump())
+    return result
 
 
 @router.get("/commands/{device_id}")
@@ -323,13 +356,17 @@ async def get_alerts(
 
 
 @router.post("/alerts/{alert_id}/clear")
-async def clear_alert(alert_id: int, _: dict = Depends(require_admin)):
-    return await platform.clear_alert(alert_id)
+async def clear_alert(alert_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.clear_alert(alert_id)
+    await audit.record(admin, "alert.clear", "alert", alert_id)
+    return result
 
 
 @router.post("/alerts/clear-all")
-async def clear_all_alerts(device_id: Optional[str] = None, _: dict = Depends(require_admin)):
-    return await platform.clear_all_alerts(device_id)
+async def clear_all_alerts(device_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+    result = await platform.clear_all_alerts(device_id)
+    await audit.record(admin, "alert.clear_all", "alert", device_id, {"device_id": device_id})
+    return result
 
 
 @router.post("/ota/upload")
@@ -338,10 +375,46 @@ async def ota_upload(
     notes: str = Form(""),
     hardware_version: Optional[str] = Form(None),
     firmware_mode: str = Form("auto"),
+    utility_type: Optional[str] = Form(None),
+    device_role: Optional[str] = Form(None),
+    sensor_type: Optional[str] = Form(None),
+    converter_type: Optional[str] = Form(None),
+    description: str = Form(""),
+    release_notes: str = Form(""),
+    compatibility_notes: str = Form(""),
     file: UploadFile = File(...),
-    _: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
-    return await platform.ota_upload(version, notes, file, hardware_version, firmware_mode)
+    result = await platform.ota_upload(
+        version=version,
+        notes=notes,
+        file=file,
+        hardware_version=hardware_version,
+        firmware_mode=firmware_mode,
+        utility_type=utility_type,
+        device_role=device_role,
+        sensor_type=sensor_type,
+        converter_type=converter_type,
+        description=description,
+        release_notes=release_notes,
+        compatibility_notes=compatibility_notes,
+    )
+    await audit.record(
+        admin,
+        "ota.upload",
+        "firmware",
+        result.get("id"),
+        {
+            "version": version,
+            "hardware_version": hardware_version,
+            "firmware_mode": firmware_mode,
+            "utility_type": utility_type,
+            "device_role": device_role,
+            "sensor_type": sensor_type,
+            "converter_type": converter_type,
+        },
+    )
+    return result
 
 
 @router.get("/ota/list")
@@ -350,8 +423,10 @@ async def ota_list(_: dict = Depends(current_token_payload)):
 
 
 @router.delete("/ota/{fw_id}")
-async def ota_delete(fw_id: int, _: dict = Depends(require_admin)):
-    return await platform.ota_delete(fw_id)
+async def ota_delete(fw_id: int, admin: dict = Depends(require_admin)):
+    result = await platform.ota_delete(fw_id)
+    await audit.record(admin, "ota.delete", "firmware", fw_id)
+    return result
 
 
 @router.get("/ota/check/{device_id}")
@@ -379,5 +454,12 @@ async def ota_download(
 
 
 @router.post("/ota/push/{device_id}")
-async def ota_push(device_id: str, _: dict = Depends(require_admin)):
-    return await platform.ota_push(device_id)
+async def ota_push(device_id: str, admin: dict = Depends(require_admin)):
+    result = await platform.ota_push(device_id)
+    await audit.record(admin, "ota.push", "device", device_id)
+    return result
+
+
+@router.get("/audit-logs")
+async def audit_logs(limit: int = Query(100, ge=1, le=500), _: dict = Depends(require_admin)):
+    return await audit.list_logs(limit)

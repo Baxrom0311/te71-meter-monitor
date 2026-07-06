@@ -385,8 +385,54 @@
                     <input type="text" class="form-control" id="ota-version" placeholder="2.1.0" style="width:130px">
                   </div>
                   <div class="col-auto">
+                    <label class="form-label">Mode</label>
+                    <select class="form-select" id="ota-firmware-mode" style="width:145px">
+                      <option value="auto">Auto</option>
+                      <option value="electricity">Electricity</option>
+                      <option value="water">Water</option>
+                      <option value="gas">Gas</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Utility</label>
+                    <select class="form-select" id="ota-utility-type" style="width:145px">
+                      <option value="">Hammasi</option>
+                      <option value="electricity">Elektr</option>
+                      <option value="water">Suv</option>
+                      <option value="gas">Gaz</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Role</label>
+                    <input type="text" class="form-control" id="ota-device-role" placeholder="main_meter" style="width:150px">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Hardware</label>
+                    <input type="text" class="form-control" id="ota-hardware-version" placeholder="HW-1.0" style="width:130px">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Sensor</label>
+                    <input type="text" class="form-control" id="ota-sensor-type" placeholder="PZEM-004T" style="width:145px">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Konvertor</label>
+                    <input type="text" class="form-control" id="ota-converter-type" placeholder="MAX485" style="width:145px">
+                  </div>
+                  <div class="col-auto">
                     <label class="form-label">Firmware .bin</label>
                     <input type="file" class="form-control" id="ota-file" accept=".bin">
+                  </div>
+                  <div class="col-12 col-lg-4">
+                    <label class="form-label">Tavsif</label>
+                    <input type="text" class="form-control" id="ota-description" placeholder="Qaysi plata va sensorlar uchun">
+                  </div>
+                  <div class="col-12 col-lg-4">
+                    <label class="form-label">Release notes</label>
+                    <input type="text" class="form-control" id="ota-release-notes" placeholder="Nima o'zgardi">
+                  </div>
+                  <div class="col-12 col-lg-4">
+                    <label class="form-label">Moslik izohi</label>
+                    <input type="text" class="form-control" id="ota-compatibility-notes" placeholder="Masalan: ESP32-WROOM + MAX485">
                   </div>
                   <div class="col-auto">
                     <button class="btn btn-primary admin-only" onclick="uploadFirmware()">
@@ -1146,6 +1192,20 @@ async function uploadFirmware() {
   document.getElementById('ota-status').textContent = 'Yuklanmoqda…';
   const fd = new FormData();
   fd.append('version', version); fd.append('file', file);
+  [
+    ['firmware_mode', 'ota-firmware-mode'],
+    ['utility_type', 'ota-utility-type'],
+    ['device_role', 'ota-device-role'],
+    ['hardware_version', 'ota-hardware-version'],
+    ['sensor_type', 'ota-sensor-type'],
+    ['converter_type', 'ota-converter-type'],
+    ['description', 'ota-description'],
+    ['release_notes', 'ota-release-notes'],
+    ['compatibility_notes', 'ota-compatibility-notes']
+  ].forEach(([key, id]) => {
+    const value = document.getElementById(id).value.trim();
+    if (value) fd.append(key, value);
+  });
   try {
     const r = await fetch('/api/ota/upload', {
       method:'POST',
@@ -1171,9 +1231,14 @@ async function fetchOtaVersions() {
     return;
   }
   el.innerHTML = `<table class="table table-sm table-hover mt-2">
-    <thead><tr><th>Versiya</th><th>Hajm</th><th>Yuklangan</th><th></th></tr></thead>
+    <thead><tr><th>Versiya</th><th>Moslik</th><th>Izoh</th><th>Hajm</th><th>Yuklangan</th><th></th></tr></thead>
     <tbody>${otaVersions.map(v => `<tr class="ota-row">
       <td><span class="badge bg-label-primary">v${v.version}</span></td>
+      <td class="small">
+        <div>${v.firmware_mode || 'auto'} / ${v.utility_type || 'all'} / ${v.device_role || 'any'}</div>
+        <div class="text-body-secondary">${v.hardware_version || 'any hw'} · ${v.sensor_type || 'any sensor'} · ${v.converter_type || 'any converter'}</div>
+      </td>
+      <td class="small text-body-secondary">${v.description || v.compatibility_notes || v.release_notes || v.notes || ''}</td>
       <td class="text-body-secondary">${(v.size/1024).toFixed(1)} KB</td>
       <td class="text-body-secondary">${new Date(v.uploaded*1000).toLocaleDateString('uz-UZ')}</td>
       <td><button class="btn btn-sm btn-outline-danger" onclick="deleteOta('${v.id}')"><i class="bx bx-trash"></i></button></td>

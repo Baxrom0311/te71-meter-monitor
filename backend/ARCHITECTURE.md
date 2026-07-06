@@ -725,26 +725,64 @@ Har bir ESP32 quyidagilarni backendga yuboradi:
 - `device_role`
 - `build_number`
 
-OTA model:
+OTA modeli printer driver katalogi kabi ishlaydi. Admin serverga `.bin` firmware yuklaydi va shu paket qaysi plata, qaysi sensor, qaysi konvertor va qaysi vazifa uchun ekanini yozadi. ESP32 OTA check qilganda backend device profilini o'qib aynan mos firmware paketni qaytaradi.
+
+Device profil:
+
+- `hardware_version`: masalan `HW-1.0`, `ESP32-WROOM-RS485-v1`
+- `software_version`: hozir ishlayotgan firmware versiyasi
+- `firmware_mode`: `auto`, `electricity`, `water`, `gas`
+- `utility_type`: `electricity`, `water`, `gas`
+- `device_role`: `main_meter`, `apartment_meter`, `water_pressure_bottom`, `water_pressure_top`, `gas_pressure_main`
+- `sensor_type`: masalan `PZEM-004T`, `TE73`, `pressure_4_20ma`, `gas_pressure_0_10bar`
+- `converter_type`: masalan `MAX485`, `ADS1115`, `RS485-TTL`, `4-20mA-to-ADC`
+- `build_number`: firmware build identifikatori
+
+OTA firmware catalog:
 
 - `id`
 - `version`
 - `hardware_version`
 - `firmware_mode`
+- `utility_type`
+- `device_role`
+- `sensor_type`
+- `converter_type`
 - `file_name`
 - `sha256`
 - `size`
 - `is_active`
+- `description`: paket nima uchun ekanini tushuntiradi
 - `release_notes`
+- `compatibility_notes`: qaysi sensor/konvertor/plata kombinatsiyasi bilan ishlashini aniq yozadi
 - `uploaded_by`
 - `created_at`
+
+Firmware compatibility row:
+
+- `firmware_id`
+- `hardware_version`
+- `firmware_mode`
+- `utility_type`
+- `device_role`
+- `sensor_type`
+- `converter_type`
+- `notes`
+
+Moslik qoidasi:
+
+- `None`, `any`, `all`, `*` qiymatlari wildcard hisoblanadi.
+- `firmware_mode=auto` umumiy firmware sifatida barcha mode'larga mos kelishi mumkin.
+- Aniq paket yuklanganda shu tuple bo'yicha eski aktiv paket deaktiv qilinadi.
+- Bir xil versiya allaqachon device'da bo'lsa `update=false` qaytadi.
 
 OTA check qoidasi:
 
 1. ESP32 `/api/ota/check/{device_id}` ga so'rov yuboradi.
-2. Backend device hardware/software versionini tekshiradi.
-3. Mos firmware bo'lsa update qaytaradi.
-4. Mos bo'lmasa update yo'q.
+2. Backend `Device` va unga bog'langan `MeasurementPoint` profilini oladi.
+3. `hardware_version`, `firmware_mode`, `utility_type`, `device_role`, `sensor_type`, `converter_type` bo'yicha eng yangi aktiv mos firmware tanlanadi.
+4. Mos firmware bo'lsa `url`, `sha256`, `size`, izohlar va moslik metadata qaytariladi.
+5. Mos bo'lmasa update yo'q.
 
 Misol response:
 
@@ -754,7 +792,14 @@ Misol response:
   "version": "1.4.0",
   "hardware_version": "HW-1.0",
   "firmware_mode": "water",
-  "url": "/api/ota/firmware/water_hw1_v1_4_0.bin",
+  "utility_type": "water",
+  "device_role": "water_pressure_top",
+  "sensor_type": "pressure_4_20ma",
+  "converter_type": "ADS1115",
+  "description": "ESP32 suv bosim yuqori nuqta firmware",
+  "compatibility_notes": "ESP32-WROOM HW-1.0 + 4-20mA pressure sensor + ADS1115",
+  "url": "/api/ota/firmware/water_hw1_v1_4_0.bin?device_id=esp32-water-top-01",
+  "size": 902144,
   "sha256": "..."
 }
 ```
