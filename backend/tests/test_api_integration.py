@@ -313,6 +313,27 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         ota_download = await self.client.get(ota_check.json()["url"], headers=device_headers)
         self.assertEqual(ota_download.status_code, 200, ota_download.text)
         self.assertEqual(ota_download.content, b"firmware-bytes")
+        ota_report = await self.client.post(
+            "/api/ota/report",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "firmware_id": ota_upload.json()["id"],
+                "from_version": "1.0.0",
+                "target_version": "2.0.0",
+                "status": "success",
+                "message": "installed",
+            },
+        )
+        self.assertEqual(ota_report.status_code, 200, ota_report.text)
+        ota_events = await self.client.get(
+            "/api/ota/events?device_id=esp32-api-water-01",
+            headers=admin_headers,
+        )
+        self.assertEqual(ota_events.status_code, 200, ota_events.text)
+        self.assertEqual(ota_events.json()["events"][0]["status"], "success")
+        updated_device = await self.client.get("/api/devices/esp32-api-water-01", headers=admin_headers)
+        self.assertEqual(updated_device.json()["software_version"], "2.0.0")
 
         audit = await self.client.get("/api/audit-logs?action=ota.upload", headers=admin_headers)
         self.assertEqual(audit.status_code, 200, audit.text)

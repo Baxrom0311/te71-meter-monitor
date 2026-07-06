@@ -334,6 +334,24 @@ class FirmwareCompatibility(Base):
     firmware: Mapped["Firmware"] = relationship(back_populates="compatibilities")
 
 
+class FirmwareInstallEvent(Base):
+    __tablename__ = "firmware_install_events"
+    __table_args__ = (
+        Index("idx_firmware_events_device_ts", "device_id", "ts"),
+        Index("idx_firmware_events_status_ts", "status", "ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(String(128), ForeignKey("devices.id"), nullable=False)
+    firmware_id: Mapped[int | None] = mapped_column(ForeignKey("firmware.id"))
+    from_version: Mapped[str | None] = mapped_column(String(64))
+    target_version: Mapped[str | None] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    ts: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 

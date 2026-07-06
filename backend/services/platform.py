@@ -21,6 +21,7 @@ from models.entities import (
     DeviceProvisioningToken,
     Firmware,
     FirmwareCompatibility,
+    FirmwareInstallEvent,
     HourlyUtilityStats,
     MeasurementPoint,
     Premise,
@@ -41,6 +42,7 @@ from models.schemas import (
     MeasurementPointUpdate,
     MeterReadingBatch,
     MeterReading,
+    OtaInstallReport,
     PremiseCreate,
 )
 from services.websocket import ws_manager
@@ -1843,6 +1845,45 @@ async def ota_check(device_id: str, current_version: str) -> dict:
     if not firmware or firmware.version == current_version:
         return {"update": False}
     return {"update": True, **_firmware_response(firmware, device_id=device_id)}
+
+
+async def ota_report(body: OtaInstallReport) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        device = await session.get(Device, body.device_id)
+        if not device:
+            raise HTTPException(404, "Qurilma topilmadi")
+        if body.firmware_id and not await session.get(Firmware, body.firmware_id):
+            raise HTTPException(404, "Firmware topilmadi")
+        event = FirmwareInstallEvent(
+            device_id=body.device_id,
+            firmware_id=body.firmware_id,
+            from_version=body.from_version,
+            target_version=body.target_version,
+            status=body.status,
+            message=body.message,
+            ts=ts,
+            created_at=ts,
+        )
+        session.add(event)
+        if body.status == "success" and body.target_version:
+            device.software_version = body.target_version
+            device.fw_version = body.target_version
+            device.updated_at = ts
+        await session.commit()
+        await session.refresh(event)
+    return {"ok": True, "id": event.id, "ts": ts}
+
+
+async def ota_events(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
+    stmt = select(FirmwareInstallEvent).order_by(desc(FirmwareInstallEvent.ts)).limit(limit)
+    if device_id:
+        stmt = stmt.where(FirmwareInstallEvent.device_id == device_id)
+    if status:
+        stmt = stmt.where(FirmwareInstallEvent.status == status)
+    async with SessionLocal() as session:
+        rows = (await session.scalars(stmt)).all()
+    return {"events": [_as_dict(row) for row in rows], "total": len(rows)}
 
 
 async def ota_push(device_id: str) -> dict:

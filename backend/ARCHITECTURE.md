@@ -832,6 +832,14 @@ OTA check qoidasi:
 4. Mos firmware bo'lsa `url`, `sha256`, `size`, izohlar va moslik metadata qaytariladi.
 5. Mos bo'lmasa update yo'q.
 
+OTA install tracking:
+
+- ESP32 OTA jarayonidagi `started`, `success`, `failed`, `rolled_back` holatlarini `POST /api/ota/report` orqali yuboradi.
+- Backend eventlarni `firmware_install_events` jadvalida saqlaydi.
+- `success` report bo'lsa backend device `software_version` va legacy `fw_version` qiymatlarini `target_version`ga yangilaydi.
+- Admin `GET /api/ota/events?device_id=...&status=...` orqali rollout history, muvaffaqiyatsiz update va rollback holatlarini ko'radi.
+- Bu history keyinchalik majburiy rollout, canary release va muammoli firmware paketlarni avtomatik bloklash uchun asos bo'ladi.
+
 Misol response:
 
 ```json

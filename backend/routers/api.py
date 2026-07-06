@@ -25,6 +25,7 @@ from models.schemas import (
     MeasurementPointUpdate,
     MeterReadingBatch,
     MeterReading,
+    OtaInstallReport,
     PremiseCreate,
     RelayCommand,
 )
@@ -520,6 +521,22 @@ async def ota_delete(fw_id: int, admin: dict = Depends(require_admin)):
 async def ota_check(device_id: str, current_version: str = "", x_device_token: Optional[str] = Header(None)):
     await platform.verify_device_access(device_id, x_device_token)
     return await platform.ota_check(device_id, current_version)
+
+
+@router.post("/ota/report")
+async def ota_report(body: OtaInstallReport, x_device_token: Optional[str] = Header(None)):
+    await platform.verify_device_access(body.device_id, x_device_token)
+    return await platform.ota_report(body)
+
+
+@router.get("/ota/events")
+async def ota_events(
+    device_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    _: dict = Depends(require_admin),
+):
+    return await platform.ota_events(device_id, status, limit)
 
 
 @router.get("/ota/firmware/{filename}")

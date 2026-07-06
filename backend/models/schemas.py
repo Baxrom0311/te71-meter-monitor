@@ -174,6 +174,15 @@ class DeviceTokenResponse(BaseModel):
     token_type: str = "device"
 
 
+class OtaInstallReport(BaseModel):
+    device_id: str
+    firmware_id: Optional[int] = None
+    from_version: Optional[str] = None
+    target_version: Optional[str] = None
+    status: str = Field(..., pattern="^(started|success|failed|rolled_back)$")
+    message: Optional[str] = None
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None

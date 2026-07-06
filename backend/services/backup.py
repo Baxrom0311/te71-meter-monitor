@@ -23,6 +23,7 @@ RESTORE_TABLE_ORDER = [
     "devices",
     "device_provisioning_tokens",
     "firmware_compatibilities",
+    "firmware_install_events",
     "readings",
     "hourly_utility_stats",
     "alerts",

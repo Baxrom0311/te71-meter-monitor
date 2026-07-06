@@ -333,6 +333,7 @@ Known actions:
 ```http
 GET /api/ota/check/{device_id}?current_version=1.0.0
 GET /api/ota/firmware/{filename}?device_id={device_id}
+POST /api/ota/report
 ```
 
 Update response:
@@ -358,6 +359,21 @@ No update response:
 ```json
 {"update": false}
 ```
+
+Install report payload:
+
+```json
+{
+  "device_id": "esp32-water-top-01",
+  "firmware_id": 12,
+  "from_version": "1.0.0",
+  "target_version": "2.0.0",
+  "status": "success",
+  "message": "installed"
+}
+```
+
+`status` qiymatlari: `started`, `success`, `failed`, `rolled_back`. `success` bo'lsa backend device `software_version` qiymatini `target_version`ga yangilaydi.
 
 ## Status Codes
 
