@@ -58,6 +58,7 @@ async def _ensure_sqlite_columns(conn) -> None:
             "created_at": "INTEGER",
             "updated_at": "INTEGER",
         },
+        "device_provisioning_tokens": {},
         "readings": {
             "reading_id": "VARCHAR(128)",
             "sequence_no": "INTEGER",
@@ -126,6 +127,8 @@ async def _ensure_sqlite_columns(conn) -> None:
         "idx_audit_logs_action_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_action_ts ON audit_logs (action, ts)",
         "idx_audit_logs_entity_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_ts ON audit_logs (entity_type, entity_id, ts)",
         "idx_audit_logs_user_ts": "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_ts ON audit_logs (user_id, ts)",
+        "idx_prov_tokens_device": "CREATE INDEX IF NOT EXISTS idx_prov_tokens_device ON device_provisioning_tokens (device_id)",
+        "idx_prov_tokens_expires_used": "CREATE INDEX IF NOT EXISTS idx_prov_tokens_expires_used ON device_provisioning_tokens (expires_at, used_at)",
     }
     for statement in indexes.values():
         await conn.execute(text(statement))

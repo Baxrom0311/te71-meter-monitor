@@ -74,22 +74,46 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(point.status_code, 200, point.text)
         point_id = point.json()["id"]
 
-        device_headers = {"X-Device-Token": settings.device_api_token}
-        register = await self.client.post(
-            "/api/register",
-            headers=device_headers,
+        provision = await self.client.post(
+            "/api/devices/provisioning-tokens",
+            headers=admin_headers,
             json={
                 "device_id": "esp32-api-water-01",
+                "building_id": building_id,
+                "point_id": point_id,
+                "utility_type": "water",
+                "device_role": "water_node",
+                "firmware_mode": "water",
+                "ttl_sec": 300,
+            },
+        )
+        self.assertEqual(provision.status_code, 200, provision.text)
+        self.assertIn("provisioning_token", provision.json())
+
+        register = await self.client.post(
+            "/api/register",
+            json={
+                "device_id": "esp32-api-water-01",
+                "provisioning_token": provision.json()["provisioning_token"],
                 "utility_type": "water",
                 "device_role": "water_node",
                 "firmware_mode": "water",
                 "hardware_version": "HW-1.0",
                 "software_version": "1.0.0",
-                "building_id": building_id,
-                "point_id": point_id,
             },
         )
         self.assertEqual(register.status_code, 200, register.text)
+        self.assertTrue(register.json()["provisioned"])
+        self.assertIn("device_token", register.json())
+        device_headers = {"X-Device-Token": register.json()["device_token"]}
+
+        used_tokens = await self.client.get(
+            "/api/devices/provisioning-tokens?active_only=false",
+            headers=admin_headers,
+        )
+        self.assertEqual(used_tokens.status_code, 200, used_tokens.text)
+        self.assertEqual(used_tokens.json()["tokens"][0]["used_by_device_id"], "esp32-api-water-01")
+        self.assertNotIn("token_hash", used_tokens.json()["tokens"][0])
 
         invalid = await self.client.post(
             "/api/readings",

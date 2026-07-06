@@ -16,6 +16,7 @@ from models.schemas import (
     BuildingUtilityUpdate,
     BuildingUpdate,
     CommandCreate,
+    DeviceProvisioningTokenCreate,
     DeviceRegister,
     DeviceStatus,
     DeviceUpdate,
@@ -207,7 +208,8 @@ async def delete_measurement_point(point_id: int, admin: dict = Depends(require_
 
 @router.post("/register")
 async def register_device(body: DeviceRegister, x_device_token: Optional[str] = Header(None)):
-    await platform.verify_device_access(body.device_id, x_device_token)
+    if not body.provisioning_token:
+        await platform.verify_device_access(body.device_id, x_device_token)
     return await platform.register_device(body)
 
 
@@ -233,6 +235,26 @@ async def list_devices(
     _: dict = Depends(current_token_payload),
 ):
     return await platform.list_devices(online, type, group, building, utility_type)
+
+
+@router.post("/devices/provisioning-tokens")
+async def create_device_provisioning_token(
+    body: DeviceProvisioningTokenCreate,
+    admin: dict = Depends(require_admin),
+):
+    result = await platform.create_provisioning_token(body, admin)
+    audit_detail = {k: v for k, v in result.items() if k != "provisioning_token"}
+    await audit.record(admin, "device.provisioning_token.create", "device_provisioning_token", result["id"], audit_detail)
+    return result
+
+
+@router.get("/devices/provisioning-tokens")
+async def list_device_provisioning_tokens(
+    active_only: bool = True,
+    limit: int = Query(100, ge=1, le=500),
+    _: dict = Depends(require_admin),
+):
+    return await platform.list_provisioning_tokens(active_only=active_only, limit=limit)
 
 
 @router.get("/devices/{device_id}")

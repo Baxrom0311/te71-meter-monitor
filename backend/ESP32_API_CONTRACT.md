@@ -14,7 +14,15 @@ Token tekshirish tartibi:
 
 1. Agar device uchun per-device token bor bo'lsa, shu token ishlatiladi.
 2. Aks holda global `DEVICE_API_TOKEN` provisioning/emergency token sifatida ishlaydi.
-3. Token noto'g'ri bo'lsa `401`.
+3. Birinchi install paytida admin yaratgan `provisioning_token` bilan `POST /api/register` chaqirilsa `X-Device-Token` shart emas.
+4. Token noto'g'ri bo'lsa `401`.
+
+Production tartib:
+
+- Admin panel yoki API orqali bir martalik provisioning token yaratiladi.
+- ESP32 birinchi marta shu token bilan register qiladi.
+- Backend ESP32 uchun alohida `device_token` qaytaradi.
+- ESP32 keyingi barcha requestlarda shu `device_token`ni `X-Device-Token` headerida yuboradi.
 
 ## Server Fallback
 
@@ -103,6 +111,33 @@ Payload:
   "point_id": 10
 }
 ```
+
+Provisioning bilan birinchi register:
+
+```json
+{
+  "device_id": "esp32-water-top-01",
+  "provisioning_token": "one-time-token",
+  "hardware_version": "HW-1.0",
+  "software_version": "1.0.0",
+  "build_number": "2026.07.06.1",
+  "chip_model": "ESP32-WROOM"
+}
+```
+
+Provisioning response:
+
+```json
+{
+  "ok": true,
+  "device_id": "esp32-water-top-01",
+  "provisioned": true,
+  "device_token": "per-device-token",
+  "token_type": "device"
+}
+```
+
+`device_token` faqat shu response’da ochiq qaytadi. ESP32 uni NVS/flash ichida saqlab, keyingi `readings`, `status`, `commands`, `ota` requestlarida ishlatadi.
 
 ## Reading
 

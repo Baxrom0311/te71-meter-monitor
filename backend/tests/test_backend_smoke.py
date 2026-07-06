@@ -28,6 +28,7 @@ from core.database import SessionLocal
 from models.entities import Alert
 from models.schemas import (
     BuildingCreate,
+    DeviceProvisioningTokenCreate,
     DeviceRegister,
     DeviceRole,
     FirmwareMode,
@@ -241,6 +242,59 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cleanup["deleted_count"], 0)
         deleted = backup.delete_backup(backup_result["filename"])
         self.assertTrue(deleted["ok"])
+
+    async def test_device_provisioning_token_flow(self) -> None:
+        building = await platform.create_building(BuildingCreate(name="Provision Building", floors=12, entrances_count=1))
+        point = await platform.create_measurement_point(
+            MeasurementPointCreate(
+                building_id=building["id"],
+                utility_type=UtilityType.gas,
+                role="gas_pressure_main",
+                name="Main gas pressure",
+                sensor_type="pressure_4_20ma",
+                converter_type="ADS1115",
+            )
+        )
+        provision = await platform.create_provisioning_token(
+            DeviceProvisioningTokenCreate(
+                device_id="esp32-gas-main-01",
+                building_id=building["id"],
+                point_id=point["id"],
+                utility_type=UtilityType.gas,
+                device_role=DeviceRole.gas_node,
+                firmware_mode=FirmwareMode.gas,
+                ttl_sec=300,
+            ),
+            {"sub": 1, "username": "admin", "role": "admin"},
+        )
+        self.assertIn("provisioning_token", provision)
+
+        register = await platform.register_device(
+            DeviceRegister(
+                device_id="esp32-gas-main-01",
+                provisioning_token=provision["provisioning_token"],
+                utility_type=UtilityType.electricity,
+                firmware_mode=FirmwareMode.electricity,
+                hardware_version="HW-GAS-1",
+                software_version="1.0.0",
+            )
+        )
+        self.assertTrue(register["provisioned"])
+        self.assertIn("device_token", register)
+        await platform.verify_device_access("esp32-gas-main-01", register["device_token"])
+
+        device = await platform.get_device("esp32-gas-main-01")
+        self.assertEqual(device["utility_type"], "gas")
+        self.assertEqual(device["device_role"], "gas_node")
+        self.assertEqual(device["firmware_mode"], "gas")
+        self.assertEqual(device["building_id"], building["id"])
+        self.assertEqual(device["point_id"], point["id"])
+
+        active = await platform.list_provisioning_tokens(active_only=True)
+        self.assertEqual(active["tokens"], [])
+        all_tokens = await platform.list_provisioning_tokens(active_only=False)
+        self.assertEqual(all_tokens["tokens"][0]["used_by_device_id"], "esp32-gas-main-01")
+        self.assertNotIn("token_hash", all_tokens["tokens"][0])
 
     async def test_readiness_and_middleware_hardening(self) -> None:
         from routers.health import ready

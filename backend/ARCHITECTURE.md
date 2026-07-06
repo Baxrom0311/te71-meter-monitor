@@ -120,6 +120,37 @@ Database
 Frontend / Admin Dashboard
 ```
 
+## Device Provisioning Flow
+
+Productionda ESP32lar umumiy parol bilan doimiy ishlamasligi kerak. Shuning uchun backendda bir martalik provisioning token modeli bor.
+
+Admin quyidagilarni oldindan tanlaydi:
+
+- `device_id` optional scope
+- `building_id`
+- `point_id`
+- `utility_type`: `electricity`, `water`, `gas`
+- `device_role`: masalan `electricity_node`, `water_node`, `gas_node`
+- `firmware_mode`: `electricity`, `water`, `gas`, `auto`
+- token muddati (`ttl_sec`)
+
+ESP32 birinchi ishga tushganda:
+
+1. `POST /api/register` ga `provisioning_token` yuboradi.
+2. Backend tokenni tekshiradi va ishlatilgan deb belgilaydi.
+3. Backend token scope bo'yicha device’ni building/measurement point/utility bilan bog'laydi.
+4. Backend shu ESP32 uchun alohida `device_token` yaratib qaytaradi.
+5. ESP32 keyingi barcha HTTP requestlarda `X-Device-Token: <device_token>` ishlatadi.
+
+Tokenlar jadvali:
+
+- `device_provisioning_tokens`
+- token plaintext saqlanmaydi, faqat hash saqlanadi
+- `used_at` va `used_by_device_id` orqali qayta ishlatish bloklanadi
+- list API token hash yoki plaintextni qaytarmaydi
+
+Bu printer driverlariga o'xshash provisioning modeli: admin oldindan qaysi sensor qaysi dom, qaysi nuqta, qaysi firmware mode bilan ishlashini belgilaydi; ESP32 esa birinchi register paytida shu scope’ni oladi.
+
 ## Backend Domain Model
 
 ### Building Model

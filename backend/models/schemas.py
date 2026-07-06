@@ -121,6 +121,7 @@ class MeasurementPointDeviceBind(BaseModel):
 
 class DeviceRegister(BaseModel):
     device_id: str
+    provisioning_token: Optional[str] = None
     name: Optional[str] = None
     utility_type: UtilityType = UtilityType.electricity
     device_role: Optional[DeviceRole] = None
@@ -138,6 +139,16 @@ class DeviceRegister(BaseModel):
     ip: Optional[str] = None
     building_id: Optional[int] = None
     point_id: Optional[int] = None
+
+
+class DeviceProvisioningTokenCreate(BaseModel):
+    device_id: Optional[str] = None
+    building_id: Optional[int] = None
+    point_id: Optional[int] = None
+    utility_type: Optional[UtilityType] = None
+    device_role: Optional[DeviceRole] = None
+    firmware_mode: Optional[FirmwareMode] = None
+    ttl_sec: int = Field(86400, ge=60, le=2592000)
 
 
 class DeviceUpdate(BaseModel):

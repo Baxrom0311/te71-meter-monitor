@@ -133,6 +133,29 @@ class Device(Base, TimestampMixin):
     readings: Mapped[list["Reading"]] = relationship(back_populates="device")
 
 
+class DeviceProvisioningToken(Base):
+    __tablename__ = "device_provisioning_tokens"
+    __table_args__ = (
+        Index("idx_prov_tokens_device", "device_id"),
+        Index("idx_prov_tokens_expires_used", "expires_at", "used_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    device_id: Mapped[str | None] = mapped_column(String(128))
+    building_id: Mapped[int | None] = mapped_column(ForeignKey("buildings.id"))
+    point_id: Mapped[int | None] = mapped_column(ForeignKey("measurement_points.id"))
+    utility_type: Mapped[str | None] = mapped_column(String(32))
+    device_role: Mapped[str | None] = mapped_column(String(64))
+    firmware_mode: Mapped[str | None] = mapped_column(String(32))
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    used_at: Mapped[int | None] = mapped_column(Integer)
+    used_by_device_id: Mapped[str | None] = mapped_column(String(128))
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_by_username: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[int | None] = mapped_column(Integer)
+
+
 class Reading(Base):
     __tablename__ = "readings"
     __table_args__ = (

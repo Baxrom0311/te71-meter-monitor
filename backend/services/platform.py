@@ -18,6 +18,7 @@ from models.entities import (
     BuildingUtility,
     Command,
     Device,
+    DeviceProvisioningToken,
     Firmware,
     FirmwareCompatibility,
     MeasurementPoint,
@@ -31,6 +32,7 @@ from models.schemas import (
     BuildingUtilityUpdate,
     BuildingUpdate,
     DeviceRegister,
+    DeviceProvisioningTokenCreate,
     DeviceStatus,
     DeviceUpdate,
     MeasurementPointCreate,
@@ -622,16 +624,31 @@ async def list_measurement_points(
 
 async def register_device(body: DeviceRegister) -> dict:
     ts = now_ts()
+    device_token = None
+    applied_utility_type = body.utility_type
+    applied_device_role = body.device_role
+    applied_firmware_mode = body.firmware_mode
     async with SessionLocal() as session:
+        provisioned = await _consume_provisioning_token(session, body, ts)
+        if provisioned:
+            applied_utility_type = provisioned.get("utility_type") or body.utility_type
+            applied_device_role = provisioned.get("device_role") or body.device_role
+            applied_firmware_mode = provisioned.get("firmware_mode") or body.firmware_mode
+
         device = await session.get(Device, body.device_id)
         if not device:
             device = Device(id=body.device_id, name=body.name or body.device_id, registered=ts, created_at=ts)
             session.add(device)
 
+        if provisioned:
+            device_token = generate_secret_token()
+            device.api_token_hash = hash_password(device_token)
+            device.token_created_at = ts
+
         device.name = device.name or body.name or body.device_id
-        device.utility_type = body.utility_type
-        device.device_role = body.device_role
-        device.firmware_mode = body.firmware_mode
+        device.utility_type = applied_utility_type
+        device.device_role = applied_device_role
+        device.firmware_mode = applied_firmware_mode
         device.meter_type = body.meter_type
         device.meter_serial = body.meter_serial or device.meter_serial
         device.serial_number = body.serial_number or device.serial_number
@@ -643,8 +660,16 @@ async def register_device(body: DeviceRegister) -> dict:
         device.rssi = body.rssi
         device.fw_version = body.fw_version or device.fw_version
         device.ip = body.ip or device.ip
-        device.building_id = body.building_id or device.building_id
-        device.point_id = body.point_id or device.point_id
+        device.building_id = (
+            provisioned.get("building_id") or body.building_id or device.building_id
+            if provisioned
+            else body.building_id or device.building_id
+        )
+        device.point_id = (
+            provisioned.get("point_id") or body.point_id or device.point_id
+            if provisioned
+            else body.point_id or device.point_id
+        )
         device.last_seen = ts
         device.updated_at = ts
         await session.commit()
@@ -653,11 +678,15 @@ async def register_device(body: DeviceRegister) -> dict:
         {
             "type": "device_online",
             "device_id": body.device_id,
-            "utility_type": body.utility_type,
-            "firmware_mode": body.firmware_mode,
+            "utility_type": applied_utility_type,
+            "firmware_mode": applied_firmware_mode,
         }
     )
-    return {"ok": True}
+    result = {"ok": True, "device_id": body.device_id, "provisioned": bool(provisioned)}
+    if device_token:
+        result["device_token"] = device_token
+        result["token_type"] = "device"
+    return result
 
 
 async def update_device_status(body: DeviceStatus) -> dict:
@@ -740,6 +769,90 @@ async def rotate_device_token(device_id: str) -> dict:
         device.updated_at = ts
         await session.commit()
     return {"device_id": device_id, "device_token": token, "token_type": "device"}
+
+
+async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: dict) -> dict:
+    token = generate_secret_token()
+    ts = now_ts()
+    async with SessionLocal() as session:
+        if body.building_id and not await session.get(Building, body.building_id):
+            raise HTTPException(404, "Building topilmadi")
+        if body.point_id:
+            point = await session.get(MeasurementPoint, body.point_id)
+            if not point:
+                raise HTTPException(404, "Measurement point topilmadi")
+            if body.building_id and point.building_id and point.building_id != body.building_id:
+                raise HTTPException(422, "Measurement point boshqa buildingga tegishli")
+
+        row = DeviceProvisioningToken(
+            token_hash=hash_password(token),
+            device_id=body.device_id,
+            building_id=body.building_id,
+            point_id=body.point_id,
+            utility_type=body.utility_type,
+            device_role=body.device_role,
+            firmware_mode=body.firmware_mode,
+            expires_at=ts + body.ttl_sec,
+            created_by_user_id=admin.get("sub"),
+            created_by_username=admin.get("username"),
+            created_at=ts,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+    return {
+        "ok": True,
+        "id": row.id,
+        "provisioning_token": token,
+        "expires_at": row.expires_at,
+        "device_id": row.device_id,
+        "building_id": row.building_id,
+        "point_id": row.point_id,
+        "utility_type": row.utility_type,
+        "device_role": row.device_role,
+        "firmware_mode": row.firmware_mode,
+    }
+
+
+async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -> dict:
+    ts = now_ts()
+    stmt = select(DeviceProvisioningToken).order_by(desc(DeviceProvisioningToken.id)).limit(limit)
+    if active_only:
+        stmt = stmt.where(and_(DeviceProvisioningToken.used_at.is_(None), DeviceProvisioningToken.expires_at > ts))
+    async with SessionLocal() as session:
+        rows = (await session.scalars(stmt)).all()
+    result = []
+    for row in rows:
+        data = _as_dict(row)
+        data.pop("token_hash", None)
+        result.append(data)
+    return {"tokens": result}
+
+
+async def _consume_provisioning_token(session, body: DeviceRegister, ts: int) -> dict | None:
+    if not body.provisioning_token:
+        return None
+    rows = (
+        await session.scalars(
+            select(DeviceProvisioningToken).where(
+                and_(DeviceProvisioningToken.used_at.is_(None), DeviceProvisioningToken.expires_at > ts)
+            )
+        )
+    ).all()
+    matched = next((row for row in rows if verify_password(body.provisioning_token, row.token_hash)), None)
+    if not matched:
+        raise HTTPException(401, "Provisioning token noto'g'ri yoki muddati tugagan")
+    if matched.device_id and matched.device_id != body.device_id:
+        raise HTTPException(403, "Provisioning token boshqa device uchun")
+    matched.used_at = ts
+    matched.used_by_device_id = body.device_id
+    return {
+        "building_id": matched.building_id,
+        "point_id": matched.point_id,
+        "utility_type": matched.utility_type,
+        "device_role": matched.device_role,
+        "firmware_mode": matched.firmware_mode,
+    }
 
 
 async def _check_alerts(session, reading: MeterReading) -> None:
