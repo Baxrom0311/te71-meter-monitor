@@ -77,10 +77,45 @@
     @media (max-width: 480px) {
       #devices-grid { grid-template-columns: 1fr; }
     }
+
+    #login-screen {
+      min-height: 100vh;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: var(--bs-body-bg);
+    }
+    #login-screen .login-panel { width: 100%; max-width: 380px; }
+    body.auth-required .layout-wrapper { display: none; }
+    body.auth-required #login-screen { display: flex; }
+    .admin-only { display: none !important; }
+    body.is-admin .admin-only { display: inline-flex !important; }
   </style>
 </head>
 
 <body>
+<div id="login-screen">
+  <div class="card login-panel">
+    <div class="card-header">
+      <h5 class="mb-0">MeterMon</h5>
+    </div>
+    <div class="card-body">
+      <form onsubmit="login(event)">
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input class="form-control" id="login-username" autocomplete="username" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Parol</label>
+          <input class="form-control" id="login-password" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-primary w-100" type="submit">Kirish</button>
+        <div class="text-danger small mt-3" id="login-error" style="display:none"></div>
+      </form>
+    </div>
+  </div>
+</div>
 <!-- Layout wrapper -->
 <div class="layout-wrapper layout-content-navbar">
   <div class="layout-container">
@@ -170,9 +205,17 @@
                 Ulanmoqda…
               </span>
             </li>
+            <li class="nav-item me-2">
+              <span class="badge bg-label-primary" id="user-badge">—</span>
+            </li>
             <li class="nav-item">
               <button class="btn btn-sm btn-outline-secondary" onclick="refresh()" title="Yangilash">
                 <i class="bx bx-refresh"></i>
+              </button>
+            </li>
+            <li class="nav-item ms-2">
+              <button class="btn btn-sm btn-outline-danger" onclick="logout()" title="Chiqish">
+                <i class="bx bx-log-out"></i>
               </button>
             </li>
           </ul>
@@ -313,7 +356,7 @@
                 <h5 class="mb-0">
                   <i class="bx bx-bell me-2 text-danger"></i>Ogohlantirishlar
                 </h5>
-                <button class="btn btn-sm btn-outline-danger" onclick="clearAllAlerts()">
+                <button class="btn btn-sm btn-outline-danger admin-only" onclick="clearAllAlerts()">
                   <i class="bx bx-trash me-1"></i>Barchasini tozalash
                 </button>
               </div>
@@ -346,7 +389,7 @@
                     <input type="file" class="form-control" id="ota-file" accept=".bin">
                   </div>
                   <div class="col-auto">
-                    <button class="btn btn-primary" onclick="uploadFirmware()">
+                    <button class="btn btn-primary admin-only" onclick="uploadFirmware()">
                       <i class="bx bx-upload me-1"></i>Yuklash
                     </button>
                   </div>
@@ -504,6 +547,8 @@
 // ── Config ────────────────────────────────────────────────────────────────────
 const WS_URL = `ws://${location.host}/ws`;
 const REFRESH = 15;  // polling interval (seconds, when WS dead)
+const TOKEN_KEY = 'metermon_token';
+const USER_KEY = 'metermon_user';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let devices    = {};  // id → device
@@ -515,6 +560,8 @@ let countdown  = REFRESH;
 let filterOnline = false;
 let filterType   = '';
 let filterGroup  = '';
+let authToken = localStorage.getItem(TOKEN_KEY) || '';
+let currentUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
 
 // Chart
 let currentChartId   = null;
@@ -535,9 +582,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (apexChart) { apexChart.destroy(); apexChart = null; }
   });
 
-  connectWS();
-  refresh();
+  applyAuthState();
+  if (authToken) {
+    connectWS();
+    refresh();
+  }
 });
+
+function applyAuthState() {
+  if (!authToken || !currentUser) {
+    document.body.classList.add('auth-required');
+    document.body.classList.remove('is-admin');
+    return;
+  }
+  document.body.classList.remove('auth-required');
+  document.body.classList.toggle('is-admin', currentUser.role === 'admin');
+  document.getElementById('user-badge').textContent = `${currentUser.username} · ${currentUser.role}`;
+}
+
+async function login(evt) {
+  evt.preventDefault();
+  const errorEl = document.getElementById('login-error');
+  errorEl.style.display = 'none';
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || 'Login xato');
+    authToken = data.access_token;
+    currentUser = data.user;
+    localStorage.setItem(TOKEN_KEY, authToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+    applyAuthState();
+    connectWS();
+    refresh();
+  } catch (e) {
+    errorEl.textContent = e.message || 'Login xato';
+    errorEl.style.display = '';
+  }
+}
+
+function logout() {
+  authToken = '';
+  currentUser = null;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  devices = {};
+  readings = {};
+  alerts = [];
+  applyAuthState();
+}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connectWS() {
@@ -611,7 +710,13 @@ function setWsBadge(live) {
 // ── API ───────────────────────────────────────────────────────────────────────
 async function api(path, opts = {}) {
   try {
-    const r = await fetch(path, opts);
+    const headers = new Headers(opts.headers || {});
+    if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+    const r = await fetch(path, {...opts, headers});
+    if (r.status === 401) {
+      logout();
+      throw new Error('401');
+    }
     if (!r.ok) throw new Error(r.status);
     return await r.json();
   } catch(e) { return null; }
@@ -744,8 +849,8 @@ function buildCard(dev, r) {
           ${relayBadge}
         </div>
         <div class="d-flex gap-1">
-          <button class="btn btn-sm btn-success" onclick="relayCmd('${id}','on')">Yoq</button>
-          <button class="btn btn-sm btn-danger"  onclick="relayCmd('${id}','off')">O'ch</button>
+          <button class="btn btn-sm btn-success admin-only" onclick="relayCmd('${id}','on')">Yoq</button>
+          <button class="btn btn-sm btn-danger admin-only"  onclick="relayCmd('${id}','off')">O'ch</button>
         </div>
       </div>
 
@@ -757,13 +862,13 @@ function buildCard(dev, r) {
         <button class="btn btn-sm btn-outline-secondary" onclick="exportCSV('${id}')">
           <i class="bx bx-download me-1"></i>CSV
         </button>
-        <button class="btn btn-sm btn-outline-info" onclick="rebootDevice('${id}')">
+        <button class="btn btn-sm btn-outline-info admin-only" onclick="rebootDevice('${id}')">
           <i class="bx bx-refresh me-1"></i>Reboot
         </button>
-        <button class="btn btn-sm btn-outline-warning" onclick="openOtaPush('${id}')">
+        <button class="btn btn-sm btn-outline-warning admin-only" onclick="openOtaPush('${id}')">
           <i class="bx bx-upload me-1"></i>OTA
         </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="openEditModal('${id}')">
+        <button class="btn btn-sm btn-outline-secondary admin-only" onclick="openEditModal('${id}')">
           <i class="bx bx-edit me-1"></i>Tahrir
         </button>
       </div>
@@ -834,10 +939,10 @@ function renderDevicesGrid() {
 async function fetchSummary() {
   const s = await api('/api/summary');
   if (!s) return;
-  document.getElementById('stat-total').textContent   = s.total_devices ?? '—';
-  document.getElementById('stat-online').textContent  = s.online_count  ?? '—';
-  document.getElementById('stat-offline').textContent = s.offline_count ?? '—';
-  document.getElementById('stat-alerts').textContent  = s.active_alerts ?? '—';
+  document.getElementById('stat-total').textContent   = s.devices_total ?? '—';
+  document.getElementById('stat-online').textContent  = s.devices_online  ?? '—';
+  document.getElementById('stat-offline').textContent = s.devices_offline ?? '—';
+  document.getElementById('stat-alerts').textContent  = s.alerts_active ?? '—';
   const kwh = s.total_energy_kwh;
   document.getElementById('stat-energy').textContent  = kwh != null ? Number(kwh).toFixed(1) : '—';
 }
@@ -902,7 +1007,7 @@ function renderAlerts() {
         <div class="fw-semibold small text-truncate">${a.message}</div>
         <div class="text-body-secondary" style="font-size:.7rem">${devName} · ${dt}</div>
       </div>
-      <button class="btn btn-sm btn-outline-secondary flex-shrink-0" onclick="clearAlert(${a.id})">
+      <button class="btn btn-sm btn-outline-secondary flex-shrink-0 admin-only" onclick="clearAlert(${a.id})">
         <i class="bx bx-x"></i>
       </button>
     </div>`;
@@ -949,7 +1054,18 @@ async function rebootDevice(deviceId) {
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
 function exportCSV(deviceId) {
-  window.open(`/api/devices/${deviceId}/export?hours=24`, '_blank');
+  fetch(`/api/devices/${deviceId}/export?hours=24`, {
+    headers: authToken ? {'Authorization': `Bearer ${authToken}`} : {}
+  }).then(async r => {
+    if (!r.ok) throw new Error(r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${deviceId.replaceAll(':','')}_24h.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }).catch(() => toast('CSV yuklanmadi', 'err'));
 }
 
 // ── Chart (ApexCharts) ────────────────────────────────────────────────────────
@@ -1031,7 +1147,11 @@ async function uploadFirmware() {
   const fd = new FormData();
   fd.append('version', version); fd.append('file', file);
   try {
-    const r = await fetch('/api/ota/upload', { method:'POST', body:fd });
+    const r = await fetch('/api/ota/upload', {
+      method:'POST',
+      headers: authToken ? {'Authorization': `Bearer ${authToken}`} : {},
+      body:fd
+    });
     const j = await r.json();
     if (j.ok) {
       toast(`v${j.version} yuklandi!`, 'ok');
@@ -1044,7 +1164,7 @@ async function uploadFirmware() {
 async function fetchOtaVersions() {
   const resp = await api('/api/ota/list');
   if (!resp) return;
-  otaVersions = resp.versions || [];
+  otaVersions = resp.firmware || resp.versions || [];
   const el = document.getElementById('ota-fw-list');
   if (!otaVersions.length) {
     el.innerHTML = '<p class="text-body-secondary small mb-0">Hech qanday firmware yuklanmagan.</p>';
