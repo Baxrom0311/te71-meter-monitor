@@ -1128,11 +1128,10 @@ Production querylar uchun alohida operational indexlar bor:
 
 ### Backup API
 
-- `POST /api/backups?reason=manual`: admin backup job yaratadi
+- `POST /api/backups?reason=manual`: admin darhol backup fayl yaratadi va fayl metadata/checksum qaytaradi
 - `GET /api/backups`: mavjud backup fayllar ro'yxati
-- `GET /api/backups/tasks/{task_id}`: Celery task statusini ko'rsatadi
-- `POST /api/backups/cleanup?keep_days=14`: cleanup job yaratadi
-- `POST /api/backups/restore/{filename}?confirm=RESTORE`: backupdan DB restore job yaratadi
+- `POST /api/backups/cleanup?keep_days=14`: eski backup fayllarni darhol tozalaydi
+- `POST /api/backups/restore/{filename}?confirm=RESTORE`: backupdan DB restore qiladi
 - `GET /api/backups/download/{filename}`: tayyor backup faylni yuklab beradi
 - `DELETE /api/backups/{filename}`: backup faylni o'chiradi
 

@@ -485,12 +485,6 @@ class CommandQueuedResponse(BaseModel):
     expires_at: Optional[int] = None
 
 
-class TaskQueuedResponse(BaseModel):
-    ok: bool
-    task_id: str
-    status: str
-
-
 class BackupInfo(BaseModel):
     filename: str
     size: int
@@ -525,13 +519,6 @@ class BackupRestoreResponse(BaseModel):
     restored_from: str
     pre_restore_backup: str
     tables: dict[str, int]
-
-
-class BackupTaskStatusResponse(BaseModel):
-    task_id: str
-    status: str
-    result: Optional[dict] = None
-    error: Optional[str] = None
 
 
 class BackupDeleteResponse(BaseModel):
