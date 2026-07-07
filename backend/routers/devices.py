@@ -14,12 +14,15 @@ from models.schemas import (
     DeviceRegister,
     DeviceRegisterResponse,
     DeviceResponse,
+    DeviceReadingStatsResponse,
     DeviceStatus,
     DeviceStatusResponse,
     DeviceTokenResponse,
     DeviceTokenRevokeResponse,
     DeviceUpdate,
     DeviceUpdateResponse,
+    ReadingHistoryResponse,
+    ReadingResponse,
 )
 from services import analytics as analytics_service
 from services import audit
@@ -113,12 +116,12 @@ async def revoke_device_token(device_id: str, admin: dict = Depends(require_admi
     return result
 
 
-@router.get("/devices/{device_id}/latest")
+@router.get("/devices/{device_id}/latest", response_model=ReadingResponse)
 async def device_latest(device_id: str, _: dict = Depends(current_token_payload)):
     return await reading_service.latest_reading(device_id)
 
 
-@router.get("/devices/{device_id}/history")
+@router.get("/devices/{device_id}/history", response_model=ReadingHistoryResponse)
 async def device_history(
     device_id: str,
     page: int = Query(1, ge=1),
@@ -129,7 +132,7 @@ async def device_history(
     return await reading_service.reading_history(device_id, page, limit, hours)
 
 
-@router.get("/devices/{device_id}/stats")
+@router.get("/devices/{device_id}/stats", response_model=DeviceReadingStatsResponse)
 async def device_stats(
     device_id: str,
     hours: int = Query(24, ge=1, le=720),

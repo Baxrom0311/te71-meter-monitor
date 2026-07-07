@@ -9,6 +9,8 @@ from core.database import SessionLocal
 from core.time import now_ts
 from models.entities import Device, MeasurementPoint, Reading
 from models.schemas import MeterReading, MeterReadingBatch
+from repositories.devices import DeviceRepository
+from repositories.readings import ReadingRepository
 from services import alerts as alert_service
 
 
@@ -49,13 +51,11 @@ async def save_reading(body: MeterReading) -> int:
     ts = now_ts()
     async with SessionLocal() as session:
         if body.reading_id:
-            existing = await session.scalar(
-                select(Reading.id).where(and_(Reading.device_id == body.device_id, Reading.reading_id == body.reading_id))
-            )
-            if existing:
+            if await ReadingRepository(session).exists_external_id(body.device_id, body.reading_id):
                 return ts
 
-        device = await session.get(Device, body.device_id)
+        device_repo = DeviceRepository(session)
+        device = await device_repo.get(body.device_id)
         if not device:
             device = Device(
                 id=body.device_id,
@@ -64,7 +64,7 @@ async def save_reading(body: MeterReading) -> int:
                 registered=ts,
                 created_at=ts,
             )
-            session.add(device)
+            device_repo.add(device)
 
         device.last_seen = ts
         device.utility_type = body.utility_type or device.utility_type
@@ -111,7 +111,7 @@ async def save_reading(body: MeterReading) -> int:
             raw_payload=json.dumps(body.model_dump(), ensure_ascii=False, default=str),
             created_at=ts,
         )
-        session.add(reading)
+        ReadingRepository(session).add(reading)
         alert_broadcasts = await alert_service.check_alerts(session, body)
         await session.commit()
     for msg in alert_broadcasts:
@@ -142,14 +142,9 @@ async def save_reading_batch(body: MeterReadingBatch) -> dict:
         try:
             if reading.reading_id:
                 async with SessionLocal() as session:
-                    exists = await session.scalar(
-                        select(Reading.id).where(
-                            and_(Reading.device_id == reading.device_id, Reading.reading_id == reading.reading_id)
-                        )
-                    )
-                if exists:
-                    skipped += 1
-                    continue
+                    if await ReadingRepository(session).exists_external_id(reading.device_id, reading.reading_id):
+                        skipped += 1
+                        continue
             ts = await save_reading(reading)
             timestamps.append(ts)
             accepted += 1
@@ -169,9 +164,7 @@ async def save_reading_batch(body: MeterReadingBatch) -> dict:
 
 async def latest_reading(device_id: str) -> dict:
     async with SessionLocal() as session:
-        row = await session.scalar(
-            select(Reading).where(Reading.device_id == device_id).order_by(desc(Reading.ts)).limit(1)
-        )
+        row = await ReadingRepository(session).latest_for_device(device_id)
     if not row:
         raise HTTPException(404, "Ma'lumot yo'q")
     return _as_dict(row)
@@ -179,16 +172,11 @@ async def latest_reading(device_id: str) -> dict:
 
 async def reading_history(device_id: str, page: int, limit: int, hours: int | None) -> dict:
     offset = (page - 1) * limit
-    stmt = select(Reading).where(Reading.device_id == device_id)
-    count_stmt = select(func.count()).select_from(Reading).where(Reading.device_id == device_id)
-    if hours:
-        cutoff = now_ts() - hours * 3600
-        stmt = stmt.where(Reading.ts > cutoff)
-        count_stmt = count_stmt.where(Reading.ts > cutoff)
-    stmt = stmt.order_by(desc(Reading.ts)).limit(limit).offset(offset)
+    cutoff = now_ts() - hours * 3600 if hours else None
     async with SessionLocal() as session:
-        total = await session.scalar(count_stmt) or 0
-        rows = (await session.scalars(stmt)).all()
+        repo = ReadingRepository(session)
+        total = await repo.count_history(device_id, cutoff)
+        rows = await repo.history(device_id, offset, limit, cutoff)
     return {"readings": [_as_dict(row) for row in rows], "total": total, "page": page, "pages": (total + limit - 1) // limit}
 
 

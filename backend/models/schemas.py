@@ -556,6 +556,18 @@ class BuildingsEnergySummaryResponse(BaseModel):
     days: int
 
 
+class SummaryResponse(BaseModel):
+    devices_total: int
+    devices_online: int
+    devices_offline: int
+    alerts_active: int
+    reads_last_hour: int
+    total_energy_kwh: float
+    buildings: int
+    measurement_points: int
+    ws_clients: int
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None
@@ -598,6 +610,107 @@ class MeterReading(BaseModel):
 class MeterReadingBatch(BaseModel):
     device_id: Optional[str] = None
     readings: list[MeterReading]
+
+
+class ReadingResponse(BaseModel):
+    id: int
+    device_id: str
+    reading_id: Optional[str] = None
+    sequence_no: Optional[int] = None
+    building_id: Optional[int] = None
+    point_id: Optional[int] = None
+    utility_type: str
+    sensor_type: Optional[str] = None
+    ts: int
+    voltage_l1: Optional[float] = None
+    voltage_l2: Optional[float] = None
+    voltage_l3: Optional[float] = None
+    current_l1: Optional[float] = None
+    current_l2: Optional[float] = None
+    current_l3: Optional[float] = None
+    power_w: Optional[float] = None
+    power_var: Optional[float] = None
+    frequency: Optional[float] = None
+    pf: Optional[float] = None
+    energy_kwh: Optional[float] = None
+    energy_t1: Optional[float] = None
+    energy_t2: Optional[float] = None
+    energy_t3: Optional[float] = None
+    energy_t4: Optional[float] = None
+    relay_on: Optional[bool] = None
+    pressure_bar: Optional[float] = None
+    pressure_bottom_bar: Optional[float] = None
+    pressure_top_bar: Optional[float] = None
+    flow_rate: Optional[float] = None
+    volume_m3: Optional[float] = None
+    temperature_c: Optional[float] = None
+    leak_detected: Optional[bool] = None
+    valve_open: Optional[bool] = None
+    raw_payload: Optional[str] = None
+    created_at: Optional[int] = None
+
+
+class ReadingIngestResponse(BaseModel):
+    ok: bool
+    ts: int
+
+
+class ReadingBatchErrorResponse(BaseModel):
+    index: int
+    error: str
+
+
+class ReadingBatchResponse(BaseModel):
+    ok: bool
+    accepted: int
+    skipped: int
+    errors: list[ReadingBatchErrorResponse]
+    last_ts: Optional[int] = None
+
+
+class ReadingHistoryResponse(BaseModel):
+    readings: list[ReadingResponse]
+    total: int
+    page: int
+    pages: int
+
+
+class HourlyUtilityStatResponse(BaseModel):
+    id: int
+    bucket_ts: int
+    building_id: Optional[int] = None
+    point_id: Optional[int] = None
+    device_id: str
+    utility_type: str
+    samples: int
+    avg_voltage_l1: Optional[float] = None
+    avg_power_w: Optional[float] = None
+    max_energy_kwh: Optional[float] = None
+    avg_pressure_bar: Optional[float] = None
+    avg_pressure_bottom_bar: Optional[float] = None
+    avg_pressure_top_bar: Optional[float] = None
+    avg_flow_rate: Optional[float] = None
+    max_volume_m3: Optional[float] = None
+    leak_count: Optional[int] = None
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class HourlyUtilityStatsResponse(BaseModel):
+    stats: list[HourlyUtilityStatResponse]
+    hours: int
+    total: int
+
+
+class AnalyticsAggregateResponse(BaseModel):
+    ok: bool
+    hours: int
+    buckets: int
+
+
+class DeviceReadingStatsResponse(BaseModel):
+    stats: list[dict]
+    hours: int
 
 
 class DeviceStatus(BaseModel):

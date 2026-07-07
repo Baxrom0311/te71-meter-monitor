@@ -3,7 +3,17 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, Query
 
 from core.security import current_token_payload, require_admin
-from models.schemas import BuildingsEnergySummaryResponse, EnergyByBuildingResponse, MeterReading, MeterReadingBatch
+from models.schemas import (
+    AnalyticsAggregateResponse,
+    BuildingsEnergySummaryResponse,
+    EnergyByBuildingResponse,
+    HourlyUtilityStatsResponse,
+    MeterReading,
+    MeterReadingBatch,
+    ReadingBatchResponse,
+    ReadingIngestResponse,
+    SummaryResponse,
+)
 from services import analytics as analytics_service
 from services import audit
 from services import devices as device_service
@@ -14,12 +24,12 @@ from services.websocket import ws_manager
 router = APIRouter(prefix="/api")
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=SummaryResponse)
 async def summary(_: dict = Depends(current_token_payload)):
     return await monitoring_service.summary()
 
 
-@router.get("/analytics/hourly")
+@router.get("/analytics/hourly", response_model=HourlyUtilityStatsResponse)
 async def hourly_stats(
     building_id: Optional[int] = None,
     utility_type: Optional[str] = None,
@@ -47,7 +57,7 @@ async def buildings_energy_summary(_: dict = Depends(current_token_payload)):
     return await analytics_service.buildings_energy_summary()
 
 
-@router.post("/analytics/hourly/aggregate")
+@router.post("/analytics/hourly/aggregate", response_model=AnalyticsAggregateResponse)
 async def aggregate_hourly_stats(
     hours: int = Query(48, ge=1, le=720),
     admin: dict = Depends(require_admin),
@@ -57,7 +67,7 @@ async def aggregate_hourly_stats(
     return result
 
 
-@router.post("/readings")
+@router.post("/readings", response_model=ReadingIngestResponse)
 async def post_readings(body: MeterReading, x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(body.device_id, x_device_token)
     ts = await reading_service.save_reading(body)
@@ -67,7 +77,7 @@ async def post_readings(body: MeterReading, x_device_token: Optional[str] = Head
     return {"ok": True, "ts": ts}
 
 
-@router.post("/readings/batch")
+@router.post("/readings/batch", response_model=ReadingBatchResponse)
 async def post_readings_batch(body: MeterReadingBatch, x_device_token: Optional[str] = Header(None)):
     device_id = body.device_id or (body.readings[0].device_id if body.readings else None)
     await device_service.verify_device_access(device_id, x_device_token)
