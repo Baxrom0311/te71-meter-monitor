@@ -1,6 +1,6 @@
 from sqlalchemy import and_, desc, func, select, update
 
-from models.entities import Command, Device
+from models.entities import Command, Device, DeviceProvisioningToken
 from repositories.base import BaseRepository
 
 
@@ -23,6 +23,37 @@ class DeviceRepository(BaseRepository[Device]):
             stmt = stmt.where(Device.building_text == building)
         if utility_type:
             stmt = stmt.where(Device.utility_type == utility_type)
+        return list((await self.session.scalars(stmt)).all())
+
+
+class DeviceProvisioningTokenRepository(BaseRepository[DeviceProvisioningToken]):
+    model = DeviceProvisioningToken
+
+    async def active_candidates(self, now: int) -> list[DeviceProvisioningToken]:
+        return list(
+            (
+                await self.session.scalars(
+                    select(DeviceProvisioningToken).where(
+                        and_(
+                            DeviceProvisioningToken.used_at.is_(None),
+                            DeviceProvisioningToken.revoked_at.is_(None),
+                            DeviceProvisioningToken.expires_at > now,
+                        )
+                    )
+                )
+            ).all()
+        )
+
+    async def list_filtered(self, active_only: bool = True, limit: int = 100, now: int | None = None) -> list[DeviceProvisioningToken]:
+        stmt = select(DeviceProvisioningToken).order_by(desc(DeviceProvisioningToken.id)).limit(limit)
+        if active_only:
+            stmt = stmt.where(
+                and_(
+                    DeviceProvisioningToken.used_at.is_(None),
+                    DeviceProvisioningToken.revoked_at.is_(None),
+                    DeviceProvisioningToken.expires_at > (now or 0),
+                )
+            )
         return list((await self.session.scalars(stmt)).all())
 
 

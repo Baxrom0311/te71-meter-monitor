@@ -4,7 +4,23 @@ from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import Response
 
 from core.security import current_token_payload, require_admin
-from models.schemas import DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
+from models.schemas import (
+    DeviceConfigResponse,
+    DeviceListResponse,
+    DeviceProvisioningTokenCreate,
+    DeviceProvisioningTokenCreateResponse,
+    DeviceProvisioningTokenListResponse,
+    DeviceProvisioningTokenRevokeResponse,
+    DeviceRegister,
+    DeviceRegisterResponse,
+    DeviceResponse,
+    DeviceStatus,
+    DeviceStatusResponse,
+    DeviceTokenResponse,
+    DeviceTokenRevokeResponse,
+    DeviceUpdate,
+    DeviceUpdateResponse,
+)
 from services import analytics as analytics_service
 from services import audit
 from services import devices as device_service
@@ -13,26 +29,26 @@ from services import readings as reading_service
 router = APIRouter(prefix="/api")
 
 
-@router.post("/register")
+@router.post("/register", response_model=DeviceRegisterResponse)
 async def register_device(body: DeviceRegister, x_device_token: Optional[str] = Header(None)):
     if not body.provisioning_token:
         await device_service.verify_device_access(body.device_id, x_device_token)
     return await device_service.register_device(body)
 
 
-@router.post("/device-status")
+@router.post("/device-status", response_model=DeviceStatusResponse)
 async def device_status(body: DeviceStatus, x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(body.device_id, x_device_token)
     return await device_service.update_device_status(body)
 
 
-@router.get("/device-config/{device_id}")
+@router.get("/device-config/{device_id}", response_model=DeviceConfigResponse)
 async def device_config(device_id: str, x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(device_id, x_device_token)
     return await device_service.get_device_config(device_id)
 
 
-@router.get("/devices")
+@router.get("/devices", response_model=DeviceListResponse)
 async def list_devices(
     online: Optional[bool] = None,
     meter_type: Optional[str] = None,
@@ -44,7 +60,7 @@ async def list_devices(
     return await device_service.list_devices(online, meter_type, group, building, utility_type)
 
 
-@router.post("/devices/provisioning-tokens")
+@router.post("/devices/provisioning-tokens", response_model=DeviceProvisioningTokenCreateResponse)
 async def create_device_provisioning_token(
     body: DeviceProvisioningTokenCreate,
     admin: dict = Depends(require_admin),
@@ -55,7 +71,7 @@ async def create_device_provisioning_token(
     return result
 
 
-@router.get("/devices/provisioning-tokens")
+@router.get("/devices/provisioning-tokens", response_model=DeviceProvisioningTokenListResponse)
 async def list_device_provisioning_tokens(
     active_only: bool = True,
     limit: int = Query(100, ge=1, le=500),
@@ -64,33 +80,33 @@ async def list_device_provisioning_tokens(
     return await device_service.list_provisioning_tokens(active_only=active_only, limit=limit)
 
 
-@router.delete("/devices/provisioning-tokens/{token_id}")
+@router.delete("/devices/provisioning-tokens/{token_id}", response_model=DeviceProvisioningTokenRevokeResponse)
 async def revoke_device_provisioning_token(token_id: int, admin: dict = Depends(require_admin)):
     result = await device_service.revoke_provisioning_token(token_id, admin)
     await audit.record(admin, "device.provisioning_token.revoke", "device_provisioning_token", token_id)
     return result
 
 
-@router.get("/devices/{device_id}")
+@router.get("/devices/{device_id}", response_model=DeviceResponse)
 async def get_device(device_id: str, _: dict = Depends(current_token_payload)):
     return await device_service.get_device(device_id)
 
 
-@router.put("/devices/{device_id}")
+@router.put("/devices/{device_id}", response_model=DeviceUpdateResponse)
 async def update_device(device_id: str, body: DeviceUpdate, admin: dict = Depends(require_admin)):
     result = await device_service.update_device(device_id, body)
     await audit.record(admin, "device.update", "device", device_id, body.model_dump(exclude_none=True))
     return result
 
 
-@router.post("/devices/{device_id}/token")
+@router.post("/devices/{device_id}/token", response_model=DeviceTokenResponse)
 async def rotate_device_token(device_id: str, admin: dict = Depends(require_admin)):
     result = await device_service.rotate_device_token(device_id)
     await audit.record(admin, "device.rotate_token", "device", device_id)
     return result
 
 
-@router.delete("/devices/{device_id}/token")
+@router.delete("/devices/{device_id}/token", response_model=DeviceTokenRevokeResponse)
 async def revoke_device_token(device_id: str, admin: dict = Depends(require_admin)):
     result = await device_service.revoke_device_token(device_id, admin)
     await audit.record(admin, "device.revoke_token", "device", device_id)

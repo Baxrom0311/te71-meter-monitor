@@ -95,6 +95,9 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("BuildingsEnergySummaryResponse", schemas)
         self.assertIn("TokenResponse", schemas)
         self.assertIn("UserListResponse", schemas)
+        self.assertIn("DeviceListResponse", schemas)
+        self.assertIn("DeviceConfigResponse", schemas)
+        self.assertIn("DeviceProvisioningTokenListResponse", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(restore_schema["$ref"], "#/components/schemas/BackupRestoreResponse")
         audit_schema = openapi["paths"]["/api/audit-logs"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -105,6 +108,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(energy_schema["$ref"], "#/components/schemas/EnergyByBuildingResponse")
         login_schema = openapi["paths"]["/api/auth/login"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(login_schema["$ref"], "#/components/schemas/TokenResponse")
+        devices_schema = openapi["paths"]["/api/devices"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(devices_schema["$ref"], "#/components/schemas/DeviceListResponse")
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
 

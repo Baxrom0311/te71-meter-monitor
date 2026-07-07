@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import and_, desc, inspect, select
+from sqlalchemy import inspect
 
 from core.config import settings
 from core.database import SessionLocal
@@ -7,6 +7,7 @@ from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
 from models.entities import Building, Device, DeviceProvisioningToken, MeasurementPoint
 from models.schemas import DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
+from repositories.devices import DeviceProvisioningTokenRepository, DeviceRepository
 from services.websocket import ws_manager
 
 
@@ -37,7 +38,7 @@ async def verify_device_access(device_id: str | None, token: str | None) -> None
     if not device_id:
         raise HTTPException(400, "device_id kerak")
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device = await DeviceRepository(session).get(device_id)
     if device and not device.is_active:
         raise HTTPException(403, "Qurilma o'chirilgan")
     if device and device.api_token_hash:
@@ -54,7 +55,7 @@ async def verify_device_access(device_id: str | None, token: str | None) -> None
 
 async def get_device_config(device_id: str) -> dict:
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device = await DeviceRepository(session).get(device_id)
         point = await session.get(MeasurementPoint, device.point_id) if device and device.point_id else None
         building = await session.get(Building, device.building_id) if device and device.building_id else None
 
@@ -92,17 +93,7 @@ async def get_device_config(device_id: str) -> dict:
 async def _consume_provisioning_token(session, body: DeviceRegister, ts: int) -> dict | None:
     if not body.provisioning_token:
         return None
-    rows = (
-        await session.scalars(
-            select(DeviceProvisioningToken).where(
-                and_(
-                    DeviceProvisioningToken.used_at.is_(None),
-                    DeviceProvisioningToken.revoked_at.is_(None),
-                    DeviceProvisioningToken.expires_at > ts,
-                )
-            )
-        )
-    ).all()
+    rows = await DeviceProvisioningTokenRepository(session).active_candidates(ts)
     matched = next((row for row in rows if verify_password(body.provisioning_token, row.token_hash)), None)
     if not matched:
         raise HTTPException(401, "Provisioning token noto'g'ri yoki muddati tugagan")
@@ -132,10 +123,11 @@ async def register_device(body: DeviceRegister) -> dict:
             applied_device_role = provisioned.get("device_role") or body.device_role
             applied_firmware_mode = provisioned.get("firmware_mode") or body.firmware_mode
 
-        device = await session.get(Device, body.device_id)
+        device_repo = DeviceRepository(session)
+        device = await device_repo.get(body.device_id)
         if not device:
             device = Device(id=body.device_id, name=body.name or body.device_id, registered=ts, created_at=ts)
-            session.add(device)
+            device_repo.add(device)
 
         if provisioned:
             device_token = generate_secret_token()
@@ -192,10 +184,11 @@ async def register_device(body: DeviceRegister) -> dict:
 async def update_device_status(body: DeviceStatus) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        device = await session.get(Device, body.device_id)
+        device_repo = DeviceRepository(session)
+        device = await device_repo.get(body.device_id)
         if not device:
             device = Device(id=body.device_id, name=body.device_id, registered=ts, created_at=ts)
-            session.add(device)
+            device_repo.add(device)
         device.ip = body.ip or device.ip
         device.rssi = body.rssi
         device.hardware_version = body.hardware_version or device.hardware_version
@@ -216,17 +209,8 @@ async def list_devices(
     building: str | None = None,
     utility_type: str | None = None,
 ) -> dict:
-    stmt = select(Device).where(Device.is_active.is_(True)).order_by(desc(Device.last_seen))
-    if meter_type:
-        stmt = stmt.where(Device.meter_type == meter_type)
-    if group:
-        stmt = stmt.where(Device.group_name == group)
-    if building:
-        stmt = stmt.where(Device.building_text == building)
-    if utility_type:
-        stmt = stmt.where(Device.utility_type == utility_type)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await DeviceRepository(session).list_filtered(meter_type, group, building, utility_type)
 
     devices = []
     for device in rows:
@@ -239,7 +223,7 @@ async def list_devices(
 
 async def get_device(device_id: str) -> dict:
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device = await DeviceRepository(session).get(device_id)
     if not device:
         raise HTTPException(404, "Qurilma topilmadi")
     return _as_dict(device) | {"online": _online(device.last_seen)}
@@ -250,7 +234,7 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
         if fields.get("building_id") and not await session.get(Building, fields["building_id"]):
@@ -273,10 +257,11 @@ async def rotate_device_token(device_id: str) -> dict:
     token = generate_secret_token()
     ts = now_ts()
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device_repo = DeviceRepository(session)
+        device = await device_repo.get(device_id)
         if not device:
             device = Device(id=device_id, name=device_id, registered=ts, created_at=ts)
-            session.add(device)
+            device_repo.add(device)
         device.api_token_hash = hash_password(token)
         device.token_created_at = ts
         device.token_revoked_at = None
@@ -290,7 +275,7 @@ async def rotate_device_token(device_id: str) -> dict:
 async def revoke_device_token(device_id: str, admin: dict) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
+        device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
         if not device.api_token_hash and device.token_revoked_at:
@@ -331,7 +316,7 @@ async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: 
             created_by_username=admin.get("username"),
             created_at=ts,
         )
-        session.add(row)
+        DeviceProvisioningTokenRepository(session).add(row)
         await session.commit()
         await session.refresh(row)
     return {
@@ -350,17 +335,8 @@ async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: 
 
 async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -> dict:
     ts = now_ts()
-    stmt = select(DeviceProvisioningToken).order_by(desc(DeviceProvisioningToken.id)).limit(limit)
-    if active_only:
-        stmt = stmt.where(
-            and_(
-                DeviceProvisioningToken.used_at.is_(None),
-                DeviceProvisioningToken.revoked_at.is_(None),
-                DeviceProvisioningToken.expires_at > ts,
-            )
-        )
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await DeviceProvisioningTokenRepository(session).list_filtered(active_only, limit, ts)
     result = []
     for row in rows:
         data = _as_dict(row)
@@ -372,7 +348,7 @@ async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -
 async def revoke_provisioning_token(token_id: int, admin: dict) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        row = await session.get(DeviceProvisioningToken, token_id)
+        row = await DeviceProvisioningTokenRepository(session).get(token_id)
         if not row:
             raise HTTPException(404, "Provisioning token topilmadi")
         if row.used_at:
