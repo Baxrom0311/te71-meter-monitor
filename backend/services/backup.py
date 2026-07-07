@@ -24,6 +24,8 @@ RESTORE_TABLE_ORDER = [
     "device_provisioning_tokens",
     "firmware_compatibilities",
     "firmware_install_events",
+    "ota_batches",
+    "ota_batch_devices",
     "readings",
     "hourly_utility_stats",
     "alerts",

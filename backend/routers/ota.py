@@ -13,6 +13,12 @@ from models.schemas import (
     FirmwareListResponse,
     FirmwareUploadResponse,
     OkResponse,
+    OTABatchCancelResponse,
+    OTABatchCreate,
+    OTABatchCreateResponse,
+    OTABatchDetailResponse,
+    OTABatchListResponse,
+    OTABatchProcessResponse,
     OtaInstallReport,
     OtaReportResponse,
 )
@@ -49,6 +55,9 @@ async def ota_upload(
     description: str = Form(""),
     release_notes: str = Form(""),
     compatibility_notes: str = Form(""),
+    is_stable: bool = Form(False),
+    min_version: Optional[str] = Form(None),
+    rollout_percentage: int = Form(100),
     file: UploadFile = File(...),
     admin: dict = Depends(require_admin),
 ):
@@ -65,6 +74,9 @@ async def ota_upload(
         description=description,
         release_notes=release_notes,
         compatibility_notes=compatibility_notes,
+        is_stable=is_stable,
+        min_version=min_version,
+        rollout_percentage=rollout_percentage,
     )
     await audit.record(
         admin,
@@ -79,6 +91,9 @@ async def ota_upload(
             "device_role": device_role,
             "sensor_type": sensor_type,
             "converter_type": converter_type,
+            "is_stable": is_stable,
+            "min_version": min_version,
+            "rollout_percentage": rollout_percentage,
         },
     )
     return result
@@ -116,6 +131,45 @@ async def ota_events(
     _: dict = Depends(require_admin),
 ):
     return await ota_service.ota_events(device_id, status, limit)
+
+
+@router.post("/ota/batches", response_model=OTABatchCreateResponse)
+async def create_ota_batch(body: OTABatchCreate, admin: dict = Depends(require_admin)):
+    result = await ota_service.create_ota_batch(body, admin)
+    await audit.record(admin, "ota_batch.create", "ota_batch", result["batch"]["id"], body.model_dump())
+    return result
+
+
+@router.get("/ota/batches", response_model=OTABatchListResponse)
+async def list_ota_batches(
+    status: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    _: dict = Depends(require_admin),
+):
+    return await ota_service.list_ota_batches(status, limit)
+
+
+@router.get("/ota/batches/{batch_id}", response_model=OTABatchDetailResponse)
+async def get_ota_batch(batch_id: int, _: dict = Depends(require_admin)):
+    return await ota_service.get_ota_batch(batch_id)
+
+
+@router.post("/ota/batches/{batch_id}/process", response_model=OTABatchProcessResponse)
+async def process_ota_batch(
+    batch_id: int,
+    limit: Optional[int] = Query(None, ge=1, le=10000),
+    admin: dict = Depends(require_admin),
+):
+    result = await ota_service.process_ota_batch(batch_id, limit)
+    await audit.record(admin, "ota_batch.process", "ota_batch", batch_id, result)
+    return result
+
+
+@router.post("/ota/batches/{batch_id}/cancel", response_model=OTABatchCancelResponse)
+async def cancel_ota_batch(batch_id: int, admin: dict = Depends(require_admin)):
+    result = await ota_service.cancel_ota_batch(batch_id)
+    await audit.record(admin, "ota_batch.cancel", "ota_batch", batch_id, result)
+    return result
 
 
 @router.get("/ota/firmware/{filename}")

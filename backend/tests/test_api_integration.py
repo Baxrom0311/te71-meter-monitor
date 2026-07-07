@@ -90,6 +90,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("AuditLogListResponse", schemas)
         self.assertIn("FirmwareListResponse", schemas)
         self.assertIn("FirmwareCheckResponse", schemas)
+        self.assertIn("OTABatchListResponse", schemas)
+        self.assertIn("OTABatchDetailResponse", schemas)
         self.assertIn("CommandQueuedResponse", schemas)
         self.assertIn("EnergyByBuildingResponse", schemas)
         self.assertIn("BuildingsEnergySummaryResponse", schemas)
@@ -523,10 +525,16 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
                 "sensor_type": "pressure_4_20ma",
                 "converter_type": "ADS1115",
                 "description": "API integration firmware",
+                "is_stable": "true",
+                "min_version": "1.0.0",
+                "rollout_percentage": "100",
             },
             files={"file": ("water.bin", b"firmware-bytes", "application/octet-stream")},
         )
         self.assertEqual(ota_upload.status_code, 200, ota_upload.text)
+        self.assertTrue(ota_upload.json()["is_stable"])
+        self.assertEqual(ota_upload.json()["min_version"], "1.0.0")
+        self.assertEqual(ota_upload.json()["rollout_percentage"], 100)
 
         ota_check = await self.client.get(
             "/api/ota/check/esp32-api-water-01?current_version=1.0.0",
@@ -535,6 +543,27 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ota_check.status_code, 200, ota_check.text)
         self.assertTrue(ota_check.json()["update"])
         self.assertEqual(ota_check.json()["version"], "2.0.0")
+
+        ota_batch = await self.client.post(
+            "/api/ota/batches",
+            headers=admin_headers,
+            json={
+                "name": "Water rollout",
+                "firmware_id": ota_upload.json()["id"],
+                "device_ids": ["esp32-api-water-01"],
+                "devices_per_hour": 100,
+            },
+        )
+        self.assertEqual(ota_batch.status_code, 200, ota_batch.text)
+        batch_id = ota_batch.json()["batch"]["id"]
+        self.assertEqual(ota_batch.json()["batch"]["total_devices"], 1)
+        processed_batch = await self.client.post(f"/api/ota/batches/{batch_id}/process", headers=admin_headers)
+        self.assertEqual(processed_batch.status_code, 200, processed_batch.text)
+        self.assertEqual(processed_batch.json()["queued"], 1)
+        ota_pending = await self.client.get("/api/commands/esp32-api-water-01", headers=device_headers)
+        self.assertEqual(ota_pending.status_code, 200, ota_pending.text)
+        self.assertTrue(any(item["action"] == "ota_check" for item in ota_pending.json()["commands"]))
+
         ota_download = await self.client.get(ota_check.json()["url"], headers=device_headers)
         self.assertEqual(ota_download.status_code, 200, ota_download.text)
         self.assertEqual(ota_download.content, b"firmware-bytes")
@@ -551,6 +580,10 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertEqual(ota_report.status_code, 200, ota_report.text)
+        ota_batch_detail = await self.client.get(f"/api/ota/batches/{batch_id}", headers=admin_headers)
+        self.assertEqual(ota_batch_detail.status_code, 200, ota_batch_detail.text)
+        self.assertEqual(ota_batch_detail.json()["success_count"], 1)
+        self.assertEqual(ota_batch_detail.json()["devices"][0]["status"], "success")
         ota_events = await self.client.get(
             "/api/ota/events?device_id=esp32-api-water-01",
             headers=admin_headers,

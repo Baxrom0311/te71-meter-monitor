@@ -344,6 +344,9 @@ class Firmware(Base):
     sha256: Mapped[str | None] = mapped_column(String(128))
     uploaded: Mapped[int | None] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_stable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    min_version: Mapped[str | None] = mapped_column(String(64))
+    rollout_percentage: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     release_notes: Mapped[str | None] = mapped_column(Text)
@@ -353,6 +356,7 @@ class Firmware(Base):
         back_populates="firmware",
         cascade="all, delete-orphan",
     )
+    ota_batches: Mapped[list["OTABatch"]] = relationship(back_populates="firmware")
 
 
 class FirmwareCompatibility(Base):
@@ -391,6 +395,58 @@ class FirmwareInstallEvent(Base):
     message: Mapped[str | None] = mapped_column(Text)
     ts: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[int | None] = mapped_column(Integer)
+
+
+class OTABatch(Base, TimestampMixin):
+    __tablename__ = "ota_batches"
+    __table_args__ = (
+        Index("idx_ota_batches_status_scheduled", "status", "scheduled_at"),
+        Index("idx_ota_batches_firmware", "firmware_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    firmware_id: Mapped[int] = mapped_column(ForeignKey("firmware.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    devices_per_hour: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    scheduled_at: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[int | None] = mapped_column(Integer)
+    completed_at: Mapped[int | None] = mapped_column(Integer)
+    total_devices: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_by_username: Mapped[str | None] = mapped_column(String(64))
+
+    firmware: Mapped["Firmware"] = relationship(back_populates="ota_batches")
+    devices: Mapped[list["OTABatchDevice"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+    )
+
+
+class OTABatchDevice(Base):
+    __tablename__ = "ota_batch_devices"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "device_id", name="uq_ota_batch_device"),
+        Index("idx_ota_batch_devices_batch_status", "batch_id", "status"),
+        Index("idx_ota_batch_devices_device_status", "device_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("ota_batches.id"), nullable=False)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    notified_at: Mapped[int | None] = mapped_column(Integer)
+    completed_at: Mapped[int | None] = mapped_column(Integer)
+    previous_version: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[int | None] = mapped_column(Integer)
+
+    batch: Mapped["OTABatch"] = relationship(back_populates="devices")
 
 
 class User(Base, TimestampMixin):

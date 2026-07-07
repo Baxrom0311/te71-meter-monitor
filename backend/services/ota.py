@@ -1,19 +1,71 @@
 import hashlib
+import json
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import desc, inspect, select
+from sqlalchemy import and_, desc, func, inspect, select
 from sqlalchemy.orm import selectinload
 
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
-from models.entities import Device, Firmware, FirmwareCompatibility, FirmwareInstallEvent, MeasurementPoint
-from models.schemas import OtaInstallReport
+from models.entities import (
+    Command,
+    Device,
+    Firmware,
+    FirmwareCompatibility,
+    FirmwareInstallEvent,
+    MeasurementPoint,
+    OTABatch,
+    OTABatchDevice,
+)
+from models.schemas import OTABatchCreate, OtaInstallReport
+from repositories.devices import CommandRepository
 
 
 def _as_dict(obj) -> dict:
     return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
+
+
+def _version_tuple(version: str | None) -> tuple[int, int, int] | None:
+    if not version:
+        return None
+    parts = str(version).strip().split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        return None
+
+
+def _is_newer_version(target_version: str, current_version: str | None) -> bool:
+    target = _version_tuple(target_version)
+    current = _version_tuple(current_version)
+    if target and current:
+        return target > current
+    return target_version != (current_version or "")
+
+
+def _can_upgrade_from(firmware: Firmware, current_version: str | None) -> bool:
+    if not firmware.min_version:
+        return True
+    minimum = _version_tuple(firmware.min_version)
+    current = _version_tuple(current_version)
+    if minimum and current:
+        return current >= minimum
+    return True
+
+
+def _device_in_rollout(device_id: str, firmware: Firmware) -> bool:
+    percentage = firmware.rollout_percentage
+    if percentage >= 100:
+        return True
+    if percentage <= 0:
+        return False
+    digest = hashlib.sha256(f"{firmware.id}:{device_id}".encode()).hexdigest()
+    bucket = int(digest[:8], 16) % 100
+    return bucket < percentage
 
 
 def _clean_meta(value: str | None) -> str | None:
@@ -104,6 +156,22 @@ def _firmware_response(firmware: Firmware, *, device_id: str | None = None) -> d
     return data
 
 
+def _batch_response(batch: OTABatch) -> dict:
+    data = _as_dict(batch)
+    processed = (batch.success_count or 0) + (batch.failure_count or 0) + (batch.skipped_count or 0)
+    data["progress_percentage"] = round((processed / batch.total_devices) * 100, 1) if batch.total_devices else 0.0
+    data["pending_count"] = max((batch.total_devices or 0) - processed, 0)
+    return data
+
+
+def _batch_detail_response(batch: OTABatch) -> dict:
+    return {
+        **_batch_response(batch),
+        "firmware": _firmware_response(batch.firmware),
+        "devices": [_as_dict(device) for device in batch.devices],
+    }
+
+
 async def ota_upload(
     version: str,
     notes: str,
@@ -117,7 +185,17 @@ async def ota_upload(
     description: str = "",
     release_notes: str = "",
     compatibility_notes: str = "",
+    is_stable: bool = False,
+    min_version: str | None = None,
+    rollout_percentage: int = 100,
 ) -> dict:
+    if _version_tuple(version) is None:
+        raise HTTPException(422, "Firmware version X.Y.Z formatida bo'lishi kerak")
+    if min_version and _version_tuple(min_version) is None:
+        raise HTTPException(422, "min_version X.Y.Z formatida bo'lishi kerak")
+    if rollout_percentage < 0 or rollout_percentage > 100:
+        raise HTTPException(422, "rollout_percentage 0 dan 100 gacha bo'lishi kerak")
+
     data = await file.read()
     sha = hashlib.sha256(data).hexdigest()
     target_tuple = _compat_tuple(utility_type, firmware_mode, device_role, hardware_version, sensor_type, converter_type)
@@ -141,6 +219,9 @@ async def ota_upload(
         sha256=sha,
         uploaded=now_ts(),
         active=True,
+        is_stable=is_stable,
+        min_version=_clean_meta(min_version),
+        rollout_percentage=rollout_percentage,
         notes=notes,
         description=_clean_meta(description),
         release_notes=_clean_meta(release_notes),
@@ -159,17 +240,6 @@ async def ota_upload(
         ],
     )
     async with SessionLocal() as session:
-        active_firmware = (
-            await session.scalars(
-                select(Firmware)
-                .options(selectinload(Firmware.compatibilities))
-                .where(Firmware.active.is_(True))
-            )
-        ).all()
-        for existing in active_firmware:
-            existing_tuples = [_firmware_direct_tuple(existing), *[_compat_row_tuple(row) for row in existing.compatibilities]]
-            if target_tuple in existing_tuples:
-                existing.active = False
         session.add(firmware)
         await session.flush()
         response = {"ok": True, **_firmware_response(firmware)}
@@ -224,8 +294,18 @@ async def ota_check(device_id: str, current_version: str) -> dict:
                 .order_by(desc(Firmware.uploaded))
             )
         ).all()
-        firmware = next((row for row in candidates if _firmware_matches_device(row, target)), None)
-    if not firmware or firmware.version == current_version:
+        firmware = next(
+            (
+                row
+                for row in candidates
+                if _firmware_matches_device(row, target)
+                and _device_in_rollout(device_id, row)
+                and _is_newer_version(row.version, current_version)
+                and _can_upgrade_from(row, current_version)
+            ),
+            None,
+        )
+    if not firmware:
         return {"update": False}
     return {"update": True, **_firmware_response(firmware, device_id=device_id)}
 
@@ -249,10 +329,36 @@ async def ota_report(body: OtaInstallReport) -> dict:
             created_at=ts,
         )
         session.add(event)
+        if body.firmware_id:
+            batch_device = await session.scalar(
+                select(OTABatchDevice)
+                .join(OTABatch, OTABatchDevice.batch_id == OTABatch.id)
+                .where(
+                    and_(
+                        OTABatch.firmware_id == body.firmware_id,
+                        OTABatchDevice.device_id == body.device_id,
+                        OTABatchDevice.status.in_(["pending", "notified", "downloading", "failed"]),
+                    )
+                )
+                .order_by(desc(OTABatchDevice.id))
+                .limit(1)
+            )
+            if batch_device:
+                batch_device.completed_at = ts
+                batch_device.updated_at = ts
+                if body.status == "success":
+                    batch_device.status = "success"
+                    batch_device.error_message = None
+                elif body.status == "failed":
+                    batch_device.status = "failed"
+                    batch_device.error_message = body.message
+                    batch_device.retry_count = (batch_device.retry_count or 0) + 1
         if body.status == "success" and body.target_version:
             device.software_version = body.target_version
             device.fw_version = body.target_version
             device.updated_at = ts
+        if body.firmware_id:
+            await _refresh_batch_counts(session, body.firmware_id)
         await session.commit()
         await session.refresh(event)
     return {"ok": True, "id": event.id, "ts": ts}
@@ -267,3 +373,213 @@ async def ota_events(device_id: str | None = None, status: str | None = None, li
     async with SessionLocal() as session:
         rows = (await session.scalars(stmt)).all()
     return {"events": [_as_dict(row) for row in rows], "total": len(rows)}
+
+
+async def _refresh_batch_counts(session, firmware_id: int | None = None, batch_id: int | None = None) -> None:
+    stmt = select(OTABatch)
+    if firmware_id:
+        stmt = stmt.where(OTABatch.firmware_id == firmware_id)
+    if batch_id:
+        stmt = stmt.where(OTABatch.id == batch_id)
+    batches = (await session.scalars(stmt)).all()
+    ts = now_ts()
+    for batch in batches:
+        success = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(
+                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "success")
+            )
+        ) or 0
+        failed = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(
+                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "failed")
+            )
+        ) or 0
+        skipped = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(
+                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "skipped")
+            )
+        ) or 0
+        total = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(OTABatchDevice.batch_id == batch.id)
+        ) or 0
+        batch.success_count = success
+        batch.failure_count = failed
+        batch.skipped_count = skipped
+        batch.total_devices = total
+        if total and success + failed + skipped >= total and batch.status != "cancelled":
+            batch.status = "completed" if failed == 0 else "failed"
+            batch.completed_at = batch.completed_at or ts
+        batch.updated_at = ts
+
+
+async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
+    device_ids = list(dict.fromkeys(body.device_ids))
+    if not device_ids:
+        raise HTTPException(422, "device_ids bo'sh bo'lmasin")
+    ts = now_ts()
+    async with SessionLocal() as session:
+        firmware = await session.get(Firmware, body.firmware_id)
+        if not firmware:
+            raise HTTPException(404, "Firmware topilmadi")
+        devices = (
+            await session.scalars(select(Device).where(and_(Device.id.in_(device_ids), Device.is_active.is_(True))))
+        ).all()
+        found_ids = {device.id for device in devices}
+        missing = [device_id for device_id in device_ids if device_id not in found_ids]
+        if missing:
+            raise HTTPException(404, f"Qurilmalar topilmadi: {', '.join(missing)}")
+        batch = OTABatch(
+            name=body.name,
+            firmware_id=body.firmware_id,
+            status="pending",
+            devices_per_hour=body.devices_per_hour,
+            scheduled_at=body.scheduled_at,
+            total_devices=len(devices),
+            created_by_user_id=admin.get("sub") or admin.get("user_id"),
+            created_by_username=admin.get("username"),
+            created_at=ts,
+            updated_at=ts,
+        )
+        session.add(batch)
+        await session.flush()
+        for device in devices:
+            session.add(
+                OTABatchDevice(
+                    batch_id=batch.id,
+                    device_id=device.id,
+                    status="pending",
+                    previous_version=device.software_version or device.fw_version,
+                    created_at=ts,
+                    updated_at=ts,
+                )
+            )
+        await session.commit()
+        batch = await session.scalar(
+            select(OTABatch)
+            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities), selectinload(OTABatch.devices))
+            .where(OTABatch.id == batch.id)
+        )
+    return {"ok": True, "batch": _batch_detail_response(batch)}
+
+
+async def list_ota_batches(status: str | None = None, limit: int = 100) -> dict:
+    stmt = select(OTABatch).order_by(desc(OTABatch.created_at)).limit(limit)
+    if status:
+        stmt = stmt.where(OTABatch.status == status)
+    async with SessionLocal() as session:
+        rows = (await session.scalars(stmt)).all()
+    return {"batches": [_batch_response(row) for row in rows], "total": len(rows)}
+
+
+async def get_ota_batch(batch_id: int) -> dict:
+    async with SessionLocal() as session:
+        batch = await session.scalar(
+            select(OTABatch)
+            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities), selectinload(OTABatch.devices))
+            .where(OTABatch.id == batch_id)
+        )
+    if not batch:
+        raise HTTPException(404, "OTA batch topilmadi")
+    return _batch_detail_response(batch)
+
+
+async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        batch = await session.scalar(
+            select(OTABatch)
+            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities))
+            .where(OTABatch.id == batch_id)
+        )
+        if not batch:
+            raise HTTPException(404, "OTA batch topilmadi")
+        if batch.status in {"completed", "failed", "cancelled"}:
+            raise HTTPException(400, "Bu OTA batch yakunlangan")
+        if batch.scheduled_at and batch.scheduled_at > ts:
+            raise HTTPException(400, "OTA batch hali schedule vaqtiga yetmadi")
+
+        notified_last_hour = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(
+                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.notified_at > ts - 3600)
+            )
+        ) or 0
+        available = max((batch.devices_per_hour or 1) - notified_last_hour, 0)
+        if limit is not None:
+            available = min(available, limit)
+
+        rows = (
+            await session.scalars(
+                select(OTABatchDevice)
+                .where(and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending"))
+                .order_by(OTABatchDevice.id)
+                .limit(available)
+            )
+        ).all()
+
+        queued = 0
+        skipped = 0
+        command_repo = CommandRepository(session)
+        for row in rows:
+            device = await session.get(Device, row.device_id)
+            if not device or not device.is_active:
+                row.status = "skipped"
+                row.error_message = "Device inactive or missing"
+                row.updated_at = ts
+                skipped += 1
+                continue
+            pending_count = await command_repo.active_pending_count(row.device_id, ts)
+            if pending_count >= settings.command_max_pending_per_device:
+                skipped += 1
+                continue
+            command = Command(
+                device_id=row.device_id,
+                action="ota_check",
+                param=json.dumps({"firmware_id": batch.firmware_id, "version": batch.firmware.version}, ensure_ascii=False),
+                status="pending",
+                created=ts,
+                expires_at=ts + settings.command_ttl_sec,
+                max_attempts=3,
+            )
+            command_repo.add(command)
+            row.status = "notified"
+            row.notified_at = ts
+            row.updated_at = ts
+            queued += 1
+
+        if queued and batch.status == "pending":
+            batch.status = "in_progress"
+            batch.started_at = batch.started_at or ts
+        await _refresh_batch_counts(session, batch_id=batch.id)
+        remaining = await session.scalar(
+            select(func.count()).select_from(OTABatchDevice).where(
+                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending")
+            )
+        ) or 0
+        await session.commit()
+    return {"ok": True, "batch_id": batch_id, "queued": queued, "skipped": skipped, "remaining": remaining}
+
+
+async def cancel_ota_batch(batch_id: int) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        batch = await session.get(OTABatch, batch_id)
+        if not batch:
+            raise HTTPException(404, "OTA batch topilmadi")
+        if batch.status in {"completed", "failed", "cancelled"}:
+            return {"ok": True, "batch_id": batch.id, "status": batch.status}
+        batch.status = "cancelled"
+        batch.completed_at = ts
+        batch.updated_at = ts
+        pending = (
+            await session.scalars(
+                select(OTABatchDevice).where(
+                    and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending")
+                )
+            )
+        ).all()
+        for row in pending:
+            row.status = "skipped"
+            row.error_message = "Batch cancelled"
+            row.updated_at = ts
+        await session.commit()
+    return {"ok": True, "batch_id": batch_id, "status": "cancelled"}
