@@ -485,6 +485,38 @@ class CommandQueuedResponse(BaseModel):
     expires_at: Optional[int] = None
 
 
+class PendingCommandResponse(BaseModel):
+    id: int
+    action: str
+    param: Optional[str] = None
+    expires_at: Optional[int] = None
+    attempts: int
+    max_attempts: int
+
+
+class PendingCommandListResponse(BaseModel):
+    commands: list[PendingCommandResponse]
+
+
+class CommandResponse(BaseModel):
+    id: int
+    device_id: str
+    action: str
+    param: Optional[str] = None
+    status: str
+    created: Optional[int] = None
+    expires_at: Optional[int] = None
+    sent: Optional[int] = None
+    acked: Optional[int] = None
+    ack_result: Optional[str] = None
+    attempts: int
+    max_attempts: int
+
+
+class CommandListResponse(BaseModel):
+    commands: list[CommandResponse]
+
+
 class BackupInfo(BaseModel):
     filename: str
     size: int

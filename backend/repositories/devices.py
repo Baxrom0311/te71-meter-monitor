@@ -1,4 +1,4 @@
-from sqlalchemy import and_, desc, select
+from sqlalchemy import and_, desc, func, select, update
 
 from models.entities import Command, Device
 from repositories.base import BaseRepository
@@ -29,14 +29,65 @@ class DeviceRepository(BaseRepository[Device]):
 class CommandRepository(BaseRepository[Command]):
     model = Command
 
-    async def pending_for_device(self, device_id: str, limit: int = 5) -> list[Command]:
+    async def active_pending_count(self, device_id: str, now: int) -> int:
+        return await self.session.scalar(
+            select(func.count()).select_from(Command).where(
+                and_(
+                    Command.device_id == device_id,
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                    (Command.expires_at.is_(None)) | (Command.expires_at > now),
+                )
+            )
+        ) or 0
+
+    async def expire_due(self, now: int, device_id: str | None = None) -> int:
+        stmt = (
+            update(Command)
+            .where(
+                and_(
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                    Command.expires_at.is_not(None),
+                    Command.expires_at <= now,
+                )
+            )
+            .values(status="expired", ack_result="expired")
+        )
+        if device_id:
+            stmt = stmt.where(Command.device_id == device_id)
+        result = await self.session.execute(stmt)
+        return result.rowcount or 0
+
+    async def pollable_for_device(self, device_id: str, now: int, limit: int = 5) -> list[Command]:
         return list(
             (
                 await self.session.scalars(
                     select(Command)
-                    .where(and_(Command.device_id == device_id, Command.acked.is_(None)))
+                    .where(
+                        and_(
+                            Command.device_id == device_id,
+                            Command.acked.is_(None),
+                            Command.status.in_(["pending", "sent"]),
+                            (Command.expires_at.is_(None)) | (Command.expires_at > now),
+                            Command.attempts < Command.max_attempts,
+                        )
+                    )
                     .order_by(Command.id)
                     .limit(limit)
                 )
             ).all()
         )
+
+    async def list_filtered(
+        self,
+        device_id: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[Command]:
+        stmt = select(Command).order_by(desc(Command.id)).limit(limit)
+        if device_id:
+            stmt = stmt.where(Command.device_id == device_id)
+        if status:
+            stmt = stmt.where(Command.status == status)
+        return list((await self.session.scalars(stmt)).all())
