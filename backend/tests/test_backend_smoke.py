@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -46,7 +47,31 @@ from models.schemas import (
     UtilityType,
 )
 from schemas.auth import LoginRequest, UserCreate, UserUpdate
-from services import audit, auth, backup, platform
+from services import analytics, audit, auth, backup, buildings, commands, devices, monitoring, ota, readings
+
+platform = SimpleNamespace(
+    aggregate_hourly_stats_once=analytics.aggregate_hourly_stats_once,
+    ack_command=commands.ack_command,
+    create_building=buildings.create_building,
+    create_command=commands.create_command,
+    create_measurement_point=buildings.create_measurement_point,
+    create_provisioning_token=devices.create_provisioning_token,
+    get_device=devices.get_device,
+    list_commands=commands.list_commands,
+    list_hourly_stats=analytics.list_hourly_stats,
+    list_provisioning_tokens=devices.list_provisioning_tokens,
+    metrics_text=monitoring.metrics_text,
+    ota_check=ota.ota_check,
+    ota_list=ota.ota_list,
+    ota_upload=ota.ota_upload,
+    pending_commands=commands.pending_commands,
+    register_device=devices.register_device,
+    revoke_device_token=devices.revoke_device_token,
+    revoke_provisioning_token=devices.revoke_provisioning_token,
+    rotate_device_token=devices.rotate_device_token,
+    save_reading=readings.save_reading,
+    verify_device_access=devices.verify_device_access,
+)
 
 
 async def _noop_app(scope, receive, send):

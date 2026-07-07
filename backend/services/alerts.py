@@ -104,7 +104,7 @@ def _notification_for_alert(alert: Alert, ts: int) -> AlertNotification:
     )
 
 
-async def check_alerts(session, reading: MeterReading) -> None:
+async def check_alerts(session, reading: MeterReading) -> list[dict]:
     ts = now_ts()
     alerts: list[tuple[Alert, int]] = []
     rules = await _alert_rules_for_reading(session, reading)
@@ -174,8 +174,8 @@ async def check_alerts(session, reading: MeterReading) -> None:
         if reading.pressure_bottom_bar is not None and reading.pressure_top_bar is not None:
             water_top_rule = rules.get("water_not_reaching_top")
             top_pressure_min = _rule_min(water_top_rule, settings.water_pressure_min_bar)
-            bottom_pressure_min = _rule_max(water_top_rule, settings.water_bottom_pressure_for_top_check_bar)
-            if reading.pressure_bottom_bar > bottom_pressure_min and reading.pressure_top_bar < top_pressure_min:
+            bottom_pressure_ok = _rule_min(water_top_rule, settings.water_bottom_pressure_for_top_check_bar)
+            if reading.pressure_bottom_bar > bottom_pressure_ok and reading.pressure_top_bar < top_pressure_min:
                 _queue_alert(
                     alerts,
                     Alert(
@@ -233,6 +233,7 @@ async def check_alerts(session, reading: MeterReading) -> None:
                 gas_leak_rule,
             )
 
+    to_broadcast = []
     for alert, dedupe_sec in alerts:
         recent = await session.scalar(
             select(Alert.id).where(
@@ -250,7 +251,7 @@ async def check_alerts(session, reading: MeterReading) -> None:
         await session.flush()
         if alert.severity == "critical":
             session.add(_notification_for_alert(alert, ts))
-        await ws_manager.broadcast(
+        to_broadcast.append(
             {
                 "type": "alert",
                 "kind": alert.kind,
@@ -260,6 +261,7 @@ async def check_alerts(session, reading: MeterReading) -> None:
                 "message": alert.message,
             }
         )
+    return to_broadcast
 
 
 async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int) -> dict:

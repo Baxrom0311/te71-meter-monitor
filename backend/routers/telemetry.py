@@ -31,6 +31,22 @@ async def hourly_stats(
     return await analytics_service.list_hourly_stats(building_id, utility_type, device_id, hours, limit)
 
 
+@router.get("/analytics/energy")
+async def energy_by_building(
+    from_ts: int = Query(..., description="Boshlang'ich unix timestamp"),
+    to_ts: int = Query(..., description="Tugash unix timestamp"),
+    building_id: Optional[int] = None,
+    granularity: str = Query("day", pattern="^(hour|day)$"),
+    _: dict = Depends(current_token_payload),
+):
+    return await analytics_service.energy_by_building(from_ts, to_ts, building_id, granularity)
+
+
+@router.get("/analytics/energy/summary")
+async def buildings_energy_summary(_: dict = Depends(current_token_payload)):
+    return await analytics_service.buildings_energy_summary()
+
+
 @router.post("/analytics/hourly/aggregate")
 async def aggregate_hourly_stats(
     hours: int = Query(48, ge=1, le=720),

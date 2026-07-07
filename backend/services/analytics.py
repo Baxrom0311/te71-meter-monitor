@@ -5,7 +5,7 @@ from sqlalchemy import Integer, and_, delete, desc, func, inspect, select
 
 from core.database import SessionLocal
 from core.time import now_ts
-from models.entities import Alert, HourlyUtilityStats, Reading
+from models.entities import Alert, Building, HourlyUtilityStats, Reading
 
 
 def _as_dict(obj) -> dict:
@@ -195,6 +195,150 @@ async def list_hourly_stats(
     async with SessionLocal() as session:
         rows = (await session.scalars(stmt)).all()
     return {"stats": [_as_dict(row) for row in rows], "hours": hours, "total": len(rows)}
+
+
+async def energy_by_building(
+    from_ts: int,
+    to_ts: int,
+    building_id: int | None = None,
+    granularity: str = "day",
+) -> dict:
+    """
+    Kunlik/soatlik energiya sarfi — har bir bino bo'yicha.
+    granularity: 'hour' | 'day'
+    """
+    if granularity == "hour":
+        bucket_sec = 3600
+    else:
+        bucket_sec = 86400
+
+    if from_ts > to_ts:
+        return {"from_ts": from_ts, "to_ts": to_ts, "granularity": granularity, "total": 0, "data": []}
+
+    bucket_ts = (Reading.ts / bucket_sec).cast(Integer) * bucket_sec
+    per_device = (
+        select(
+            bucket_ts.label("bucket_ts"),
+            Reading.building_id.label("building_id"),
+            Reading.device_id.label("device_id"),
+            (func.max(Reading.energy_kwh) - func.min(Reading.energy_kwh)).label("energy_kwh_delta"),
+            func.max(Reading.energy_kwh).label("energy_kwh_max"),
+            func.avg(Reading.power_w).label("avg_power_w"),
+            func.count().label("samples"),
+        )
+        .where(
+            and_(
+                Reading.ts >= from_ts,
+                Reading.ts <= to_ts,
+                Reading.utility_type == "electricity",
+                Reading.energy_kwh.isnot(None),
+            )
+        )
+        .group_by(bucket_ts, Reading.building_id, Reading.device_id)
+    )
+    if building_id:
+        per_device = per_device.where(Reading.building_id == building_id)
+    per_device_subq = per_device.subquery()
+
+    stmt = (
+        select(
+            per_device_subq.c.bucket_ts,
+            per_device_subq.c.building_id,
+            func.round(func.sum(per_device_subq.c.energy_kwh_delta), 3).label("energy_kwh_delta"),
+            func.round(func.sum(per_device_subq.c.energy_kwh_max), 3).label("energy_kwh_max"),
+            func.round(func.avg(per_device_subq.c.avg_power_w), 1).label("avg_power_w"),
+            func.sum(per_device_subq.c.samples).label("samples"),
+        )
+        .group_by(per_device_subq.c.bucket_ts, per_device_subq.c.building_id)
+        .order_by(per_device_subq.c.bucket_ts)
+    )
+
+    async with SessionLocal() as session:
+        rows = (await session.execute(stmt)).mappings().all()
+        # building nomi uchun
+        bld_ids = {r["building_id"] for r in rows if r["building_id"]}
+        bld_names: dict[int, str] = {}
+        if bld_ids:
+            bld_rows = (await session.scalars(select(Building).where(Building.id.in_(bld_ids)))).all()
+            bld_names = {b.id: b.name for b in bld_rows}
+
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["building_name"] = bld_names.get(d["building_id"], str(d["building_id"]) if d["building_id"] else "Noma'lum")
+        result.append(d)
+
+    return {
+        "from_ts": from_ts,
+        "to_ts": to_ts,
+        "granularity": granularity,
+        "total": len(result),
+        "data": result,
+    }
+
+
+async def buildings_energy_summary() -> dict:
+    """
+    Barcha binolar uchun oxirgi 30 kun energiya sarfi xulasasi (dashboard uchun).
+    """
+    to_ts = now_ts()
+    from_ts = to_ts - 30 * 86400
+
+    per_device = (
+        select(
+            Reading.building_id.label("building_id"),
+            Reading.device_id.label("device_id"),
+            (func.max(Reading.energy_kwh) - func.min(Reading.energy_kwh)).label("energy_kwh_delta"),
+            func.avg(Reading.power_w).label("avg_power_w"),
+            func.count().label("readings"),
+        )
+        .where(
+            and_(
+                Reading.ts >= from_ts,
+                Reading.utility_type == "electricity",
+                Reading.energy_kwh.isnot(None),
+            )
+        )
+        .group_by(Reading.building_id, Reading.device_id)
+        .subquery()
+    )
+    stmt = (
+        select(
+            per_device.c.building_id,
+            func.round(func.sum(per_device.c.energy_kwh_delta), 3).label("total_energy_kwh"),
+            func.round(func.avg(per_device.c.avg_power_w), 1).label("avg_power_w"),
+            func.sum(per_device.c.readings).label("readings"),
+        )
+        .group_by(per_device.c.building_id)
+    )
+
+    async with SessionLocal() as session:
+        rows = (await session.execute(stmt)).mappings().all()
+        bld_ids = {r["building_id"] for r in rows if r["building_id"]}
+        bld_names: dict[int, str] = {}
+        if bld_ids:
+            bld_rows = (await session.scalars(select(Building).where(Building.id.in_(bld_ids)))).all()
+            bld_names = {b.id: b.name for b in bld_rows}
+        all_buildings = (await session.scalars(select(Building))).all()
+
+    summary = []
+    seen = {r["building_id"] for r in rows}
+    for row in rows:
+        d = dict(row)
+        d["building_name"] = bld_names.get(d["building_id"], "Noma'lum")
+        summary.append(d)
+    for b in all_buildings:
+        if b.id not in seen:
+            summary.append({
+                "building_id": b.id,
+                "building_name": b.name,
+                "total_energy_kwh": 0,
+                "avg_power_w": 0,
+                "readings": 0,
+            })
+
+    summary.sort(key=lambda x: (x.get("total_energy_kwh") or 0), reverse=True)
+    return {"summary": summary, "days": 30}
 
 
 async def export_csv(device_id: str, hours: int) -> tuple[str, str]:

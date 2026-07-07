@@ -1,0 +1,14 @@
+[Unit]
+Description=Meter Monitor API
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/meter_backend
+EnvironmentFile=/root/meter_backend/.env
+ExecStart=/root/meter_backend/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001 --workers 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

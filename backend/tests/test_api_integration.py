@@ -17,7 +17,6 @@ import httpx
 from app import app
 from core.config import settings
 from core.database import init_db
-from routers import backups as backup_routes
 from services import alerts as alert_service
 from services import backup
 from services.auth import bootstrap_admin
@@ -68,28 +67,22 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(missing_file.status_code, 404, missing_file.text)
 
-        class FakeRestoreTask:
-            id = "restore-task-api-test"
-
-        original_delay = backup_routes.restore_backup_task.delay
-        backup_routes.restore_backup_task.delay = lambda restore_filename, confirm: FakeRestoreTask()
-        try:
-            queued = await self.client.post(
-                f"/api/backups/restore/{filename}?confirm=RESTORE",
-                headers=admin_headers,
-            )
-        finally:
-            backup_routes.restore_backup_task.delay = original_delay
-        self.assertEqual(queued.status_code, 200, queued.text)
-        self.assertEqual(queued.json()["task_id"], "restore-task-api-test")
-        self.assertEqual(queued.json()["status"], "queued")
+        restored = await self.client.post(
+            f"/api/backups/restore/{filename}?confirm=RESTORE",
+            headers=admin_headers,
+        )
+        self.assertEqual(restored.status_code, 200, restored.text)
+        self.assertTrue(restored.json()["ok"])
+        self.assertEqual(restored.json()["restored_from"], filename)
+        self.assertIn("pre_restore_backup", restored.json())
 
         audit = await self.client.get("/api/audit-logs?action=backup.restore", headers=admin_headers)
         self.assertEqual(audit.status_code, 200, audit.text)
         self.assertEqual(audit.json()["audit_logs"][0]["entity_id"], filename)
         openapi = app.openapi()
         schemas = openapi["components"]["schemas"]
-        self.assertIn("TaskQueuedResponse", schemas)
+        self.assertIn("BackupCreateResponse", schemas)
+        self.assertIn("BackupRestoreResponse", schemas)
         self.assertIn("BackupListResponse", schemas)
         self.assertIn("AlertListResponse", schemas)
         self.assertIn("AlertNotificationListResponse", schemas)
@@ -99,7 +92,7 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("FirmwareCheckResponse", schemas)
         self.assertIn("CommandQueuedResponse", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
-        self.assertEqual(restore_schema["$ref"], "#/components/schemas/TaskQueuedResponse")
+        self.assertEqual(restore_schema["$ref"], "#/components/schemas/BackupRestoreResponse")
         audit_schema = openapi["paths"]["/api/audit-logs"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(audit_schema["$ref"], "#/components/schemas/AuditLogListResponse")
         firmware_schema = openapi["paths"]["/api/ota/list"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -124,31 +117,19 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(downloaded.status_code, 200, downloaded.text)
         self.assertGreater(len(downloaded.content), 0)
 
-        class FakeCreateTask:
-            id = "backup-create-api-test"
-
-        class FakeCleanupTask:
-            id = "backup-cleanup-api-test"
-
-        original_create_delay = backup_routes.create_backup_task.delay
-        original_cleanup_delay = backup_routes.cleanup_old_backups_task.delay
-        backup_routes.create_backup_task.delay = lambda reason: FakeCreateTask()
-        backup_routes.cleanup_old_backups_task.delay = lambda keep_days: FakeCleanupTask()
-        try:
-            created = await self.client.post("/api/backups?reason=api-test", headers=admin_headers)
-            cleaned = await self.client.post("/api/backups/cleanup?keep_days=7", headers=admin_headers)
-        finally:
-            backup_routes.create_backup_task.delay = original_create_delay
-            backup_routes.cleanup_old_backups_task.delay = original_cleanup_delay
+        created = await self.client.post("/api/backups?reason=api-test", headers=admin_headers)
+        cleaned = await self.client.post("/api/backups/cleanup?keep_days=7", headers=admin_headers)
 
         self.assertEqual(created.status_code, 200, created.text)
-        self.assertEqual(created.json()["task_id"], "backup-create-api-test")
+        self.assertTrue(created.json()["ok"])
+        self.assertIn("filename", created.json())
         self.assertEqual(cleaned.status_code, 200, cleaned.text)
-        self.assertEqual(cleaned.json()["task_id"], "backup-cleanup-api-test")
+        self.assertTrue(cleaned.json()["ok"])
+        self.assertIn("deleted_count", cleaned.json())
 
         create_audit = await self.client.get("/api/audit-logs?action=backup.create", headers=admin_headers)
         self.assertEqual(create_audit.status_code, 200, create_audit.text)
-        self.assertEqual(create_audit.json()["audit_logs"][0]["entity_id"], "backup-create-api-test")
+        self.assertEqual(create_audit.json()["audit_logs"][0]["entity_id"], created.json()["filename"])
 
         removed = await self.client.delete(f"/api/backups/{filename}", headers=admin_headers)
         self.assertEqual(removed.status_code, 200, removed.text)
@@ -374,6 +355,56 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(hourly.status_code, 200, hourly.text)
         self.assertEqual(hourly.json()["stats"][0]["device_id"], "esp32-api-water-01")
+
+        electricity_point = await self.client.post(
+            "/api/measurement-points",
+            headers=admin_headers,
+            json={
+                "building_id": building_id,
+                "utility_type": "electricity",
+                "role": "electricity_main_meter",
+                "name": "Main electricity",
+            },
+        )
+        self.assertEqual(electricity_point.status_code, 200, electricity_point.text)
+        electricity_register = await self.client.post(
+            "/api/register",
+            headers={"X-Device-Token": "global-device-token"},
+            json={
+                "device_id": "esp32-api-electric-01",
+                "utility_type": "electricity",
+                "device_role": "electricity_node",
+                "firmware_mode": "electricity",
+                "building_id": building_id,
+                "point_id": electricity_point.json()["id"],
+            },
+        )
+        self.assertEqual(electricity_register.status_code, 200, electricity_register.text)
+        electric_headers = {"X-Device-Token": "global-device-token"}
+        for reading_id, energy_kwh, power_w in [("api-e-1", 100.0, 1200.0), ("api-e-2", 104.5, 1500.0)]:
+            energy_reading = await self.client.post(
+                "/api/readings",
+                headers=electric_headers,
+                json={
+                    "device_id": "esp32-api-electric-01",
+                    "reading_id": reading_id,
+                    "utility_type": "electricity",
+                    "building_id": building_id,
+                    "point_id": electricity_point.json()["id"],
+                    "energy_kwh": energy_kwh,
+                    "power_w": power_w,
+                },
+            )
+            self.assertEqual(energy_reading.status_code, 200, energy_reading.text)
+        energy = await self.client.get(
+            f"/api/analytics/energy?from_ts=0&to_ts=9999999999&building_id={building_id}&granularity=day",
+            headers=admin_headers,
+        )
+        self.assertEqual(energy.status_code, 200, energy.text)
+        self.assertEqual(energy.json()["data"][0]["energy_kwh_delta"], 4.5)
+        energy_summary = await self.client.get("/api/analytics/energy/summary", headers=admin_headers)
+        self.assertEqual(energy_summary.status_code, 200, energy_summary.text)
+        self.assertGreaterEqual(energy_summary.json()["summary"][0]["total_energy_kwh"], 4.5)
 
         alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
         self.assertEqual(alerts.status_code, 200, alerts.text)

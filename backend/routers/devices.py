@@ -35,13 +35,13 @@ async def device_config(device_id: str, x_device_token: Optional[str] = Header(N
 @router.get("/devices")
 async def list_devices(
     online: Optional[bool] = None,
-    type: Optional[str] = None,
+    meter_type: Optional[str] = None,
     group: Optional[str] = None,
     building: Optional[str] = None,
     utility_type: Optional[str] = None,
     _: dict = Depends(current_token_payload),
 ):
-    return await device_service.list_devices(online, type, group, building, utility_type)
+    return await device_service.list_devices(online, meter_type, group, building, utility_type)
 
 
 @router.post("/devices/provisioning-tokens")

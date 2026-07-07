@@ -10,6 +10,7 @@ env/
 # Environment
 .env
 *.env.local
+backend/deploy/.env.production
 
 # Database & runtime data
 backend/data/*.db

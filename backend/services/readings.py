@@ -1,7 +1,8 @@
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import and_, desc, func, inspect, select
+from sqlalchemy import Integer, and_, desc, func, inspect, select
+from sqlalchemy.orm import aliased
 
 from core.config import settings
 from core.database import SessionLocal
@@ -111,8 +112,10 @@ async def save_reading(body: MeterReading) -> int:
             created_at=ts,
         )
         session.add(reading)
-        await alert_service.check_alerts(session, body)
+        alert_broadcasts = await alert_service.check_alerts(session, body)
         await session.commit()
+    for msg in alert_broadcasts:
+        await alert_service.ws_manager.broadcast(msg)
     return ts
 
 
@@ -150,6 +153,8 @@ async def save_reading_batch(body: MeterReadingBatch) -> dict:
             ts = await save_reading(reading)
             timestamps.append(ts)
             accepted += 1
+        except HTTPException as exc:
+            errors.append({"index": index, "error": exc.detail})
         except Exception as exc:
             errors.append({"index": index, "error": str(exc)})
 
@@ -195,16 +200,28 @@ async def building_latest_readings(building_id: int, utility_type: str | None = 
         if utility_type:
             points_stmt = points_stmt.where(MeasurementPoint.utility_type == utility_type)
         points = (await session.scalars(points_stmt.order_by(MeasurementPoint.utility_type, MeasurementPoint.role))).all()
+        point_ids = [p.id for p in points]
+
+        # Har bir point uchun eng oxirgi reading — bitta query
+        r_inner = aliased(Reading)
+        latest_subq = (
+            select(func.max(r_inner.ts).label("max_ts"), r_inner.point_id)
+            .where(r_inner.point_id.in_(point_ids))
+            .group_by(r_inner.point_id)
+            .subquery()
+        )
+        readings_stmt = select(Reading).join(
+            latest_subq,
+            and_(Reading.point_id == latest_subq.c.point_id, Reading.ts == latest_subq.c.max_ts),
+        )
+        readings_by_point: dict[int, Reading] = {
+            r.point_id: r for r in (await session.scalars(readings_stmt)).all()
+        }
 
         result = []
         for point in points:
-            reading = await session.scalar(
-                select(Reading)
-                .where(Reading.point_id == point.id)
-                .order_by(desc(Reading.ts))
-                .limit(1)
-            )
             row = _as_dict(point)
+            reading = readings_by_point.get(point.id)
             row["latest_reading"] = _as_dict(reading) if reading else None
             result.append(row)
     return {"building_id": building_id, "points": result}

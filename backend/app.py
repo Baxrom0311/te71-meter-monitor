@@ -31,7 +31,14 @@ from routers.ota import router as ota_router
 from routers.telemetry import router as telemetry_router
 from routers.websocket import router as websocket_router
 from services.auth import bootstrap_admin
-from services.background import data_cleanup, offline_detector
+from services.background import (
+    alert_notification_worker,
+    analytics_worker,
+    audit_cleanup_worker,
+    command_cleanup_worker,
+    data_cleanup,
+    offline_detector,
+)
 from services.monitoring import build_snapshot
 from services.websocket import ws_manager
 
@@ -47,6 +54,10 @@ async def lifespan(app: FastAPI):
     if settings.run_inline_workers:
         asyncio.create_task(offline_detector())
         asyncio.create_task(data_cleanup())
+        asyncio.create_task(alert_notification_worker())
+        asyncio.create_task(command_cleanup_worker())
+        asyncio.create_task(audit_cleanup_worker())
+        asyncio.create_task(analytics_worker())
     yield
 
 
@@ -94,13 +105,14 @@ app.include_router(auth_router)
 app.include_router(websocket_router)
 app.include_router(health_router)
 
-if settings.static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
-
-
 @app.get("/", response_class=HTMLResponse)
 async def root():
     index_file = settings.static_dir / "index.html"
     if index_file.exists():
         return HTMLResponse(index_file.read_text(encoding="utf-8"))
     return HTMLResponse(f"<h1>{settings.app_name} v{settings.app_version}</h1>")
+
+# Frontend — serve all HTML pages and static assets
+# Mount happens after all /api/* routes so API always takes precedence
+if settings.static_dir.exists():
+    app.mount("/", StaticFiles(directory=str(settings.static_dir), html=True), name="frontend")

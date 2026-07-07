@@ -97,3 +97,51 @@ async def data_cleanup() -> None:
         except Exception as exc:
             logger.warning("data_cleanup error: %s", exc)
         await asyncio.sleep(86400)
+
+
+async def alert_notification_worker() -> None:
+    """Alert notifications va escalation — har 60s."""
+    from services.alerts import process_alert_notifications_once
+    await asyncio.sleep(20)
+    while True:
+        try:
+            await process_alert_notifications_once()
+        except Exception as exc:
+            logger.warning("alert_notification_worker error: %s", exc)
+        await asyncio.sleep(60)
+
+
+async def command_cleanup_worker() -> None:
+    """Muddati o'tgan commandlarni tozalash — har soat."""
+    from services.commands import cleanup_expired_commands_once
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await cleanup_expired_commands_once()
+        except Exception as exc:
+            logger.warning("command_cleanup_worker error: %s", exc)
+        await asyncio.sleep(3600)
+
+
+async def audit_cleanup_worker() -> None:
+    """Eski audit loglarni tozalash — har kunda."""
+    from services.audit import cleanup_old_logs_once
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await cleanup_old_logs_once()
+        except Exception as exc:
+            logger.warning("audit_cleanup_worker error: %s", exc)
+        await asyncio.sleep(86400)
+
+
+async def analytics_worker() -> None:
+    """Soatlik statistika agregatsiyasi — har soat."""
+    from services.analytics import aggregate_hourly_stats_once
+    await asyncio.sleep(300)
+    while True:
+        try:
+            await aggregate_hourly_stats_once()
+        except Exception as exc:
+            logger.warning("analytics_worker error: %s", exc)
+        await asyncio.sleep(3600)

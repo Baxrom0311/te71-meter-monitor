@@ -1,4 +1,5 @@
-from sqlalchemy import and_, desc, func, inspect, select
+from sqlalchemy import Integer, and_, desc, func, inspect, select
+from sqlalchemy.orm import aliased
 
 from core.config import settings
 from core.database import SessionLocal
@@ -38,7 +39,25 @@ async def summary() -> dict:
             or 0
         )
         reads_last_hour = await session.scalar(select(func.count()).select_from(Reading).where(Reading.ts > n - 3600)) or 0
-        total_energy = await session.scalar(select(func.sum(Reading.energy_kwh))) or 0
+        # Har bir device uchun oxirgi energy_kwh ni summalaymiz
+        r_inner = aliased(Reading)
+        latest_energy_subq = (
+            select(func.max(r_inner.ts).label("max_ts"), r_inner.device_id)
+            .where(r_inner.energy_kwh.isnot(None))
+            .group_by(r_inner.device_id)
+            .subquery()
+        )
+        total_energy = (
+            await session.scalar(
+                select(func.sum(Reading.energy_kwh)).join(
+                    latest_energy_subq,
+                    and_(
+                        Reading.device_id == latest_energy_subq.c.device_id,
+                        Reading.ts == latest_energy_subq.c.max_ts,
+                    ),
+                )
+            )
+        ) or 0
         buildings = await session.scalar(select(func.count()).select_from(Building)) or 0
         points = await session.scalar(select(func.count()).select_from(MeasurementPoint).where(MeasurementPoint.is_active.is_(True))) or 0
     return {
