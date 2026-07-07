@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="uz" class="layout-navbar-fixed layout-menu-fixed layout-compact" dir="ltr" data-skin="default" data-assets-path="assets/" data-template="vertical-menu-template" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"/>
+  <title>Firmware | Meter Monitor</title>
+  <link rel="icon" type="image/x-icon" href="assets/img/favicon/favicon.ico"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="assets/vendor/fonts/iconify-icons.css"/>
+  <link rel="stylesheet" href="assets/vendor/css/core.css"/>
+  <link rel="stylesheet" href="assets/css/demo.css"/>
+  <link rel="stylesheet" href="assets/vendor/libs/datatables-bs5/datatables.bootstrap5.css"/>
+  <link rel="stylesheet" href="assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css"/>
+  <link rel="stylesheet" href="assets/vendor/libs/notyf/notyf.min.css"/>
+  <script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
+  <style>
+    .admin-only { display: none !important; }
+    body.is-admin .admin-only { display: flex !important; }
+    body.is-admin li.admin-only { display: list-item !important; }
+  </style>
+</head>
+<body>
+<div class="layout-wrapper layout-content-navbar">
+  <div class="layout-container">
+
+    <aside class="layout-menu menu-vertical menu bg-menu-theme" id="layout-menu">
+      <div class="app-brand demo">
+        <a href="index.html" class="app-brand-link">
+          <span class="app-brand-logo demo me-2"><iconify-icon icon="tabler:bolt" class="text-primary" style="font-size:1.8rem"></iconify-icon></span>
+          <span class="app-brand-text demo menu-text fw-bold">Meter Monitor</span>
+        </a>
+      </div>
+      <div class="menu-inner-shadow"></div>
+      <ul class="menu-inner py-1">
+        <li class="menu-item" id="nav-dashboard"><a href="index.html" class="menu-link"><iconify-icon icon="tabler:dashboard" class="menu-icon"></iconify-icon><div>Dashboard</div></a></li>
+        <li class="menu-item" id="nav-analytics"><a href="analytics.html" class="menu-link"><iconify-icon icon="tabler:chart-bar" class="menu-icon"></iconify-icon><div>Analitika</div></a></li>
+        <li class="menu-item" id="nav-buildings"><a href="buildings.html" class="menu-link"><iconify-icon icon="tabler:building" class="menu-icon"></iconify-icon><div>Binolar</div></a></li>
+        <li class="menu-item" id="nav-devices"><a href="devices.html" class="menu-link"><iconify-icon icon="tabler:cpu" class="menu-icon"></iconify-icon><div>Qurilmalar</div></a></li>
+        <li class="menu-item" id="nav-alerts"><a href="alerts.html" class="menu-link"><iconify-icon icon="tabler:bell-ringing" class="menu-icon"></iconify-icon><div>Ogohlantirishlar</div></a></li>
+        <li class="menu-item" id="nav-firmware"><a href="firmware.html" class="menu-link"><iconify-icon icon="tabler:upload" class="menu-icon"></iconify-icon><div>Firmware</div></a></li>
+        <li class="menu-item admin-only" id="nav-users"><a href="users.html" class="menu-link"><iconify-icon icon="tabler:users" class="menu-icon"></iconify-icon><div>Foydalanuvchilar</div></a></li>
+        <li class="menu-item admin-only" id="nav-audit"><a href="audit.html" class="menu-link"><iconify-icon icon="tabler:clipboard-list" class="menu-icon"></iconify-icon><div>Audit</div></a></li>
+      </ul>
+    </aside>
+
+    <div class="layout-page">
+      <nav class="layout-navbar container-xxl navbar navbar-expand-xl navbar-detached align-items-center bg-navbar-theme">
+        <div class="layout-menu-toggle navbar-nav align-items-xl-center me-4 me-xl-0 d-xl-none">
+          <a class="nav-item nav-link px-0 me-xl-6" href="javascript:void(0)">
+            <iconify-icon icon="tabler:menu-2" style="font-size:1.5rem"></iconify-icon>
+          </a>
+        </div>
+        <div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
+          <div class="navbar-nav align-items-center ms-auto">
+            <div class="nav-item navbar-dropdown dropdown-user dropdown">
+              <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0)" data-bs-toggle="dropdown">
+                <div class="avatar avatar-online">
+                  <span class="avatar-initial rounded-circle bg-primary" id="user-avatar">A</span>
+                </div>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><div class="dropdown-item"><div class="fw-semibold" id="user-name">Admin</div><small class="text-muted" id="user-role">admin</small></div></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="javascript:void(0)" id="btn-logout"><iconify-icon icon="tabler:logout" class="me-2"></iconify-icon>Chiqish</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div class="content-wrapper">
+        <div class="container-xxl flex-grow-1 container-p-y">
+
+          <h4 class="fw-bold mb-4"><iconify-icon icon="tabler:upload" class="me-2 text-primary"></iconify-icon>Firmware boshqaruvi</h4>
+
+          <!-- Upload card (admin only) -->
+          <div class="card mb-4 admin-only">
+            <div class="card-header">
+              <h5 class="mb-0"><iconify-icon icon="tabler:cloud-upload" class="me-2"></iconify-icon>Firmware yuklash</h5>
+            </div>
+            <div class="card-body">
+              <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                  <label class="form-label">Firmware fayli (.bin)</label>
+                  <input type="file" class="form-control" id="upload-file" accept=".bin">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Versiya</label>
+                  <input type="text" class="form-control" id="upload-version" placeholder="3.3.0">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Mode</label>
+                  <select class="form-select" id="upload-mode">
+                    <option value="auto">Auto</option>
+                    <option value="electricity">Elektr</option>
+                    <option value="water">Suv</option>
+                    <option value="gas">Gaz</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Utility turi</label>
+                  <select class="form-select" id="upload-utility-type">
+                    <option value="">Barchasi</option>
+                    <option value="electricity">Elektr</option>
+                    <option value="water">Suv</option>
+                    <option value="gas">Gaz</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Device role</label>
+                  <select class="form-select" id="upload-device-role">
+                    <option value="">Barchasi</option>
+                    <option value="electricity_node">Elektr node</option>
+                    <option value="water_node">Suv node</option>
+                    <option value="gas_node">Gaz node</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Hardware</label>
+                  <input type="text" class="form-control" id="upload-hardware-version" placeholder="HW-1.0">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Sensor</label>
+                  <input type="text" class="form-control" id="upload-sensor-type" placeholder="pressure_4_20ma">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Converter</label>
+                  <input type="text" class="form-control" id="upload-converter-type" placeholder="ADS1115">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Min version</label>
+                  <input type="text" class="form-control" id="upload-min-version" placeholder="1.0.0">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Rollout %</label>
+                  <input type="number" class="form-control" id="upload-rollout" min="0" max="100" value="100">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Stable</label>
+                  <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" id="upload-stable">
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <button class="btn btn-primary" id="btn-upload">
+                    <iconify-icon icon="tabler:upload" class="me-1"></iconify-icon>Yuklash
+                  </button>
+                </div>
+              </div>
+              <div class="mt-3" id="upload-progress-wrap" style="display:none">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                  <span>Yuklanmoqda…</span>
+                  <span id="upload-pct">0%</span>
+                </div>
+                <div class="progress" style="height:8px">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated" id="upload-bar" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <ul class="nav nav-tabs mb-4" id="firmwareTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="tab-fw-list" data-bs-toggle="tab" data-bs-target="#tab-fw-list-pane" type="button" role="tab">
+                Firmware ro'yxati
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-ota-events" data-bs-toggle="tab" data-bs-target="#tab-ota-events-pane" type="button" role="tab">
+                OTA Hodisalar
+              </button>
+            </li>
+            <li class="nav-item admin-only" role="presentation">
+              <button class="nav-link" id="tab-ota-batches" data-bs-toggle="tab" data-bs-target="#tab-ota-batches-pane" type="button" role="tab">
+                OTA Batch
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <!-- Firmware list tab -->
+            <div class="tab-pane fade show active" id="tab-fw-list-pane" role="tabpanel">
+              <div class="card">
+                <div class="card-datatable table-responsive">
+                  <table class="table table-hover" id="firmware-table">
+                    <thead>
+                      <tr>
+                        <th>Versiya</th>
+                        <th>Mode</th>
+                        <th>Utility turi</th>
+                        <th>Role</th>
+                        <th>Stable</th>
+                        <th>Rollout</th>
+                        <th>Hajm (KB)</th>
+                        <th>Yuklangan sana</th>
+                        <th>Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody id="firmware-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- OTA Events tab -->
+            <div class="tab-pane fade" id="tab-ota-events-pane" role="tabpanel">
+              <div class="card">
+                <div class="card-datatable table-responsive">
+                  <table class="table table-hover" id="ota-events-table">
+                    <thead>
+                      <tr>
+                        <th>Qurilma</th>
+                        <th>Versiya</th>
+                        <th>Status</th>
+                        <th>Sana</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ota-events-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-ota-batches-pane" role="tabpanel">
+              <div class="card mb-4">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                  <h5 class="mb-0"><iconify-icon icon="tabler:rocket" class="me-2"></iconify-icon>Batch rollout yaratish</h5>
+                  <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-batches">
+                    <iconify-icon icon="tabler:refresh" class="me-1"></iconify-icon>Yangilash
+                  </button>
+                </div>
+                <div class="card-body">
+                  <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                      <label class="form-label">Nomi</label>
+                      <input class="form-control" id="batch-name" placeholder="Suv node rollout">
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Firmware</label>
+                      <select class="form-select" id="batch-firmware"></select>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Qurilmalar</label>
+                      <select class="form-select" id="batch-devices" multiple size="4"></select>
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label">Devices/hour</label>
+                      <input type="number" class="form-control" id="batch-devices-per-hour" min="1" value="100">
+                    </div>
+                    <div class="col-md-1">
+                      <button class="btn btn-primary w-100" id="btn-create-batch">
+                        <iconify-icon icon="tabler:plus"></iconify-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-datatable table-responsive">
+                  <table class="table table-hover" id="ota-batches-table">
+                    <thead>
+                      <tr>
+                        <th>Nomi</th>
+                        <th>Firmware</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Devices/hour</th>
+                        <th>Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ota-batches-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <footer class="content-footer footer bg-footer-theme">
+          <div class="container-xxl"><div class="footer-container d-flex py-3"><small class="text-muted">Meter Monitor v4.0 © 2024</small></div></div>
+        </footer>
+      </div>
+    </div>
+  </div>
+  <div class="layout-overlay layout-menu-toggle"></div>
+</div>
+
+<!-- Push to device modal -->
+<div class="modal fade" id="pushModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><iconify-icon icon="tabler:send" class="me-2"></iconify-icon>Qurilmaga yuborish</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="push-firmware-id">
+        <div class="alert alert-primary d-flex align-items-center mb-3">
+          <iconify-icon icon="tabler:info-circle" class="me-2 fs-5"></iconify-icon>
+          <div>Firmware: <strong id="push-firmware-version">—</strong></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Qurilma tanlang</label>
+          <select class="form-select" id="push-device-select">
+            <option value="">Qurilma tanlang…</option>
+          </select>
+        </div>
+        <p class="text-muted small">ESP32 firmware yuklab qayta ishga tushadi.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Bekor</button>
+        <button class="btn btn-warning" id="btn-push-confirm">
+          <iconify-icon icon="tabler:send" class="me-1"></iconify-icon>Yuborish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- vendor JS -->
+<script src="assets/vendor/libs/jquery/jquery.js"></script>
+<script src="assets/vendor/js/bootstrap.js"></script>
+<script src="assets/vendor/js/helpers.js"></script>
+  <script src="assets/js/config.js"></script>
+<script src="assets/vendor/js/menu.js"></script>
+<script src="assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
+<script src="assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.js"></script>
+<script src="assets/vendor/libs/sweetalert2/sweetalert2.all.min.js"></script>
+<script src="assets/vendor/libs/notyf/notyf.min.js"></script>
+
+<script>
+var firmwareTable, otaEventsTable, otaBatchesTable;
+</script>
+
+<script type="module">
+import { requireAuth, isAdmin, logout } from './js/auth.js';
+import { api } from './js/api.js';
+import { formatTs, showToast } from './js/utils.js';
+
+const user = await requireAuth();
+const admin = isAdmin();
+if (admin) document.body.classList.add('is-admin');
+
+document.getElementById('user-name').textContent = user?.username || '';
+document.getElementById('user-avatar').textContent = (user?.username?.[0] || 'U').toUpperCase();
+document.getElementById('user-role').textContent = user?.role || '';
+document.getElementById('btn-logout').addEventListener('click', () => logout());
+document.querySelectorAll('.admin-only').forEach(el => { if (!admin) el.style.display = 'none'; });
+document.getElementById('nav-firmware')?.classList.add('active');
+
+let firmwareList = [];
+let devicesList = [];
+const pushModal = new bootstrap.Modal(document.getElementById('pushModal'));
+
+function badge(text, cls) {
+  return `<span class="badge ${cls}">${text}</span>`;
+}
+
+function statusBadge(status) {
+  if (status === 'completed' || status === 'success') return badge('Success', 'bg-success');
+  if (status === 'failed') return badge('Failed', 'bg-danger');
+  if (status === 'cancelled' || status === 'skipped') return badge('Skipped', 'bg-secondary');
+  if (status === 'in_progress' || status === 'notified' || status === 'downloading') return badge('Jarayonda', 'bg-info');
+  return badge('Pending', 'bg-warning text-dark');
+}
+
+function tableInit(selector, current, rows, columns, orderIndex) {
+  if (current) current.destroy();
+  return $(selector).DataTable({
+    data: rows,
+    columns,
+    responsive: true,
+    language: {
+      emptyTable: 'Ma’lumot yo‘q',
+      search: 'Qidirish:',
+      paginate: { next: 'Keyingi', previous: 'Oldingi' }
+    },
+    order: [[orderIndex, 'desc']],
+    pageLength: 25
+  });
+}
+
+function fillDeviceSelects() {
+  const pushSelect = document.getElementById('push-device-select');
+  const batchSelect = document.getElementById('batch-devices');
+  pushSelect.innerHTML = '<option value="">Qurilma tanlang…</option>';
+  batchSelect.innerHTML = '';
+  devicesList.forEach(d => {
+    const label = `${d.name || d.id}${d.software_version ? ` — v${d.software_version}` : ''}`;
+    const opt = new Option(label, d.id);
+    pushSelect.appendChild(opt);
+    batchSelect.appendChild(new Option(label, d.id));
+  });
+}
+
+function fillFirmwareSelect() {
+  const select = document.getElementById('batch-firmware');
+  select.innerHTML = '';
+  firmwareList.forEach(fw => {
+    select.appendChild(new Option(`v${fw.version} · ${fw.firmware_mode || 'auto'} · ${fw.utility_type || 'all'}`, fw.id));
+  });
+}
+
+async function loadDevices() {
+  const resp = await api.get('/api/devices');
+  devicesList = resp.devices || [];
+  fillDeviceSelects();
+}
+
+async function loadFirmware() {
+  const resp = await api.get('/api/ota/list');
+  firmwareList = resp.firmware || [];
+  fillFirmwareSelect();
+  const rows = firmwareList.map(fw => [
+    `<span class="badge bg-label-primary">v${fw.version}</span>`,
+    fw.firmware_mode || 'auto',
+    fw.utility_type || '—',
+    fw.device_role || '—',
+    fw.is_stable ? badge('Stable', 'bg-success') : badge('Beta', 'bg-warning text-dark'),
+    `${fw.rollout_percentage ?? 100}%`,
+    fw.size ? (fw.size / 1024).toFixed(1) : '—',
+    formatTs(fw.uploaded),
+    `<div class="d-flex gap-1">
+      <button class="btn btn-sm btn-outline-primary btn-push-fw" data-id="${fw.id}" data-version="${fw.version}">
+        <iconify-icon icon="tabler:send" class="me-1"></iconify-icon>Push
+      </button>
+      ${admin ? `<button class="btn btn-sm btn-icon btn-outline-danger btn-delete-fw" data-id="${fw.id}"><iconify-icon icon="tabler:trash"></iconify-icon></button>` : ''}
+    </div>`
+  ]);
+  firmwareTable = tableInit('#firmware-table', firmwareTable, rows, [
+    { title: 'Versiya' }, { title: 'Mode' }, { title: 'Utility turi' },
+    { title: 'Role' }, { title: 'Stable' }, { title: 'Rollout' },
+    { title: 'Hajm (KB)' }, { title: 'Yuklangan sana' },
+    { title: 'Amallar', orderable: false }
+  ], 7);
+}
+
+async function loadOtaEvents() {
+  const resp = await api.get('/api/ota/events');
+  const rows = (resp.events || []).map(ev => [
+    ev.device_id || '—',
+    ev.target_version ? `v${ev.target_version}` : '—',
+    statusBadge(ev.status),
+    formatTs(ev.ts || ev.created_at)
+  ]);
+  otaEventsTable = tableInit('#ota-events-table', otaEventsTable, rows, [
+    { title: 'Qurilma' }, { title: 'Versiya' }, { title: 'Status' }, { title: 'Sana' }
+  ], 3);
+}
+
+async function loadBatches() {
+  if (!admin) return;
+  const resp = await api.get('/api/ota/batches');
+  const rows = (resp.batches || []).map(batch => [
+    batch.name,
+    `#${batch.firmware_id}`,
+    statusBadge(batch.status),
+    `<div class="d-flex align-items-center gap-2">
+      <div class="progress flex-grow-1" style="height:7px;min-width:120px">
+        <div class="progress-bar" style="width:${batch.progress_percentage}%"></div>
+      </div>
+      <span class="small">${batch.progress_percentage}%</span>
+    </div>
+    <div class="small text-muted">ok ${batch.success_count}, fail ${batch.failure_count}, skip ${batch.skipped_count}, pending ${batch.pending_count}</div>`,
+    batch.devices_per_hour,
+    `<div class="d-flex gap-1">
+      <button class="btn btn-sm btn-outline-primary btn-process-batch" data-id="${batch.id}"><iconify-icon icon="tabler:player-play"></iconify-icon></button>
+      <button class="btn btn-sm btn-outline-secondary btn-detail-batch" data-id="${batch.id}"><iconify-icon icon="tabler:list-details"></iconify-icon></button>
+      <button class="btn btn-sm btn-outline-danger btn-cancel-batch" data-id="${batch.id}"><iconify-icon icon="tabler:x"></iconify-icon></button>
+    </div>`
+  ]);
+  otaBatchesTable = tableInit('#ota-batches-table', otaBatchesTable, rows, [
+    { title: 'Nomi' }, { title: 'Firmware' }, { title: 'Status' },
+    { title: 'Progress' }, { title: 'Devices/hour' },
+    { title: 'Amallar', orderable: false }
+  ], 0);
+}
+
+document.getElementById('btn-upload')?.addEventListener('click', async () => {
+  const file = document.getElementById('upload-file').files[0];
+  const version = document.getElementById('upload-version').value.trim();
+  if (!file || !version) {
+    showToast('Firmware fayli va versiyani kiriting', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('version', version);
+  fd.append('firmware_mode', document.getElementById('upload-mode').value);
+  fd.append('rollout_percentage', document.getElementById('upload-rollout').value || '100');
+  fd.append('is_stable', document.getElementById('upload-stable').checked ? 'true' : 'false');
+  const fields = [
+    ['utility_type', 'upload-utility-type'],
+    ['device_role', 'upload-device-role'],
+    ['hardware_version', 'upload-hardware-version'],
+    ['sensor_type', 'upload-sensor-type'],
+    ['converter_type', 'upload-converter-type'],
+    ['min_version', 'upload-min-version']
+  ];
+  fields.forEach(([key, id]) => {
+    const value = document.getElementById(id).value.trim();
+    if (value) fd.append(key, value);
+  });
+  const btn = document.getElementById('btn-upload');
+  btn.disabled = true;
+  try {
+    await api.postForm('/api/ota/upload', fd);
+    showToast(`v${version} yuklandi`, 'success');
+    document.getElementById('upload-file').value = '';
+    document.getElementById('upload-version').value = '';
+    await loadFirmware();
+  } catch (err) {
+    showToast(err.message || 'Yuklash xato', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('#firmware-table').on('click', '.btn-push-fw', function() {
+  document.getElementById('push-firmware-id').value = $(this).data('id');
+  document.getElementById('push-firmware-version').textContent = `v${$(this).data('version')}`;
+  pushModal.show();
+});
+
+$('#firmware-table').on('click', '.btn-delete-fw', async function() {
+  const id = $(this).data('id');
+  const result = await Swal.fire({
+    title: 'Firmwareni o‘chirish?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ha',
+    cancelButtonText: 'Bekor',
+    customClass: { confirmButton: 'btn btn-danger me-2', cancelButton: 'btn btn-secondary' },
+    buttonsStyling: false
+  });
+  if (!result.isConfirmed) return;
+  try {
+    await api.del(`/api/ota/${id}`);
+    showToast('Firmware o‘chirildi', 'success');
+    await loadFirmware();
+  } catch (err) {
+    showToast(err.message || 'O‘chirilmadi', 'error');
+  }
+});
+
+document.getElementById('btn-push-confirm').addEventListener('click', async () => {
+  const deviceId = document.getElementById('push-device-select').value;
+  if (!deviceId) {
+    showToast('Qurilma tanlang', 'error');
+    return;
+  }
+  try {
+    await api.post(`/api/ota/push/${deviceId}`, {});
+    pushModal.hide();
+    showToast('OTA check buyrug‘i yuborildi', 'success');
+  } catch (err) {
+    showToast(err.message || 'Buyruq yuborilmadi', 'error');
+  }
+});
+
+document.getElementById('btn-create-batch')?.addEventListener('click', async () => {
+  const deviceIds = Array.from(document.getElementById('batch-devices').selectedOptions).map(opt => opt.value);
+  const body = {
+    name: document.getElementById('batch-name').value.trim() || 'OTA rollout',
+    firmware_id: Number(document.getElementById('batch-firmware').value),
+    device_ids: deviceIds,
+    devices_per_hour: Number(document.getElementById('batch-devices-per-hour').value || 100)
+  };
+  if (!body.firmware_id || !body.device_ids.length) {
+    showToast('Firmware va qurilmalarni tanlang', 'error');
+    return;
+  }
+  try {
+    await api.post('/api/ota/batches', body);
+    showToast('OTA batch yaratildi', 'success');
+    await loadBatches();
+  } catch (err) {
+    showToast(err.message || 'Batch yaratilmadi', 'error');
+  }
+});
+
+$('#ota-batches-table').on('click', '.btn-process-batch', async function() {
+  try {
+    await api.post(`/api/ota/batches/${$(this).data('id')}/process`, {});
+    showToast('Batch process qilindi', 'success');
+    await loadBatches();
+  } catch (err) {
+    showToast(err.message || 'Process xato', 'error');
+  }
+});
+
+$('#ota-batches-table').on('click', '.btn-cancel-batch', async function() {
+  try {
+    await api.post(`/api/ota/batches/${$(this).data('id')}/cancel`, {});
+    showToast('Batch bekor qilindi', 'success');
+    await loadBatches();
+  } catch (err) {
+    showToast(err.message || 'Bekor qilinmadi', 'error');
+  }
+});
+
+$('#ota-batches-table').on('click', '.btn-detail-batch', async function() {
+  try {
+    const batch = await api.get(`/api/ota/batches/${$(this).data('id')}`);
+    const rows = batch.devices.map(d => `${d.device_id}: ${d.status} (${d.retry_count})`).join('<br>');
+    await Swal.fire({ title: batch.name, html: rows || 'Device yo‘q', width: 700 });
+  } catch (err) {
+    showToast(err.message || 'Detail olinmadi', 'error');
+  }
+});
+
+document.getElementById('tab-ota-events').addEventListener('shown.bs.tab', () => loadOtaEvents());
+document.getElementById('tab-ota-batches')?.addEventListener('shown.bs.tab', () => loadBatches());
+document.getElementById('btn-refresh-batches')?.addEventListener('click', () => loadBatches());
+
+await Promise.all([loadDevices(), loadFirmware()]);
+if (admin) await loadBatches();
+</script>
+</body>
+</html>

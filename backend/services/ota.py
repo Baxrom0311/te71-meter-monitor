@@ -344,13 +344,17 @@ async def ota_report(body: OtaInstallReport) -> dict:
                 .limit(1)
             )
             if batch_device:
-                batch_device.completed_at = ts
                 batch_device.updated_at = ts
-                if body.status == "success":
+                if body.status == "started":
+                    batch_device.status = "downloading"
+                    batch_device.error_message = None
+                elif body.status == "success":
                     batch_device.status = "success"
+                    batch_device.completed_at = ts
                     batch_device.error_message = None
                 elif body.status == "failed":
                     batch_device.status = "failed"
+                    batch_device.completed_at = ts
                     batch_device.error_message = body.message
                     batch_device.retry_count = (batch_device.retry_count or 0) + 1
         if body.status == "success" and body.target_version:
@@ -391,7 +395,11 @@ async def _refresh_batch_counts(session, firmware_id: int | None = None, batch_i
         ) or 0
         failed = await session.scalar(
             select(func.count()).select_from(OTABatchDevice).where(
-                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "failed")
+                and_(
+                    OTABatchDevice.batch_id == batch.id,
+                    OTABatchDevice.status == "failed",
+                    OTABatchDevice.retry_count >= settings.ota_batch_max_retries,
+                )
             )
         ) or 0
         skipped = await session.scalar(
@@ -410,6 +418,40 @@ async def _refresh_batch_counts(session, firmware_id: int | None = None, batch_i
             batch.status = "completed" if failed == 0 else "failed"
             batch.completed_at = batch.completed_at or ts
         batch.updated_at = ts
+
+
+async def _prepare_batch_retries(session, batch_id: int, ts: int) -> dict:
+    timeout_cutoff = ts - settings.ota_batch_retry_timeout_sec
+    retryable = (
+        await session.scalars(
+            select(OTABatchDevice).where(
+                and_(
+                    OTABatchDevice.batch_id == batch_id,
+                    OTABatchDevice.status.in_(["failed", "notified", "downloading"]),
+                )
+            )
+        )
+    ).all()
+    reset = 0
+    skipped = 0
+    for row in retryable:
+        is_stale = row.status == "failed" or (row.updated_at or row.notified_at or 0) <= timeout_cutoff
+        if not is_stale:
+            continue
+        if (row.retry_count or 0) >= settings.ota_batch_max_retries:
+            row.status = "skipped"
+            row.error_message = row.error_message or "OTA retry limit reached"
+            row.updated_at = ts
+            skipped += 1
+            continue
+        if row.status in {"notified", "downloading"}:
+            row.retry_count = (row.retry_count or 0) + 1
+        row.status = "pending"
+        row.completed_at = None
+        row.error_message = None
+        row.updated_at = ts
+        reset += 1
+    return {"retry_reset": reset, "retry_skipped": skipped}
 
 
 async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
@@ -498,6 +540,8 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
         if batch.scheduled_at and batch.scheduled_at > ts:
             raise HTTPException(400, "OTA batch hali schedule vaqtiga yetmadi")
 
+        retry_result = await _prepare_batch_retries(session, batch.id, ts)
+
         notified_last_hour = await session.scalar(
             select(func.count()).select_from(OTABatchDevice).where(
                 and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.notified_at > ts - 3600)
@@ -517,7 +561,7 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
         ).all()
 
         queued = 0
-        skipped = 0
+        skipped = retry_result["retry_skipped"]
         command_repo = CommandRepository(session)
         for row in rows:
             device = await session.get(Device, row.device_id)
@@ -557,6 +601,32 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
         ) or 0
         await session.commit()
     return {"ok": True, "batch_id": batch_id, "queued": queued, "skipped": skipped, "remaining": remaining}
+
+
+async def process_due_ota_batches_once(limit_per_batch: int | None = None) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        batch_ids = (
+            await session.scalars(
+                select(OTABatch.id)
+                .where(
+                    and_(
+                        OTABatch.status.in_(["pending", "in_progress"]),
+                        (OTABatch.scheduled_at.is_(None)) | (OTABatch.scheduled_at <= ts),
+                    )
+                )
+                .order_by(OTABatch.scheduled_at.is_(None), OTABatch.scheduled_at, OTABatch.id)
+            )
+        ).all()
+
+    processed = []
+    errors = []
+    for batch_id in batch_ids:
+        try:
+            processed.append(await process_ota_batch(batch_id, limit_per_batch))
+        except HTTPException as exc:
+            errors.append({"batch_id": batch_id, "error": exc.detail})
+    return {"ok": not errors, "batches": len(batch_ids), "processed": processed, "errors": errors}
 
 
 async def cancel_ota_batch(batch_id: int) -> dict:

@@ -7,7 +7,7 @@ celery_app = Celery(
     "meter_monitor",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["tasks.maintenance", "tasks.backup"],
+    include=["tasks.maintenance", "tasks.backup", "tasks.ota"],
 )
 
 celery_app.conf.update(
@@ -35,6 +35,10 @@ celery_app.conf.update(
         "process-alert-notifications-every-minute": {
             "task": "maintenance.process_alert_notifications",
             "schedule": 60.0,
+        },
+        "process-ota-batches": {
+            "task": "ota.process_due_batches",
+            "schedule": float(settings.ota_batch_process_interval_sec),
         },
         "aggregate-hourly-stats-hourly": {
             "task": "maintenance.aggregate_hourly_stats",

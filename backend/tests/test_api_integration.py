@@ -19,6 +19,7 @@ from core.config import settings
 from core.database import init_db
 from services import alerts as alert_service
 from services import backup
+from services import ota as ota_service
 from services.auth import bootstrap_admin
 
 
@@ -557,12 +558,28 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ota_batch.status_code, 200, ota_batch.text)
         batch_id = ota_batch.json()["batch"]["id"]
         self.assertEqual(ota_batch.json()["batch"]["total_devices"], 1)
-        processed_batch = await self.client.post(f"/api/ota/batches/{batch_id}/process", headers=admin_headers)
-        self.assertEqual(processed_batch.status_code, 200, processed_batch.text)
-        self.assertEqual(processed_batch.json()["queued"], 1)
+        processed_batch = await ota_service.process_due_ota_batches_once()
+        self.assertEqual(processed_batch["batches"], 1)
+        self.assertEqual(processed_batch["processed"][0]["queued"], 1)
         ota_pending = await self.client.get("/api/commands/esp32-api-water-01", headers=device_headers)
         self.assertEqual(ota_pending.status_code, 200, ota_pending.text)
         self.assertTrue(any(item["action"] == "ota_check" for item in ota_pending.json()["commands"]))
+
+        failed_ota_report = await self.client.post(
+            "/api/ota/report",
+            headers=device_headers,
+            json={
+                "device_id": "esp32-api-water-01",
+                "firmware_id": ota_upload.json()["id"],
+                "from_version": "1.0.0",
+                "target_version": "2.0.0",
+                "status": "failed",
+                "message": "network timeout",
+            },
+        )
+        self.assertEqual(failed_ota_report.status_code, 200, failed_ota_report.text)
+        retried_batch = await ota_service.process_due_ota_batches_once()
+        self.assertEqual(retried_batch["processed"][0]["queued"], 1)
 
         ota_download = await self.client.get(ota_check.json()["url"], headers=device_headers)
         self.assertEqual(ota_download.status_code, 200, ota_download.text)
@@ -584,6 +601,7 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ota_batch_detail.status_code, 200, ota_batch_detail.text)
         self.assertEqual(ota_batch_detail.json()["success_count"], 1)
         self.assertEqual(ota_batch_detail.json()["devices"][0]["status"], "success")
+        self.assertEqual(ota_batch_detail.json()["devices"][0]["retry_count"], 1)
         ota_events = await self.client.get(
             "/api/ota/events?device_id=esp32-api-water-01",
             headers=admin_headers,

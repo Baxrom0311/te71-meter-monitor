@@ -36,6 +36,9 @@ class Settings:
     command_poll_interval_sec: int = int(os.getenv("COMMAND_POLL_INTERVAL_SEC", "10"))
     command_ttl_sec: int = int(os.getenv("COMMAND_TTL_SEC", "3600"))
     command_max_pending_per_device: int = int(os.getenv("COMMAND_MAX_PENDING_PER_DEVICE", "20"))
+    ota_batch_process_interval_sec: int = int(os.getenv("OTA_BATCH_PROCESS_INTERVAL_SEC", "60"))
+    ota_batch_retry_timeout_sec: int = int(os.getenv("OTA_BATCH_RETRY_TIMEOUT_SEC", "900"))
+    ota_batch_max_retries: int = int(os.getenv("OTA_BATCH_MAX_RETRIES", "3"))
     device_api_token: str = os.getenv("DEVICE_API_TOKEN", "")
     celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
     celery_result_backend: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
@@ -86,6 +89,12 @@ class Settings:
             errors.append("COMMAND_TTL_SEC kamida 1 bo'lishi kerak")
         if self.command_max_pending_per_device < 1:
             errors.append("COMMAND_MAX_PENDING_PER_DEVICE kamida 1 bo'lishi kerak")
+        if self.ota_batch_process_interval_sec < 1:
+            errors.append("OTA_BATCH_PROCESS_INTERVAL_SEC kamida 1 bo'lishi kerak")
+        if self.ota_batch_retry_timeout_sec < 1:
+            errors.append("OTA_BATCH_RETRY_TIMEOUT_SEC kamida 1 bo'lishi kerak")
+        if self.ota_batch_max_retries < 0:
+            errors.append("OTA_BATCH_MAX_RETRIES manfiy bo'lmasligi kerak")
         if self.water_pressure_min_bar < 0 or self.gas_pressure_min_bar < 0:
             errors.append("Bosim minimal qiymatlari manfiy bo'lmasligi kerak")
         if self.gas_pressure_max_bar <= self.gas_pressure_min_bar:

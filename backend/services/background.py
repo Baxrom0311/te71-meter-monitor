@@ -145,3 +145,15 @@ async def analytics_worker() -> None:
         except Exception as exc:
             logger.warning("analytics_worker error: %s", exc)
         await asyncio.sleep(3600)
+
+
+async def ota_batch_worker() -> None:
+    """Scheduled OTA batchlarni process qilish va retry qilish."""
+    from services.ota import process_due_ota_batches_once
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await process_due_ota_batches_once()
+        except Exception as exc:
+            logger.warning("ota_batch_worker error: %s", exc)
+        await asyncio.sleep(settings.ota_batch_process_interval_sec)

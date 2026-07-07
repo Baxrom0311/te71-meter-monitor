@@ -38,6 +38,7 @@ from services.background import (
     command_cleanup_worker,
     data_cleanup,
     offline_detector,
+    ota_batch_worker,
 )
 from services.monitoring import build_snapshot
 from services.websocket import ws_manager
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(command_cleanup_worker())
         asyncio.create_task(audit_cleanup_worker())
         asyncio.create_task(analytics_worker())
+        asyncio.create_task(ota_batch_worker())
     yield
 
 
