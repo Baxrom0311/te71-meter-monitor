@@ -1,11 +1,11 @@
 from fastapi import HTTPException
-from sqlalchemy import select
 
 from core.config import settings
 from core.database import SessionLocal
 from core.security import create_access_token, hash_password, validate_password, verify_password
 from core.time import now_ts
 from models.entities import User
+from repositories.auth import UserRepository
 from repositories.base import model_to_dict
 from schemas.auth import LoginRequest, UserCreate, UserUpdate
 
@@ -26,12 +26,11 @@ async def bootstrap_admin() -> None:
     validate_password(settings.bootstrap_admin_password)
     ts = now_ts()
     async with SessionLocal() as session:
-        existing = await session.scalar(
-            select(User).where(User.username == settings.bootstrap_admin_username)
-        )
+        repo = UserRepository(session)
+        existing = await repo.by_username(settings.bootstrap_admin_username)
         if existing:
             return
-        session.add(
+        repo.add(
             User(
                 username=settings.bootstrap_admin_username,
                 password_hash=hash_password(settings.bootstrap_admin_password),
@@ -46,7 +45,7 @@ async def bootstrap_admin() -> None:
 
 async def login(body: LoginRequest) -> dict:
     async with SessionLocal() as session:
-        user = await session.scalar(select(User).where(User.username == body.username))
+        user = await UserRepository(session).by_username(body.username)
         if not user or not user.is_active:
             raise HTTPException(401, "Login yoki parol noto'g'ri")
 
@@ -72,7 +71,7 @@ async def login(body: LoginRequest) -> dict:
 
 async def me(user_id: int) -> dict:
     async with SessionLocal() as session:
-        user = await session.get(User, user_id)
+        user = await UserRepository(session).get(user_id)
     if not user or not user.is_active:
         raise HTTPException(401, "User topilmadi")
     return _public_user(user)
@@ -84,8 +83,8 @@ async def create_user(body: UserCreate) -> dict:
     validate_password(body.password)
     ts = now_ts()
     async with SessionLocal() as session:
-        existing = await session.scalar(select(User.id).where(User.username == body.username))
-        if existing:
+        repo = UserRepository(session)
+        if await repo.username_exists(body.username):
             raise HTTPException(400, "Username band")
         user = User(
             username=body.username,
@@ -95,7 +94,7 @@ async def create_user(body: UserCreate) -> dict:
             created_at=ts,
             updated_at=ts,
         )
-        session.add(user)
+        repo.add(user)
         await session.commit()
         await session.refresh(user)
     return _public_user(user)
@@ -103,13 +102,13 @@ async def create_user(body: UserCreate) -> dict:
 
 async def list_users() -> dict:
     async with SessionLocal() as session:
-        users = (await session.scalars(select(User).order_by(User.id))).all()
+        users = await UserRepository(session).list_ordered()
     return {"users": [_public_user(user) for user in users]}
 
 
 async def get_user(user_id: int) -> dict:
     async with SessionLocal() as session:
-        user = await session.get(User, user_id)
+        user = await UserRepository(session).get(user_id)
     if not user:
         raise HTTPException(404, "User topilmadi")
     return _public_user(user)
@@ -125,7 +124,7 @@ async def update_user(user_id: int, body: UserUpdate, actor_id: int | None = Non
         validate_password(fields["password"])
 
     async with SessionLocal() as session:
-        user = await session.get(User, user_id)
+        user = await UserRepository(session).get(user_id)
         if not user:
             raise HTTPException(404, "User topilmadi")
         if actor_id == user_id and fields.get("is_active") is False:

@@ -93,6 +93,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("CommandQueuedResponse", schemas)
         self.assertIn("EnergyByBuildingResponse", schemas)
         self.assertIn("BuildingsEnergySummaryResponse", schemas)
+        self.assertIn("TokenResponse", schemas)
+        self.assertIn("UserListResponse", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(restore_schema["$ref"], "#/components/schemas/BackupRestoreResponse")
         audit_schema = openapi["paths"]["/api/audit-logs"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -101,6 +103,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(firmware_schema["$ref"], "#/components/schemas/FirmwareListResponse")
         energy_schema = openapi["paths"]["/api/analytics/energy"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(energy_schema["$ref"], "#/components/schemas/EnergyByBuildingResponse")
+        login_schema = openapi["paths"]["/api/auth/login"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(login_schema["$ref"], "#/components/schemas/TokenResponse")
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
 
