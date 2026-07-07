@@ -91,12 +91,16 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("FirmwareListResponse", schemas)
         self.assertIn("FirmwareCheckResponse", schemas)
         self.assertIn("CommandQueuedResponse", schemas)
+        self.assertIn("EnergyByBuildingResponse", schemas)
+        self.assertIn("BuildingsEnergySummaryResponse", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(restore_schema["$ref"], "#/components/schemas/BackupRestoreResponse")
         audit_schema = openapi["paths"]["/api/audit-logs"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(audit_schema["$ref"], "#/components/schemas/AuditLogListResponse")
         firmware_schema = openapi["paths"]["/api/ota/list"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(firmware_schema["$ref"], "#/components/schemas/FirmwareListResponse")
+        energy_schema = openapi["paths"]["/api/analytics/energy"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(energy_schema["$ref"], "#/components/schemas/EnergyByBuildingResponse")
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
 

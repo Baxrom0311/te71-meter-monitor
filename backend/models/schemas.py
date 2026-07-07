@@ -384,6 +384,37 @@ class AuditLogListResponse(BaseModel):
     pages: int
 
 
+class EnergyBucketResponse(BaseModel):
+    bucket_ts: int
+    building_id: Optional[int] = None
+    energy_kwh_delta: Optional[float] = None
+    energy_kwh_max: Optional[float] = None
+    avg_power_w: Optional[float] = None
+    samples: int
+    building_name: str
+
+
+class EnergyByBuildingResponse(BaseModel):
+    from_ts: int
+    to_ts: int
+    granularity: str
+    total: int
+    data: list[EnergyBucketResponse]
+
+
+class BuildingEnergySummaryItem(BaseModel):
+    building_id: Optional[int] = None
+    building_name: str
+    total_energy_kwh: Optional[float] = None
+    avg_power_w: Optional[float] = None
+    readings: int
+
+
+class BuildingsEnergySummaryResponse(BaseModel):
+    summary: list[BuildingEnergySummaryItem]
+    days: int
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None

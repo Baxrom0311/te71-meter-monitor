@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, Query
 
 from core.security import current_token_payload, require_admin
-from models.schemas import MeterReading, MeterReadingBatch
+from models.schemas import BuildingsEnergySummaryResponse, EnergyByBuildingResponse, MeterReading, MeterReadingBatch
 from services import analytics as analytics_service
 from services import audit
 from services import devices as device_service
@@ -31,7 +31,7 @@ async def hourly_stats(
     return await analytics_service.list_hourly_stats(building_id, utility_type, device_id, hours, limit)
 
 
-@router.get("/analytics/energy")
+@router.get("/analytics/energy", response_model=EnergyByBuildingResponse)
 async def energy_by_building(
     from_ts: int = Query(..., description="Boshlang'ich unix timestamp"),
     to_ts: int = Query(..., description="Tugash unix timestamp"),
@@ -42,7 +42,7 @@ async def energy_by_building(
     return await analytics_service.energy_by_building(from_ts, to_ts, building_id, granularity)
 
 
-@router.get("/analytics/energy/summary")
+@router.get("/analytics/energy/summary", response_model=BuildingsEnergySummaryResponse)
 async def buildings_energy_summary(_: dict = Depends(current_token_payload)):
     return await analytics_service.buildings_energy_summary()
 
