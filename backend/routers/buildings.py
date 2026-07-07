@@ -4,15 +4,33 @@ from fastapi import APIRouter, Depends, Query
 
 from core.security import current_token_payload, require_admin
 from models.schemas import (
+    BuildingAnalyticsResponse,
     BuildingCreate,
+    BuildingCreateResponse,
     BuildingDefaultProvision,
+    BuildingDefaultProvisionResponse,
+    BuildingDeleteResponse,
+    BuildingLatestReadingsResponse,
+    BuildingListResponse,
+    BuildingReadingHistoryResponse,
+    BuildingResponse,
     BuildingUtilityCreate,
+    BuildingUtilityCreateResponse,
+    BuildingUtilityListResponse,
+    BuildingUtilityUpdateResponse,
     BuildingUtilityUpdate,
     BuildingUpdate,
+    BuildingUpdateResponse,
     MeasurementPointCreate,
+    MeasurementPointCreateResponse,
     MeasurementPointDeviceBind,
+    MeasurementPointListResponse,
+    MeasurementPointResponse,
+    MeasurementPointUpdateResponse,
     MeasurementPointUpdate,
     PremiseCreate,
+    PremiseCreateResponse,
+    PremiseListResponse,
 )
 from services import analytics as analytics_service
 from services import audit
@@ -22,24 +40,24 @@ from services import readings as reading_service
 router = APIRouter(prefix="/api")
 
 
-@router.post("/buildings")
+@router.post("/buildings", response_model=BuildingCreateResponse)
 async def create_building(body: BuildingCreate, admin: dict = Depends(require_admin)):
     result = await building_service.create_building(body)
     await audit.record(admin, "building.create", "building", result.get("id"), body.model_dump())
     return result
 
 
-@router.get("/buildings")
+@router.get("/buildings", response_model=BuildingListResponse)
 async def list_buildings(_: dict = Depends(current_token_payload)):
     return await building_service.list_buildings()
 
 
-@router.get("/buildings/{building_id}")
+@router.get("/buildings/{building_id}", response_model=BuildingResponse)
 async def get_building(building_id: int, _: dict = Depends(current_token_payload)):
     return await building_service.get_building(building_id)
 
 
-@router.put("/buildings/{building_id}")
+@router.put("/buildings/{building_id}", response_model=BuildingUpdateResponse)
 async def update_building(
     building_id: int,
     body: BuildingUpdate,
@@ -50,14 +68,14 @@ async def update_building(
     return result
 
 
-@router.delete("/buildings/{building_id}")
+@router.delete("/buildings/{building_id}", response_model=BuildingDeleteResponse)
 async def delete_building(building_id: int, admin: dict = Depends(require_admin)):
     result = await building_service.delete_building(building_id)
     await audit.record(admin, "building.delete", "building", building_id)
     return result
 
 
-@router.post("/buildings/{building_id}/utilities")
+@router.post("/buildings/{building_id}/utilities", response_model=BuildingUtilityCreateResponse)
 async def create_building_utility(
     building_id: int,
     body: BuildingUtilityCreate,
@@ -69,12 +87,12 @@ async def create_building_utility(
     return result
 
 
-@router.get("/buildings/{building_id}/utilities")
+@router.get("/buildings/{building_id}/utilities", response_model=BuildingUtilityListResponse)
 async def list_building_utilities(building_id: int, _: dict = Depends(current_token_payload)):
     return await building_service.list_building_utilities(building_id)
 
 
-@router.put("/buildings/{building_id}/utilities/{utility_id}")
+@router.put("/buildings/{building_id}/utilities/{utility_id}", response_model=BuildingUtilityUpdateResponse)
 async def update_building_utility(
     building_id: int,
     utility_id: int,
@@ -86,7 +104,7 @@ async def update_building_utility(
     return result
 
 
-@router.post("/buildings/{building_id}/provision-defaults")
+@router.post("/buildings/{building_id}/provision-defaults", response_model=BuildingDefaultProvisionResponse)
 async def provision_building_defaults(
     building_id: int,
     body: BuildingDefaultProvision,
@@ -97,7 +115,7 @@ async def provision_building_defaults(
     return result
 
 
-@router.get("/buildings/{building_id}/readings/latest")
+@router.get("/buildings/{building_id}/readings/latest", response_model=BuildingLatestReadingsResponse)
 async def building_latest_readings(
     building_id: int,
     utility_type: Optional[str] = None,
@@ -106,7 +124,7 @@ async def building_latest_readings(
     return await reading_service.building_latest_readings(building_id, utility_type)
 
 
-@router.get("/buildings/{building_id}/readings/history")
+@router.get("/buildings/{building_id}/readings/history", response_model=BuildingReadingHistoryResponse)
 async def building_reading_history(
     building_id: int,
     utility_type: Optional[str] = None,
@@ -118,7 +136,7 @@ async def building_reading_history(
     return await reading_service.building_reading_history(building_id, utility_type, page, limit, hours)
 
 
-@router.get("/buildings/{building_id}/analytics")
+@router.get("/buildings/{building_id}/analytics", response_model=BuildingAnalyticsResponse)
 async def building_analytics(
     building_id: int,
     hours: int = Query(24, ge=1, le=720),
@@ -127,26 +145,26 @@ async def building_analytics(
     return await analytics_service.building_analytics(building_id, hours)
 
 
-@router.post("/premises")
+@router.post("/premises", response_model=PremiseCreateResponse)
 async def create_premise(body: PremiseCreate, admin: dict = Depends(require_admin)):
     result = await building_service.create_premise(body)
     await audit.record(admin, "premise.create", "premise", result.get("id"), body.model_dump())
     return result
 
 
-@router.get("/premises")
+@router.get("/premises", response_model=PremiseListResponse)
 async def list_premises(building_id: Optional[int] = None, _: dict = Depends(current_token_payload)):
     return await building_service.list_premises(building_id)
 
 
-@router.post("/measurement-points")
+@router.post("/measurement-points", response_model=MeasurementPointCreateResponse)
 async def create_measurement_point(body: MeasurementPointCreate, admin: dict = Depends(require_admin)):
     result = await building_service.create_measurement_point(body)
     await audit.record(admin, "measurement_point.create", "measurement_point", result.get("id"), body.model_dump())
     return result
 
 
-@router.get("/measurement-points")
+@router.get("/measurement-points", response_model=MeasurementPointListResponse)
 async def list_measurement_points(
     building_id: Optional[int] = None,
     utility_type: Optional[str] = None,
@@ -156,12 +174,12 @@ async def list_measurement_points(
     return await building_service.list_measurement_points(building_id, utility_type, role)
 
 
-@router.get("/measurement-points/{point_id}")
+@router.get("/measurement-points/{point_id}", response_model=MeasurementPointResponse)
 async def get_measurement_point(point_id: int, _: dict = Depends(current_token_payload)):
     return await building_service.get_measurement_point(point_id)
 
 
-@router.put("/measurement-points/{point_id}")
+@router.put("/measurement-points/{point_id}", response_model=MeasurementPointUpdateResponse)
 async def update_measurement_point(
     point_id: int,
     body: MeasurementPointUpdate,
@@ -172,7 +190,7 @@ async def update_measurement_point(
     return result
 
 
-@router.post("/measurement-points/{point_id}/bind-device")
+@router.post("/measurement-points/{point_id}/bind-device", response_model=MeasurementPointUpdateResponse)
 async def bind_measurement_point_device(
     point_id: int,
     body: MeasurementPointDeviceBind,
@@ -183,7 +201,7 @@ async def bind_measurement_point_device(
     return result
 
 
-@router.delete("/measurement-points/{point_id}")
+@router.delete("/measurement-points/{point_id}", response_model=MeasurementPointUpdateResponse)
 async def delete_measurement_point(point_id: int, admin: dict = Depends(require_admin)):
     result = await building_service.delete_measurement_point(point_id)
     await audit.record(admin, "measurement_point.delete", "measurement_point", point_id)

@@ -119,6 +119,118 @@ class MeasurementPointDeviceBind(BaseModel):
     device_id: str
 
 
+class BuildingResponse(BaseModel):
+    id: int
+    name: str
+    address: Optional[str] = None
+    floors: int
+    entrances_count: int
+    description: Optional[str] = None
+    is_active: bool
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class BuildingCreateResponse(BaseModel):
+    ok: bool
+    id: int
+
+
+class BuildingListResponse(BaseModel):
+    buildings: list[BuildingResponse]
+
+
+class BuildingUpdateResponse(BaseModel):
+    ok: bool
+
+
+class BuildingDeleteResponse(BaseModel):
+    ok: bool
+
+
+class BuildingUtilityResponse(BaseModel):
+    id: int
+    building_id: int
+    utility_type: str
+    name: Optional[str] = None
+    status: str
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class BuildingUtilityCreateResponse(BaseModel):
+    ok: bool
+    id: int
+
+
+class BuildingUtilityListResponse(BaseModel):
+    utilities: list[BuildingUtilityResponse]
+
+
+class BuildingUtilityUpdateResponse(BaseModel):
+    ok: bool
+
+
+class PremiseResponse(BaseModel):
+    id: int
+    building_id: int
+    number: str
+    floor: Optional[int] = None
+    premise_type: str
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class PremiseCreateResponse(BaseModel):
+    ok: bool
+    id: int
+
+
+class PremiseListResponse(BaseModel):
+    premises: list[PremiseResponse]
+
+
+class MeasurementPointResponse(BaseModel):
+    id: int
+    building_id: Optional[int] = None
+    utility_module_id: Optional[int] = None
+    premise_id: Optional[int] = None
+    parent_id: Optional[int] = None
+    device_id: Optional[str] = None
+    name: Optional[str] = None
+    utility_type: str
+    role: str
+    sensor_type: Optional[str] = None
+    converter_type: Optional[str] = None
+    location_name: Optional[str] = None
+    meter_serial: Optional[str] = None
+    floor: Optional[int] = None
+    is_active: bool
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class MeasurementPointCreateResponse(BaseModel):
+    ok: bool
+    id: int
+
+
+class MeasurementPointListResponse(BaseModel):
+    points: list[MeasurementPointResponse]
+
+
+class MeasurementPointUpdateResponse(BaseModel):
+    ok: bool
+
+
+class BuildingDefaultProvisionResponse(BaseModel):
+    ok: bool
+    building_id: int
+    utilities: list[BuildingUtilityResponse]
+    created_points: list[MeasurementPointResponse]
+    existing_points: list[MeasurementPointResponse]
+
+
 class DeviceRegister(BaseModel):
     device_id: str
     provisioning_token: Optional[str] = None
@@ -568,6 +680,29 @@ class SummaryResponse(BaseModel):
     ws_clients: int
 
 
+class HealthWorkersResponse(BaseModel):
+    inline: bool
+    celery_broker: bool
+
+
+class HealthResponse(BaseModel):
+    status: str
+    ts: int
+    devices: int
+    readings: int
+    open_alerts: int
+    pending_commands: int
+    ws_clients: int
+    version: str
+    data_keep_days: int
+    workers: HealthWorkersResponse
+
+
+class ReadyResponse(BaseModel):
+    status: str
+    checks: dict[str, str]
+
+
 class MeterReading(BaseModel):
     device_id: str
     reading_id: Optional[str] = None
@@ -675,6 +810,19 @@ class ReadingHistoryResponse(BaseModel):
     pages: int
 
 
+class MeasurementPointLatestResponse(MeasurementPointResponse):
+    latest_reading: Optional[ReadingResponse] = None
+
+
+class BuildingLatestReadingsResponse(BaseModel):
+    building_id: int
+    points: list[MeasurementPointLatestResponse]
+
+
+class BuildingReadingHistoryResponse(ReadingHistoryResponse):
+    building_id: int
+
+
 class HourlyUtilityStatResponse(BaseModel):
     id: int
     bucket_ts: int
@@ -711,6 +859,39 @@ class AnalyticsAggregateResponse(BaseModel):
 class DeviceReadingStatsResponse(BaseModel):
     stats: list[dict]
     hours: int
+
+
+class BuildingElectricityAnalyticsResponse(BaseModel):
+    samples: int
+    energy_kwh: Optional[float] = None
+    avg_power_w: Optional[float] = None
+    max_power_w: Optional[float] = None
+    avg_voltage_l1: Optional[float] = None
+
+
+class BuildingWaterAnalyticsResponse(BaseModel):
+    samples: int
+    avg_pressure_bottom_bar: Optional[float] = None
+    avg_pressure_top_bar: Optional[float] = None
+    avg_pressure_delta_bar: Optional[float] = None
+    top_pressure_problem_count: Optional[int] = None
+
+
+class BuildingGasAnalyticsResponse(BaseModel):
+    samples: int
+    avg_pressure_bar: Optional[float] = None
+    min_pressure_bar: Optional[float] = None
+    max_pressure_bar: Optional[float] = None
+    leak_count: Optional[int] = None
+
+
+class BuildingAnalyticsResponse(BaseModel):
+    building_id: int
+    hours: int
+    active_alerts: int
+    electricity: BuildingElectricityAnalyticsResponse
+    water: BuildingWaterAnalyticsResponse
+    gas: BuildingGasAnalyticsResponse
 
 
 class DeviceStatus(BaseModel):

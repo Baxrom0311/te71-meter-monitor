@@ -1,4 +1,4 @@
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, select
 
 from models.entities import Building, BuildingUtility, MeasurementPoint, Premise
 from repositories.base import BaseRepository
@@ -6,6 +6,9 @@ from repositories.base import BaseRepository
 
 class BuildingRepository(BaseRepository[Building]):
     model = Building
+
+    async def list_ordered(self) -> list[Building]:
+        return list((await self.session.scalars(select(Building).order_by(desc(Building.id)))).all())
 
     async def list_active(self) -> list[Building]:
         return list(
@@ -15,6 +18,20 @@ class BuildingRepository(BaseRepository[Building]):
 
 class BuildingUtilityRepository(BaseRepository[BuildingUtility]):
     model = BuildingUtility
+
+    async def get_for_building(self, building_id: int, utility_id: int) -> BuildingUtility | None:
+        return await self.session.scalar(
+            select(BuildingUtility).where(
+                and_(BuildingUtility.id == utility_id, BuildingUtility.building_id == building_id)
+            )
+        )
+
+    async def get_by_building_type(self, building_id: int, utility_type: str) -> BuildingUtility | None:
+        return await self.session.scalar(
+            select(BuildingUtility).where(
+                and_(BuildingUtility.building_id == building_id, BuildingUtility.utility_type == utility_type)
+            )
+        )
 
     async def list_by_building(self, building_id: int) -> list[BuildingUtility]:
         return list(
@@ -40,6 +57,23 @@ class PremiseRepository(BaseRepository[Premise]):
 
 class MeasurementPointRepository(BaseRepository[MeasurementPoint]):
     model = MeasurementPoint
+
+    async def active_for_building_role(
+        self,
+        building_id: int,
+        utility_type: str,
+        role: str,
+    ) -> MeasurementPoint | None:
+        return await self.session.scalar(
+            select(MeasurementPoint).where(
+                and_(
+                    MeasurementPoint.building_id == building_id,
+                    MeasurementPoint.utility_type == utility_type,
+                    MeasurementPoint.role == role,
+                    MeasurementPoint.is_active.is_(True),
+                )
+            )
+        )
 
     async def list_filtered(
         self,

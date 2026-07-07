@@ -5,17 +5,18 @@ from sqlalchemy import text
 
 from core.config import settings
 from core.database import SessionLocal
+from models.schemas import HealthResponse, ReadyResponse
 from services import monitoring
 
 router = APIRouter()
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 async def health():
     return await monitoring.health()
 
 
-@router.get("/ready")
+@router.get("/ready", response_model=ReadyResponse)
 async def ready():
     async with SessionLocal() as session:
         await session.execute(text("SELECT 1"))

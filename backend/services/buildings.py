@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import and_, desc, inspect, select, update
+from sqlalchemy import inspect
 
 from core.database import SessionLocal
 from core.time import now_ts
@@ -15,6 +15,13 @@ from models.schemas import (
     MeasurementPointUpdate,
     PremiseCreate,
 )
+from repositories.buildings import (
+    BuildingRepository,
+    BuildingUtilityRepository,
+    MeasurementPointRepository,
+    PremiseRepository,
+)
+from repositories.devices import DeviceRepository
 
 
 def _as_dict(obj) -> dict:
@@ -33,7 +40,7 @@ async def create_building(body: BuildingCreate) -> dict:
         updated_at=ts,
     )
     async with SessionLocal() as session:
-        session.add(building)
+        BuildingRepository(session).add(building)
         await session.commit()
         await session.refresh(building)
     return {"ok": True, "id": building.id}
@@ -41,13 +48,13 @@ async def create_building(body: BuildingCreate) -> dict:
 
 async def list_buildings() -> dict:
     async with SessionLocal() as session:
-        rows = (await session.scalars(select(Building).order_by(desc(Building.id)))).all()
+        rows = await BuildingRepository(session).list_ordered()
     return {"buildings": [_as_dict(row) for row in rows]}
 
 
 async def get_building(building_id: int) -> dict:
     async with SessionLocal() as session:
-        building = await session.get(Building, building_id)
+        building = await BuildingRepository(session).get(building_id)
     if not building:
         raise HTTPException(404, "Dom topilmadi")
     return _as_dict(building)
@@ -59,7 +66,7 @@ async def update_building(building_id: int, body: BuildingUpdate) -> dict:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
     async with SessionLocal() as session:
-        building = await session.get(Building, building_id)
+        building = await BuildingRepository(session).get(building_id)
         if not building:
             raise HTTPException(404, "Dom topilmadi")
         for key, value in fields.items():
@@ -70,7 +77,7 @@ async def update_building(building_id: int, body: BuildingUpdate) -> dict:
 
 async def delete_building(building_id: int) -> dict:
     async with SessionLocal() as session:
-        building = await session.get(Building, building_id)
+        building = await BuildingRepository(session).get(building_id)
         if not building:
             raise HTTPException(404, "Dom topilmadi")
         building.is_active = False
@@ -82,16 +89,11 @@ async def delete_building(building_id: int) -> dict:
 async def create_building_utility(body: BuildingUtilityCreate) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        if not await session.get(Building, body.building_id):
+        building_repo = BuildingRepository(session)
+        utility_repo = BuildingUtilityRepository(session)
+        if not await building_repo.get(body.building_id):
             raise HTTPException(404, "Dom topilmadi")
-        existing = await session.scalar(
-            select(BuildingUtility.id).where(
-                and_(
-                    BuildingUtility.building_id == body.building_id,
-                    BuildingUtility.utility_type == body.utility_type,
-                )
-            )
-        )
+        existing = await utility_repo.get_by_building_type(body.building_id, body.utility_type)
         if existing:
             raise HTTPException(409, "Bu utility buildingda allaqachon bor")
         item = BuildingUtility(
@@ -102,7 +104,7 @@ async def create_building_utility(body: BuildingUtilityCreate) -> dict:
             created_at=ts,
             updated_at=ts,
         )
-        session.add(item)
+        utility_repo.add(item)
         await session.commit()
         await session.refresh(item)
     return {"ok": True, "id": item.id}
@@ -110,13 +112,7 @@ async def create_building_utility(body: BuildingUtilityCreate) -> dict:
 
 async def list_building_utilities(building_id: int) -> dict:
     async with SessionLocal() as session:
-        rows = (
-            await session.scalars(
-                select(BuildingUtility)
-                .where(BuildingUtility.building_id == building_id)
-                .order_by(BuildingUtility.utility_type)
-            )
-        ).all()
+        rows = await BuildingUtilityRepository(session).list_by_building(building_id)
     return {"utilities": [_as_dict(row) for row in rows]}
 
 
@@ -126,8 +122,8 @@ async def update_building_utility(building_id: int, utility_id: int, body: Build
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
     async with SessionLocal() as session:
-        utility = await session.get(BuildingUtility, utility_id)
-        if not utility or utility.building_id != building_id:
+        utility = await BuildingUtilityRepository(session).get_for_building(building_id, utility_id)
+        if not utility:
             raise HTTPException(404, "Utility topilmadi")
         for key, value in fields.items():
             setattr(utility, key, value)
@@ -138,20 +134,17 @@ async def update_building_utility(building_id: int, utility_id: int, body: Build
 async def provision_building_defaults(building_id: int, body: BuildingDefaultProvision) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        building = await session.get(Building, building_id)
+        building_repo = BuildingRepository(session)
+        utility_repo = BuildingUtilityRepository(session)
+        point_repo = MeasurementPointRepository(session)
+        device_repo = DeviceRepository(session)
+        building = await building_repo.get(building_id)
         if not building:
             raise HTTPException(404, "Dom topilmadi")
 
         utilities: dict[str, BuildingUtility] = {}
         for utility_type in ("electricity", "water", "gas"):
-            existing = await session.scalar(
-                select(BuildingUtility).where(
-                    and_(
-                        BuildingUtility.building_id == building_id,
-                        BuildingUtility.utility_type == utility_type,
-                    )
-                )
-            )
+            existing = await utility_repo.get_by_building_type(building_id, utility_type)
             if existing:
                 utilities[utility_type] = existing
                 continue
@@ -163,7 +156,7 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
                 created_at=ts,
                 updated_at=ts,
             )
-            session.add(item)
+            utility_repo.add(item)
             await session.flush()
             utilities[utility_type] = item
 
@@ -209,15 +202,10 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
         created_points = []
         existing_points = []
         for spec in point_specs:
-            existing_point = await session.scalar(
-                select(MeasurementPoint).where(
-                    and_(
-                        MeasurementPoint.building_id == building_id,
-                        MeasurementPoint.utility_type == spec["utility_type"],
-                        MeasurementPoint.role == spec["role"],
-                        MeasurementPoint.is_active.is_(True),
-                    )
-                )
+            existing_point = await point_repo.active_for_building_role(
+                building_id,
+                spec["utility_type"],
+                spec["role"],
             )
             if existing_point:
                 existing_points.append(existing_point)
@@ -237,7 +225,7 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
                 created_at=ts,
                 updated_at=ts,
             )
-            session.add(point)
+            point_repo.add(point)
             await session.flush()
             created_points.append(point)
 
@@ -248,10 +236,10 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
         ]:
             if not device_id:
                 continue
-            device = await session.get(Device, device_id)
+            device = await device_repo.get(device_id)
             if not device:
                 device = Device(id=device_id, name=device_id, registered=ts, created_at=ts)
-                session.add(device)
+                device_repo.add(device)
             device.building_id = building_id
             device.utility_type = utility_type
             device.device_role = device_role
@@ -272,7 +260,7 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
 async def create_premise(body: PremiseCreate) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        if not await session.get(Building, body.building_id):
+        if not await BuildingRepository(session).get(body.building_id):
             raise HTTPException(404, "Dom topilmadi")
         premise = Premise(
             building_id=body.building_id,
@@ -282,18 +270,15 @@ async def create_premise(body: PremiseCreate) -> dict:
             created_at=ts,
             updated_at=ts,
         )
-        session.add(premise)
+        PremiseRepository(session).add(premise)
         await session.commit()
         await session.refresh(premise)
     return {"ok": True, "id": premise.id}
 
 
 async def list_premises(building_id: int | None = None) -> dict:
-    stmt = select(Premise).order_by(Premise.building_id, Premise.floor, Premise.number)
-    if building_id:
-        stmt = stmt.where(Premise.building_id == building_id)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await PremiseRepository(session).list_by_building(building_id)
     return {"premises": [_as_dict(row) for row in rows]}
 
 
@@ -306,23 +291,28 @@ async def _validate_measurement_point_refs(
     parent_id: int | None = None,
     device_id: str | None = None,
 ) -> None:
-    if building_id and not await session.get(Building, building_id):
+    building_repo = BuildingRepository(session)
+    utility_repo = BuildingUtilityRepository(session)
+    premise_repo = PremiseRepository(session)
+    point_repo = MeasurementPointRepository(session)
+    device_repo = DeviceRepository(session)
+    if building_id and not await building_repo.get(building_id):
         raise HTTPException(404, "Building topilmadi")
     if utility_module_id:
-        utility = await session.get(BuildingUtility, utility_module_id)
+        utility = await utility_repo.get(utility_module_id)
         if not utility:
             raise HTTPException(404, "Utility topilmadi")
         if building_id and utility.building_id != building_id:
             raise HTTPException(422, "Utility boshqa buildingga tegishli")
     if premise_id:
-        premise = await session.get(Premise, premise_id)
+        premise = await premise_repo.get(premise_id)
         if not premise:
             raise HTTPException(404, "Premise topilmadi")
         if building_id and premise.building_id != building_id:
             raise HTTPException(422, "Premise boshqa buildingga tegishli")
-    if parent_id and not await session.get(MeasurementPoint, parent_id):
+    if parent_id and not await point_repo.get(parent_id):
         raise HTTPException(404, "Parent measurement point topilmadi")
-    if device_id and not await session.get(Device, device_id):
+    if device_id and not await device_repo.get(device_id):
         raise HTTPException(404, "Qurilma topilmadi")
 
 
@@ -346,6 +336,8 @@ async def create_measurement_point(body: MeasurementPointCreate) -> dict:
         updated_at=ts,
     )
     async with SessionLocal() as session:
+        point_repo = MeasurementPointRepository(session)
+        device_repo = DeviceRepository(session)
         await _validate_measurement_point_refs(
             session,
             building_id=body.building_id,
@@ -354,10 +346,12 @@ async def create_measurement_point(body: MeasurementPointCreate) -> dict:
             parent_id=body.parent_id,
             device_id=body.device_id,
         )
-        session.add(point)
+        point_repo.add(point)
         await session.flush()
         if body.device_id:
-            await session.execute(update(Device).where(Device.id == body.device_id).values(point_id=point.id))
+            device = await device_repo.get(body.device_id)
+            if device:
+                device.point_id = point.id
         await session.commit()
         await session.refresh(point)
     return {"ok": True, "id": point.id}
@@ -365,7 +359,7 @@ async def create_measurement_point(body: MeasurementPointCreate) -> dict:
 
 async def get_measurement_point(point_id: int) -> dict:
     async with SessionLocal() as session:
-        point = await session.get(MeasurementPoint, point_id)
+        point = await MeasurementPointRepository(session).get(point_id)
     if not point:
         raise HTTPException(404, "Measurement point topilmadi")
     return _as_dict(point)
@@ -377,7 +371,9 @@ async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) 
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
     async with SessionLocal() as session:
-        point = await session.get(MeasurementPoint, point_id)
+        point_repo = MeasurementPointRepository(session)
+        device_repo = DeviceRepository(session)
+        point = await point_repo.get(point_id)
         if not point:
             raise HTTPException(404, "Measurement point topilmadi")
         next_building_id = fields.get("building_id", point.building_id)
@@ -392,7 +388,7 @@ async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) 
         for key, value in fields.items():
             setattr(point, key, value)
         if "device_id" in fields and fields["device_id"]:
-            device = await session.get(Device, fields["device_id"])
+            device = await device_repo.get(fields["device_id"])
             if device:
                 device.point_id = point.id
                 device.building_id = point.building_id or device.building_id
@@ -404,14 +400,16 @@ async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) 
 
 async def bind_measurement_point_device(point_id: int, body: MeasurementPointDeviceBind) -> dict:
     async with SessionLocal() as session:
-        point = await session.get(MeasurementPoint, point_id)
+        point_repo = MeasurementPointRepository(session)
+        device_repo = DeviceRepository(session)
+        point = await point_repo.get(point_id)
         if not point:
             raise HTTPException(404, "Measurement point topilmadi")
-        device = await session.get(Device, body.device_id)
+        device = await device_repo.get(body.device_id)
         ts = now_ts()
         if not device:
             device = Device(id=body.device_id, name=body.device_id, registered=ts, created_at=ts)
-            session.add(device)
+            device_repo.add(device)
         point.device_id = body.device_id
         point.updated_at = ts
         device.point_id = point.id
@@ -427,7 +425,7 @@ async def bind_measurement_point_device(point_id: int, body: MeasurementPointDev
 
 async def delete_measurement_point(point_id: int) -> dict:
     async with SessionLocal() as session:
-        point = await session.get(MeasurementPoint, point_id)
+        point = await MeasurementPointRepository(session).get(point_id)
         if not point:
             raise HTTPException(404, "Measurement point topilmadi")
         point.is_active = False
@@ -441,13 +439,6 @@ async def list_measurement_points(
     utility_type: str | None = None,
     role: str | None = None,
 ) -> dict:
-    stmt = select(MeasurementPoint).where(MeasurementPoint.is_active.is_(True)).order_by(desc(MeasurementPoint.id))
-    if building_id:
-        stmt = stmt.where(MeasurementPoint.building_id == building_id)
-    if utility_type:
-        stmt = stmt.where(MeasurementPoint.utility_type == utility_type)
-    if role:
-        stmt = stmt.where(MeasurementPoint.role == role)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await MeasurementPointRepository(session).list_filtered(building_id, utility_type, role)
     return {"points": [_as_dict(row) for row in rows]}
