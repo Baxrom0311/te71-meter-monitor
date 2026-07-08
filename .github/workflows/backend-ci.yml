@@ -68,6 +68,7 @@ jobs:
       - name: Rsync backend to server
         run: |
           rsync -az --delete \
+            --rsync-path=/usr/bin/rsync \
             --exclude='.git' \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
@@ -86,4 +87,4 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "systemctl restart meter-api"
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && systemctl restart meter-api && systemctl is-active meter-api"

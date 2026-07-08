@@ -73,6 +73,7 @@ jobs:
       - name: Rsync dist to server
         run: |
           rsync -az --delete \
+            --rsync-path=/usr/bin/rsync \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             dist/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/meter_backend/frontend/
