@@ -1,19 +1,19 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   push:
+    branches: [main]
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
-      - "docker-compose.yml"
   pull_request:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
-      - "docker-compose.yml"
 
 jobs:
-  backend:
+  test:
+    name: Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,27 +34,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile backend
-        run: |
-          python -m py_compile \
-            app.py \
-            core/config.py \
-            core/database.py \
-            core/security.py \
-            core/middleware.py \
-            core/celery_app.py \
-            models/entities.py \
-            models/schemas.py \
-            routers/api.py \
-            routers/auth.py \
-            routers/health.py \
-            services/auth.py \
-            services/platform.py \
-            services/backup.py \
-            services/background.py \
-            tasks/backup.py \
-            tasks/maintenance.py \
-            tests/test_backend_smoke.py \
-            tests/test_api_integration.py
+        run: python -m compileall -q .
 
       - name: Run smoke tests
         run: python -m unittest tests.test_backend_smoke
@@ -67,3 +47,43 @@ jobs:
           tmpdb="$(mktemp /tmp/meter-ci-XXXX.db)"
           DB_PATH="$tmpdb" DATABASE_URL="sqlite+aiosqlite:///$tmpdb" alembic upgrade head
           rm -f "$tmpdb"
+
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rsync backend to server
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='venv/' \
+            --exclude='data/' \
+            --exclude='backups/' \
+            --exclude='firmware/' \
+            --exclude='.env' \
+            --exclude='deploy/' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            backend/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/meter_backend/
+
+      - name: Restart backend service
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "systemctl restart meter-api"
