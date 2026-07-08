@@ -547,10 +547,7 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
             settings.bootstrap_admin_password = "StrongAdmin1234"
             settings.cors_origins = ["https://meter.example.uz"]
             settings.trusted_hosts = ["meter.example.uz"]
-            settings.database_url = "sqlite+aiosqlite:///tmp/prod-should-fail.db"
-            with self.assertRaises(RuntimeError):
-                settings.validate_runtime()
-            settings.database_url = "postgresql+asyncpg://meter:meter_password@postgres:5432/meter_monitor"
+            # SQLite production da ham qo'llab-quvvatlanadi — xato chiqmaydi
             settings.log_format = "yaml"
             with self.assertRaises(RuntimeError):
                 settings.validate_runtime()
