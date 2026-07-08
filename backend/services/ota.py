@@ -82,6 +82,9 @@ def _matches_rule(rule: str | None, actual: str | None, *, auto_is_wildcard: boo
         return True
     if auto_is_wildcard and str(rule).strip().lower() == "auto":
         return True
+    # Device firmware_mode "auto" = hali aniqlanmagan → istalgan firmware qabul qiladi
+    if auto_is_wildcard and actual is not None and str(actual).strip().lower() == "auto":
+        return True
     return str(rule).strip() == str(actual).strip() if actual is not None else False
 
 
