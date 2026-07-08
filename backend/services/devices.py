@@ -233,7 +233,8 @@ async def get_device(device_id: str) -> dict:
 
 
 async def update_device(device_id: str, body: DeviceUpdate) -> dict:
-    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    # exclude_unset=True: faqat so'rovda yuborilgan maydonlar — null yuborilsa ham o'zgaradi
+    fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     async with SessionLocal() as session:
@@ -242,8 +243,9 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
         device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
-        if fields.get("building_id") and not await building_repo.get(fields["building_id"]):
-            raise HTTPException(404, "Building topilmadi")
+        if fields.get("building_id") is not None and fields["building_id"] is not None:
+            if not await building_repo.get(fields["building_id"]):
+                raise HTTPException(404, "Building topilmadi")
         if fields.get("point_id"):
             point = await point_repo.get(fields["point_id"])
             if not point:
