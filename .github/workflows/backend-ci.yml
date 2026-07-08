@@ -78,6 +78,7 @@ jobs:
             --exclude='firmware/' \
             --exclude='.env' \
             --exclude='deploy/' \
+            --exclude='frontend/' \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             backend/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/meter_backend/
