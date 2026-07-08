@@ -78,6 +78,13 @@ export interface Reading {
   frequency: number | null
   pf: number | null
   energy_kwh: number | null
+  pressure_bar: number | null
+  pressure_bottom_bar: number | null
+  pressure_top_bar: number | null
+  flow_rate: number | null
+  volume_m3: number | null
+  temperature_c: number | null
+  leak_detected: boolean | null
 }
 
 export interface DeviceHistoryResponse {

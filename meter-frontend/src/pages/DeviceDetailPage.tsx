@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Info, Clock, Thermometer } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDeviceById, useDeviceLatest, useDeviceHistory } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
@@ -112,10 +112,20 @@ export default function DeviceDetailPage() {
       .reverse()
       .map((r) => ({
         timestamp: new Date(r.ts * 1000).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-        power: r.power_w ?? 0,
+        metric: device?.utility_type === 'water'
+          ? (r.pressure_top_bar ?? r.pressure_bottom_bar ?? r.flow_rate ?? 0)
+          : device?.utility_type === 'gas'
+            ? (r.pressure_bar ?? r.flow_rate ?? 0)
+            : (r.power_w ?? 0),
         voltage: r.voltage_l1 ?? 0,
       }))
-  }, [historyData])
+  }, [historyData, device?.utility_type])
+
+  const chartMeta = device?.utility_type === 'water'
+    ? { title: 'Suv bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim/flow o‘zgarishi', label: 'Bosim / Flow', color: '#06B6D4' }
+    : device?.utility_type === 'gas'
+      ? { title: 'Gaz bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim o‘zgarishi', label: 'Bosim', color: '#F59E0B' }
+      : { title: 'Quvvat grafigi', subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi", label: 'Power W', color: '#10B981' }
 
   return (
     <RootLayout>
@@ -268,7 +278,13 @@ export default function DeviceDetailPage() {
             {/* Real-time Telemetry Values */}
             <div className="space-y-4">
               <h3 className="text-xl font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-blue-500" />
+                {device.utility_type === 'water' ? (
+                  <Droplets className="w-5 h-5 text-cyan-500" />
+                ) : device.utility_type === 'gas' ? (
+                  <Flame className="w-5 h-5 text-orange-500" />
+                ) : (
+                  <Zap className="w-5 h-5 text-yellow-500" />
+                )}
                 Real-vaqtdagi ko'rsatkichlar
               </h3>
               {latestReading ? (
@@ -309,6 +325,65 @@ export default function DeviceDetailPage() {
                       <span className="text-2xl font-extrabold text-orange-650 dark:text-orange-400 mt-2 font-mono">{latestReading.pf}</span>
                     </div>
                   )}
+                  {latestReading.pressure_bottom_bar !== undefined && latestReading.pressure_bottom_bar !== null && (
+                    <div className="glass-card border border-cyan-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Gauge className="w-3.5 h-3.5 text-cyan-500" />
+                        Past bosim
+                      </span>
+                      <span className="text-2xl font-extrabold text-cyan-650 dark:text-cyan-400 mt-2 font-mono">{latestReading.pressure_bottom_bar} <span className="text-sm font-normal text-gray-500">bar</span></span>
+                    </div>
+                  )}
+                  {latestReading.pressure_top_bar !== undefined && latestReading.pressure_top_bar !== null && (
+                    <div className="glass-card border border-blue-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Gauge className="w-3.5 h-3.5 text-blue-500" />
+                        Yuqori bosim
+                      </span>
+                      <span className="text-2xl font-extrabold text-blue-650 dark:text-blue-400 mt-2 font-mono">{latestReading.pressure_top_bar} <span className="text-sm font-normal text-gray-500">bar</span></span>
+                    </div>
+                  )}
+                  {latestReading.pressure_bar !== undefined && latestReading.pressure_bar !== null && (
+                    <div className="glass-card border border-orange-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Gauge className="w-3.5 h-3.5 text-orange-500" />
+                        Bosim
+                      </span>
+                      <span className="text-2xl font-extrabold text-orange-650 dark:text-orange-400 mt-2 font-mono">{latestReading.pressure_bar} <span className="text-sm font-normal text-gray-500">bar</span></span>
+                    </div>
+                  )}
+                  {latestReading.flow_rate !== undefined && latestReading.flow_rate !== null && (
+                    <div className="glass-card border border-cyan-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">Flow</span>
+                      <span className="text-2xl font-extrabold text-cyan-650 dark:text-cyan-400 mt-2 font-mono">{latestReading.flow_rate}</span>
+                    </div>
+                  )}
+                  {latestReading.volume_m3 !== undefined && latestReading.volume_m3 !== null && (
+                    <div className="glass-card border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">Hajm</span>
+                      <span className="text-2xl font-extrabold text-emerald-650 dark:text-emerald-400 mt-2 font-mono">{latestReading.volume_m3} <span className="text-sm font-normal text-gray-500">m3</span></span>
+                    </div>
+                  )}
+                  {latestReading.temperature_c !== undefined && latestReading.temperature_c !== null && (
+                    <div className="glass-card border border-purple-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Thermometer className="w-3.5 h-3.5 text-purple-500" />
+                        Harorat
+                      </span>
+                      <span className="text-2xl font-extrabold text-purple-650 dark:text-purple-400 mt-2 font-mono">{latestReading.temperature_c} <span className="text-sm font-normal text-gray-500">C</span></span>
+                    </div>
+                  )}
+                  {latestReading.leak_detected !== undefined && latestReading.leak_detected !== null && (
+                    <div className={`glass-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm ${latestReading.leak_detected ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/20 bg-green-500/5'}`}>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className={`w-3.5 h-3.5 ${latestReading.leak_detected ? 'text-red-500' : 'text-green-500'}`} />
+                        Leak
+                      </span>
+                      <span className={`text-2xl font-extrabold mt-2 ${latestReading.leak_detected ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {latestReading.leak_detected ? 'Aniqlandi' : 'Yo‘q'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <EmptyBlock
@@ -325,9 +400,9 @@ export default function DeviceDetailPage() {
                   <div>
                     <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2">
                       <Clock className="w-5 h-5 text-blue-500" />
-                      Quvvat grafigi
+                      {chartMeta.title}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Oxirgi 24 soatdagi Power W o'zgarishi</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">{chartMeta.subtitle}</p>
                   </div>
                   <span className="chart-chip">24 soat</span>
                 </div>
@@ -336,8 +411,8 @@ export default function DeviceDetailPage() {
                     <AreaChart data={chartData}>
                       <defs>
                         <linearGradient id="powerGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                          <stop offset="5%" stopColor={chartMeta.color} stopOpacity={0.2} />
+                          <stop offset="95%" stopColor={chartMeta.color} stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
@@ -348,7 +423,7 @@ export default function DeviceDetailPage() {
                         labelStyle={{ color: chart.label, fontWeight: 800 }}
                         cursor={chart.cursor}
                       />
-                      <Area type="monotone" dataKey="power" stroke="#10B981" fillOpacity={1} fill="url(#powerGrad)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+                      <Area type="monotone" dataKey="metric" name={chartMeta.label} stroke={chartMeta.color} fillOpacity={1} fill="url(#powerGrad)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>

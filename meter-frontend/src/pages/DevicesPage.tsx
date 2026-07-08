@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle, Zap, Droplets, Flame } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDevices, useBuildings } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,8 +14,15 @@ import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 import { TableSkeleton } from '@/components/Skeleton'
 
+const utilityCards = [
+  { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
+  { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+] as const
+
 export default function DevicesPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: devices, isLoading, isError, error: queryError, refetch } = useDevices()
   const { data: buildings } = useBuildings()
   const { isAdmin } = useAuth()
@@ -55,6 +62,26 @@ export default function DevicesPage() {
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'status'>('name')
   const [page, setPage] = useState(1)
   const pageSize = 12
+
+  useEffect(() => {
+    const utility = new URLSearchParams(location.search).get('utility')
+    if (utility === 'electricity' || utility === 'water' || utility === 'gas') {
+      setTypeFilter(utility)
+    }
+  }, [location.search])
+
+  const utilityStats = useMemo(() => {
+    const source = devices ?? []
+    return utilityCards.map((utility) => {
+      const rows = source.filter((device) => device.utility_type === utility.key)
+      return {
+        ...utility,
+        total: rows.length,
+        online: rows.filter((device) => device.online).length,
+        unassigned: rows.filter((device) => device.building_id === null).length,
+      }
+    })
+  }, [devices])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -126,6 +153,35 @@ export default function DevicesPage() {
     })
   }, [devices, searchQuery, typeFilter, statusFilter, sortBy])
 
+  const groupedDevices = useMemo(() => {
+    if (!devices) return []
+    const q = searchQuery.toLowerCase().trim()
+    const baseRows = devices.filter((device) => {
+      const matchesSearch =
+        !q ||
+        (device.name ?? '').toLowerCase().includes(q) ||
+        device.id.toLowerCase().includes(q) ||
+        (device.ip ?? '').toLowerCase().includes(q)
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'online' && device.online) ||
+        (statusFilter === 'offline' && !device.online)
+
+      return matchesSearch && matchesStatus
+    })
+
+    return utilityCards.map((utility) => ({
+      ...utility,
+      rows: baseRows
+        .filter((device) => device.utility_type === utility.key)
+        .sort((a, b) => {
+          if (sortBy === 'status') return Number(b.online) - Number(a.online)
+          return (a.name ?? a.id).localeCompare(b.name ?? b.id)
+        }),
+    }))
+  }, [devices, searchQuery, statusFilter, sortBy])
+
   useEffect(() => {
     setPage(1)
   }, [searchQuery, typeFilter, statusFilter, sortBy])
@@ -180,6 +236,39 @@ export default function DevicesPage() {
           )}
         </div>
 
+        {!isLoading && !isError && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {utilityStats.map((utility) => {
+              const Icon = utility.icon
+              const active = typeFilter === utility.key
+              return (
+                <button
+                  key={utility.key}
+                  onClick={() => setTypeFilter(active ? 'all' : utility.key)}
+                  className={clsx(
+                    'glass-card rounded-xl p-4 text-left border transition hover:-translate-y-0.5',
+                    active ? `${utility.border} ring-2 ring-blue-500/30` : 'hover:border-blue-500/30'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{utility.label}</p>
+                      <p className="text-2xl font-extrabold text-gray-950 dark:text-gray-100 mt-1">{utility.total}</p>
+                    </div>
+                    <div className={`p-2.5 rounded-lg ${utility.bg} ${utility.border} border`}>
+                      <Icon className={`w-5 h-5 ${utility.accent}`} />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className="text-green-600 dark:text-green-400 font-bold">{utility.online} online</span>
+                    <span className="text-yellow-600 dark:text-yellow-400 font-bold">{utility.unassigned} birikmagan</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* Filters Toolbar */}
         <div className="flex flex-col xl:flex-row gap-4 justify-between items-stretch xl:items-center glass-card rounded-xl p-4 sm:p-5 shadow">
           {/* Search Bar */}
@@ -196,17 +285,29 @@ export default function DevicesPage() {
 
           {/* Quick Filters */}
           <div className="flex flex-wrap gap-3 w-full xl:w-auto">
-            {/* Utility Type Filter */}
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
-            >
-              <option value="all">Barcha datchik turlari</option>
-              <option value="electricity">Elektr</option>
-              <option value="water">Suv</option>
-              <option value="gas">Gaz</option>
-            </select>
+            <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-800 bg-gray-100/50 dark:bg-gray-950/50 shadow-sm">
+              <button
+                onClick={() => setTypeFilter('all')}
+                className={clsx(
+                  'px-3.5 py-1.5 text-xs font-semibold transition',
+                  typeFilter === 'all' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-gray-100'
+                )}
+              >
+                Hammasi
+              </button>
+              {utilityStats.map((utility) => (
+                <button
+                  key={utility.key}
+                  onClick={() => setTypeFilter(utility.key)}
+                  className={clsx(
+                    'px-3.5 py-1.5 text-xs font-semibold transition',
+                    typeFilter === utility.key ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-gray-100'
+                  )}
+                >
+                  {utility.label} ({utility.total})
+                </button>
+              ))}
+            </div>
 
             <select
               value={sortBy}
@@ -267,6 +368,60 @@ export default function DevicesPage() {
             </button>
           </div>
         </div>
+
+        {typeFilter === 'all' && !isLoading && !isError && groupedDevices.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {groupedDevices.map((group) => {
+              const Icon = group.icon
+              return (
+                <section key={group.key} className="glass-card rounded-2xl p-4 border relative overflow-hidden">
+                  <div className={`absolute inset-x-0 top-0 h-1 ${group.key === 'electricity' ? 'bg-yellow-500' : group.key === 'water' ? 'bg-cyan-500' : 'bg-orange-500'}`} />
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                      <p className="text-base font-extrabold text-gray-950 dark:text-gray-100">{group.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{group.rows.length} ta qurilma</p>
+                    </div>
+                    <div className={`p-2.5 rounded-xl ${group.bg} ${group.border} border`}>
+                      <Icon className={`w-5 h-5 ${group.accent}`} />
+                    </div>
+                  </div>
+
+                  {group.rows.length > 0 ? (
+                    <div className="space-y-2">
+                      {group.rows.slice(0, 4).map((device) => (
+                        <button
+                          key={device.id}
+                          onClick={() => navigate(`/devices/${device.id}`)}
+                          className="w-full rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/35 dark:bg-gray-950/25 px-3 py-2.5 text-left hover:border-blue-500/35 hover:bg-blue-500/5 transition"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-gray-950 dark:text-gray-100">{device.name ?? device.id}</p>
+                              <p className="truncate text-xs text-gray-500 font-mono">{device.ip ?? device.id}</p>
+                            </div>
+                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
+                          </div>
+                        </button>
+                      ))}
+                      {group.rows.length > 4 && (
+                        <button
+                          onClick={() => setTypeFilter(group.key)}
+                          className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition"
+                        >
+                          Yana {group.rows.length - 4} tasini ko‘rish
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-800 p-4 text-center text-xs text-gray-500">
+                      Hozircha {group.label.toLowerCase()} qurilmasi yo‘q.
+                    </div>
+                  )}
+                </section>
+              )
+            })}
+          </div>
+        )}
 
         {/* Devices Table */}
         {isLoading ? (
@@ -363,7 +518,14 @@ export default function DevicesPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
-                        {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                        <span className={clsx(
+                          'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold border',
+                          device.utility_type === 'electricity' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
+                          device.utility_type === 'water' && 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+                          device.utility_type === 'gas' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+                        )}>
+                          {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.ip ?? '—'}</td>
                       <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.fw_version ?? '—'}</td>

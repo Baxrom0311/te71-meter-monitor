@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X } from 'lucide-react'
+import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { KPICard } from '@/components/KPICard'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -15,6 +15,12 @@ import { chartTheme } from '@/lib/chartTheme'
 import { EmptyBlock } from '@/components/StateBlock'
 import { notifySuccess } from '@/lib/toast'
 import { ChartSkeleton, KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
+
+const utilityOverview = [
+  { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
+  { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+] as const
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -81,6 +87,22 @@ export default function DashboardPage() {
     [updatedDevices]
   )
 
+  const utilityStats = useMemo(() => {
+    return utilityOverview.map((utility) => {
+      const rows = updatedDevices.filter((device) => device.utility_type === utility.key)
+      return {
+        ...utility,
+        total: rows.length,
+        online: rows.filter((device) => device.online).length,
+        offline: rows.filter((device) => !device.online).length,
+      }
+    })
+  }, [updatedDevices])
+
+  const onlinePercent = summary?.devices_total
+    ? Math.round(((summary.devices_online || 0) / summary.devices_total) * 100)
+    : 0
+
   // Chart data: convert EnergyPoints to recharts format
   const chartData = useMemo(() => {
     if (!energyData?.data) return []
@@ -93,18 +115,40 @@ export default function DashboardPage() {
   return (
     <RootLayout>
       <div className="space-y-8">
-        {/* Page Title */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-950 dark:text-gray-100">{translations.dashboard.title}</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2 font-medium">
-            {new Date().toLocaleDateString('uz-UZ', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
-        </div>
+        <section className="relative overflow-hidden rounded-2xl border border-blue-500/15 bg-gradient-to-br from-blue-600/12 via-emerald-500/8 to-transparent p-5 sm:p-6 shadow-2xl shadow-blue-500/5">
+          <div className="absolute inset-0 pointer-events-none bg-dashboard-circuit opacity-50" />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 mb-4">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live utility command center
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-950 dark:text-gray-100">{translations.dashboard.title}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2 font-medium">
+                {new Date().toLocaleDateString('uz-UZ', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-full lg:min-w-[420px]">
+              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
+                <p className="text-[10px] uppercase font-bold text-gray-500">Online</p>
+                <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{onlinePercent}%</p>
+              </div>
+              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
+                <p className="text-[10px] uppercase font-bold text-gray-500">Alerts</p>
+                <p className="text-2xl font-extrabold text-red-600 dark:text-red-400">{summary?.alerts_active || 0}</p>
+              </div>
+              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
+                <p className="text-[10px] uppercase font-bold text-gray-500">Reads/h</p>
+                <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400">{summary?.reads_last_hour || 0}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Unassigned Devices Banner */}
         {unassignedDevices.length > 0 && (
@@ -263,6 +307,39 @@ export default function DashboardPage() {
               icon={<TrendingUp className="w-5 h-5" />}
               color="yellow"
             />
+          </div>
+        )}
+
+        {!devicesLoading && updatedDevices.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {utilityStats.map((utility) => {
+              const Icon = utility.icon
+              return (
+                <button
+                  key={utility.key}
+                  onClick={() => navigate(`/devices?utility=${utility.key}`)}
+                  className="glass-card rounded-xl p-4 text-left border hover:border-blue-500/35 hover:-translate-y-0.5 transition"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{utility.label} qurilmalari</p>
+                      <p className="text-2xl font-extrabold text-gray-950 dark:text-gray-100 mt-1">{utility.total}</p>
+                    </div>
+                    <div className={`p-2.5 rounded-lg border ${utility.bg} ${utility.border}`}>
+                      <Icon className={`w-5 h-5 ${utility.accent}`} />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-green-500/10 px-2 py-1.5 text-green-600 dark:text-green-400 font-bold">
+                      {utility.online} online
+                    </div>
+                    <div className="rounded-lg bg-red-500/10 px-2 py-1.5 text-red-600 dark:text-red-400 font-bold">
+                      {utility.offline} offline
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
 

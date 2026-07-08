@@ -22,6 +22,8 @@ import {
   ChevronRight,
   Activity,
   ShieldCheck,
+  PanelLeft,
+  PanelTop,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -42,18 +44,17 @@ interface NavGroup {
   items: NavItem[]
 }
 
-export function Sidebar() {
-  const { user, logout, isAdmin } = useAuth()
-  const { theme, toggleTheme, isDark } = useTheme()
-  const { data: alerts } = useAlerts(false, 200)
-  const [isOpen, setIsOpen] = useState(false)
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const location = useLocation()
+export type DesktopNavMode = 'sidebar' | 'topbar'
 
-  const openAlertCount = alerts?.length ?? 0
+interface NavigationProps {
+  desktopMode: DesktopNavMode
+  onDesktopModeChange: (mode: DesktopNavMode) => void
+}
 
-  const navGroups: NavGroup[] = useMemo(
-    () => [
+function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup[] {
+  return useMemo(
+    () => {
+      const groups: NavGroup[] = [
       {
         label: 'Monitoring',
         items: [
@@ -128,13 +129,26 @@ export function Sidebar() {
           },
         ],
       },
-    ],
-    [openAlertCount],
+    ]
+      return groups
+        .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || isAdmin) }))
+        .filter((group) => group.items.length > 0)
+    },
+    [openAlertCount, isAdmin],
   )
+}
 
-  const visibleGroups = navGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || isAdmin) }))
-    .filter((group) => group.items.length > 0)
+export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
+  const { user, logout, isAdmin } = useAuth()
+  const { theme, toggleTheme, isDark } = useTheme()
+  const { data: alerts } = useAlerts(false, 200)
+  const [isOpen, setIsOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const location = useLocation()
+
+  const openAlertCount = alerts?.length ?? 0
+
+  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
 
@@ -194,6 +208,7 @@ export function Sidebar() {
         className={clsx(
           'fixed left-0 top-0 h-screen w-72 glass-sidebar flex flex-col z-50 transition-[width,transform] duration-300 md:relative md:translate-x-0',
           isCollapsed ? 'md:w-20' : 'md:w-72',
+          desktopMode === 'topbar' && 'md:hidden',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -316,6 +331,31 @@ export function Sidebar() {
           </div>
 
           {/* Theme Toggle */}
+          <div className={clsx('hidden md:grid gap-1 rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/30 dark:bg-gray-950/25 p-1', isCollapsed ? 'grid-cols-1' : 'grid-cols-2')}>
+            <button
+              onClick={() => onDesktopModeChange('sidebar')}
+              className={clsx(
+                'inline-flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition',
+                desktopMode === 'sidebar' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:hover:text-gray-100',
+              )}
+              title="Sidebar"
+            >
+              <PanelLeft className="w-4 h-4" />
+              {!isCollapsed && 'Sidebar'}
+            </button>
+            <button
+              onClick={() => onDesktopModeChange('topbar')}
+              className={clsx(
+                'inline-flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition',
+                desktopMode === 'topbar' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:hover:text-gray-100',
+              )}
+              title="Navbar"
+            >
+              <PanelTop className="w-4 h-4" />
+              {!isCollapsed && 'Navbar'}
+            </button>
+          </div>
+
           <button
             onClick={toggleTheme}
             className={clsx(
@@ -361,5 +401,106 @@ export function Sidebar() {
         </div>
       </aside>
     </>
+  )
+}
+
+export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps) {
+  const { user, logout, isAdmin } = useAuth()
+  const { toggleTheme, isDark } = useTheme()
+  const { data: alerts } = useAlerts(false, 200)
+  const location = useLocation()
+  const openAlertCount = alerts?.length ?? 0
+  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
+  const navItems = visibleGroups.flatMap((group) => group.items)
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
+
+  return (
+    <header className="hidden md:block fixed left-0 right-0 top-0 z-40 px-5 pt-4">
+      <div className="mx-auto max-w-[1500px] glass-card rounded-2xl px-4 py-3 shadow-2xl">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="flex items-center gap-3 shrink-0 group">
+            <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-blue-500 shadow-lg shadow-blue-500/20">
+              <span className="absolute inset-0 bg-white/20 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700" />
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-base font-extrabold text-gray-950 dark:text-gray-100 leading-none">TE71 Meter</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-500 mt-1">Live stack</p>
+            </div>
+          </Link>
+
+          <nav className="flex-1 overflow-x-auto sidebar-scroll">
+            <div className="flex items-center gap-1.5 min-w-max px-1">
+              {navItems.map((item) => {
+                const active = isActive(item.path)
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={clsx(
+                      'nav-item relative inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition',
+                      active
+                        ? 'nav-item-active bg-blue-500/10 text-blue-500 border-blue-500/25'
+                        : 'border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-900/5 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-white/5',
+                    )}
+                  >
+                    {item.icon}
+                    {item.label}
+                    {item.badge && item.badge > 0 && (
+                      <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </nav>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="grid grid-cols-2 rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/30 dark:bg-gray-950/25 p-1">
+              <button
+                onClick={() => onDesktopModeChange('sidebar')}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold transition',
+                  desktopMode === 'sidebar' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:hover:text-gray-100',
+                )}
+              >
+                <PanelLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => onDesktopModeChange('topbar')}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold transition',
+                  desktopMode === 'topbar' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-950 dark:hover:text-gray-100',
+                )}
+              >
+                <PanelTop className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/35 dark:bg-gray-950/25 text-gray-600 dark:text-gray-300 hover:text-blue-500 transition"
+              title={isDark ? "Yorug' rejim" : 'Tungi rejim'}
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <div className="flex items-center gap-2 rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/35 dark:bg-gray-950/25 px-2.5 py-2">
+              <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 text-xs font-black ring-1 ring-blue-500/25">
+                {user?.username?.[0]?.toUpperCase() || 'U'}
+              </div>
+              <span className="max-w-24 truncate text-xs font-bold text-gray-700 dark:text-gray-250">{user?.username}</span>
+            </div>
+            <button
+              onClick={logout}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/15 bg-red-500/10 text-red-500 hover:bg-red-500/15 transition"
+              title={translations.common.logout}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
   )
 }

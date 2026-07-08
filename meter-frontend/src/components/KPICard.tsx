@@ -30,15 +30,16 @@ export function KPICard({
   color = 'primary',
 }: KPICardProps) {
   return (
-    <div className="glass-card glass-card-hover kpi-card rounded-2xl p-6 cursor-default animate-card-rise">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wide">{title}</h3>
-        <div className={`kpi-icon p-2.5 rounded-lg border ${colorClasses[color]}`}>{icon}</div>
+    <div className="glass-card glass-card-hover kpi-card rounded-2xl p-4 sm:p-6 cursor-default animate-card-rise overflow-hidden relative">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/35 to-transparent" />
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <h3 className="text-xs sm:text-sm font-bold text-gray-500 dark:text-gray-400 tracking-wide leading-tight">{title}</h3>
+        <div className={`kpi-icon p-2 sm:p-2.5 rounded-lg border shrink-0 ${colorClasses[color]}`}>{icon}</div>
       </div>
 
       <div>
-        <p className={`text-3xl font-extrabold mb-1 tracking-tight ${valueColors[color]}`}>{value}</p>
-        {subtitle && <p className="text-xs text-gray-600 dark:text-gray-500 font-medium">{subtitle}</p>}
+        <p className={`text-2xl sm:text-3xl font-extrabold mb-1 tracking-tight ${valueColors[color]}`}>{value}</p>
+        {subtitle && <p className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-500 font-semibold leading-tight">{subtitle}</p>}
       </div>
     </div>
   )
