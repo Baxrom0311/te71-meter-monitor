@@ -248,9 +248,9 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
     return to_broadcast
 
 
-async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int) -> dict:
+async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int, offset: int = 0) -> dict:
     async with SessionLocal() as session:
-        rows = await AlertRepository(session).list_filtered(device_id, kind, cleared, limit)
+        rows = await AlertRepository(session).list_filtered(device_id, kind, cleared, limit, offset)
     return {"alerts": [model_to_dict(row) for row in rows]}
 
 

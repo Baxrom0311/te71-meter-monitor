@@ -37,9 +37,10 @@ async def list_commands(
     device_id: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(require_admin),
 ):
-    return await command_service.list_commands(device_id, status, limit)
+    return await command_service.list_commands(device_id, status, limit, offset)
 
 
 @router.get("/commands/{device_id}", response_model=PendingCommandListResponse)

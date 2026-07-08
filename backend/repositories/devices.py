@@ -126,8 +126,9 @@ class CommandRepository(BaseRepository[Command]):
         device_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Command]:
-        stmt = select(Command).order_by(desc(Command.id)).limit(limit)
+        stmt = select(Command).order_by(desc(Command.id)).offset(offset).limit(limit)
         if device_id:
             stmt = stmt.where(Command.device_id == device_id)
         if status:

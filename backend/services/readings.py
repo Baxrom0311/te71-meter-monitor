@@ -33,7 +33,7 @@ def _validate_reading(body: MeterReading) -> None:
         _validate_range(name, getattr(body, name), 0, settings.max_voltage)
     for name in ("current_l1", "current_l2", "current_l3"):
         _validate_range(name, getattr(body, name), 0, settings.max_current)
-    _validate_range("frequency", body.frequency, 0, 100)
+    _validate_range("frequency", body.frequency, 0, 60)
     _validate_range("pf", body.pf, -1, 1)
     for name in ("energy_kwh", "energy_t1", "energy_t2", "energy_t3", "energy_t4"):
         _validate_range(name, getattr(body, name), 0, None)

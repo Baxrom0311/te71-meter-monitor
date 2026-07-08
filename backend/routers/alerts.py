@@ -24,9 +24,10 @@ async def get_alerts(
     kind: Optional[str] = None,
     cleared: bool = False,
     limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(current_token_payload),
 ):
-    return await alert_service.get_alerts(device_id, kind, cleared, limit)
+    return await alert_service.get_alerts(device_id, kind, cleared, limit, offset)
 
 
 @router.get("/alert-notifications", response_model=AlertNotificationListResponse)

@@ -94,9 +94,9 @@ async def ack_command(command_id: int, result: str) -> dict:
     return {"ok": True}
 
 
-async def list_commands(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
+async def list_commands(device_id: str | None = None, status: str | None = None, limit: int = 100, offset: int = 0) -> dict:
     async with SessionLocal() as session:
-        rows = await CommandRepository(session).list_filtered(device_id, status, limit)
+        rows = await CommandRepository(session).list_filtered(device_id, status, limit, offset)
     return {"commands": [model_to_dict(row) for row in rows]}
 
 

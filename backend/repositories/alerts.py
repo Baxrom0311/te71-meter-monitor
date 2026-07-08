@@ -13,12 +13,13 @@ class AlertRepository(BaseRepository[Alert]):
         kind: str | None = None,
         cleared: bool = False,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[Alert]:
-        stmt = select(Alert).where(Alert.cleared.is_(cleared)).order_by(desc(Alert.ts)).limit(limit)
+        stmt = select(Alert).where(Alert.cleared.is_(cleared)).order_by(desc(Alert.ts)).offset(offset).limit(limit)
         if device_id:
             stmt = stmt.where(Alert.device_id == device_id)
         if kind:
-            stmt = stmt.where(Alert.kind.like(f"{kind}%"))
+            stmt = stmt.where(Alert.kind.startswith(kind))
         return list((await self.session.scalars(stmt)).all())
 
     async def has_recent_duplicate(self, alert: Alert, since_ts: int) -> bool:
