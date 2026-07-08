@@ -453,3 +453,15 @@ static String sensor_build_json(const char* device_id,
     serializeJson(doc, out);
     return out;
 }
+
+// Backend uchun registratsiya (main.cpp dan chaqiriladi)
+static bool sensor_do_register(const char* device_id, const char* fw_version) {
+    return app_register(
+        device_id,
+        "electricity",
+        g_sensor_meta.sensor_type[0] ? g_sensor_meta.sensor_type : "te71",
+        g_sensor_meta.meter_serial,
+        fw_version,
+        g_sensor_meta.meter_baud
+    );
+}
