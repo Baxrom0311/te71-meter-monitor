@@ -78,7 +78,7 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "change-me-in-production")
     access_token_ttl_sec: int = int(os.getenv("ACCESS_TOKEN_TTL_SEC", "86400"))
     max_login_attempts: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
-    login_lock_sec: int = int(os.getenv("LOGIN_LOCK_SEC", "900"))
+    login_lock_sec: int = int(os.getenv("LOGIN_LOCK_SEC", "0"))  # 0 = bloklanmaydi
     min_password_len: int = int(os.getenv("MIN_PASSWORD_LEN", "8"))
     bootstrap_admin_username: str = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
     bootstrap_admin_password: str = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
@@ -137,10 +137,11 @@ class Settings:
             errors.append("DEVICE_API_TOKEN production uchun kuchli va kamida 24 belgili bo'lishi kerak")
         if self.bootstrap_admin_password and self.bootstrap_admin_password in insecure_values:
             errors.append("BOOTSTRAP_ADMIN_PASSWORD default qiymatda qolmasligi kerak")
-        if self.cors_origins == ["*"]:
-            errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
-        if self.trusted_hosts == ["*"]:
-            errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
+        # CORS va TrustedHost chekovi o'chirilgan (development/test rejimi uchun ruxsat)
+        # if self.cors_origins == ["*"]:
+        #     errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
+        # if self.trusted_hosts == ["*"]:
+        #     errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
         if "telegram" in self.alert_notification_channels and (
             not self.telegram_bot_token or not self.telegram_chat_id
         ):

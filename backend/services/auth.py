@@ -51,12 +51,12 @@ async def login(body: LoginRequest) -> dict:
             raise HTTPException(401, "Login yoki parol noto'g'ri")
 
         n = now_ts()
-        if user.locked_until and user.locked_until > n:
+        if settings.login_lock_sec > 0 and user.locked_until and user.locked_until > n:
             raise HTTPException(423, "Akkount vaqtincha bloklangan. Keyinroq urinib ko'ring")
 
         if not verify_password(body.password, user.password_hash):
             user.failed_login_count = (user.failed_login_count or 0) + 1
-            if user.failed_login_count >= settings.max_login_attempts:
+            if settings.login_lock_sec > 0 and user.failed_login_count >= settings.max_login_attempts:
                 user.locked_until = n + settings.login_lock_sec
             await session.commit()
             raise HTTPException(401, "Login yoki parol noto'g'ri")
