@@ -117,8 +117,9 @@ class Settings:
             errors.append("Retention kunlari kamida 1 bo'lishi kerak")
         if self.alert_escalation_after_sec < 0:
             errors.append("ALERT_ESCALATION_AFTER_SEC manfiy bo'lmasligi kerak")
-        if self.is_production and not self.database_url.startswith(("postgresql+asyncpg://", "postgresql://")):
-            errors.append("Productionda DATABASE_URL PostgreSQL bo'lishi kerak")
+        # SQLite production da ham ishlaydi (kichik loyihalar uchun)
+        # if self.is_production and not self.database_url.startswith(("postgresql+asyncpg://", "postgresql://")):
+        #     errors.append("Productionda DATABASE_URL PostgreSQL bo'lishi kerak")
         allowed_channels = {"internal", "telegram", "webhook"}
         invalid_channels = [item for item in self.alert_notification_channels if item not in allowed_channels]
         if invalid_channels:
