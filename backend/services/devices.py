@@ -243,7 +243,7 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
         device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
-        if fields.get("building_id") is not None and fields["building_id"] is not None:
+        if "building_id" in fields and fields["building_id"] is not None:
             if not await building_repo.get(fields["building_id"]):
                 raise HTTPException(404, "Building topilmadi")
         if fields.get("point_id"):
