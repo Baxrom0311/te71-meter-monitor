@@ -12,8 +12,16 @@ from dlms.hdlc import make_hdlc, send_recv, hex_str
 from dlms.connection import DLMSConnection, _client_to_hdlc
 from dlms.parser import parse_dlms_data
 
-PORT = "COM18"
-BAUD = 4800
+import serial.tools.list_ports as _lp
+def _autoport():
+    if len(sys.argv) > 1:
+        return sys.argv[1]
+    usb = [p.device for p in _lp.comports()
+           if 'usb' in p.device.lower() or 'serial' in p.device.lower()]
+    return usb[0] if usb else _lp.comports()[0].device
+
+PORT = _autoport()
+BAUD = 9600  # ESP32 bridge USB baud (RS485 = 4800 bridge ichida)
 
 LLC = b"\xE6\xE6\x00"
 OBIS_SERIAL = (0, 0, 96, 1, 0, 255)

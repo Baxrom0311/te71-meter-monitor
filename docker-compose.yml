@@ -7,9 +7,6 @@
 # Dashboard:
 #   http://localhost:8000
 #
-# Flower:
-#   http://localhost:5555
-#
 # Database:
 #   PostgreSQL 5432
 # ──────────────────────────────────────────────────────────────────────────────
@@ -46,16 +43,11 @@ x-backend-common: &backend-common
     - GAS_PRESSURE_MIN_BAR=0.02
     - GAS_PRESSURE_MAX_BAR=5.0
     - ALERT_DEDUPE_SEC=600
-    - CELERY_BROKER_URL=redis://redis:6379/0
-    - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    - RUN_INLINE_WORKERS=false
-    - READY_CHECK_REDIS=true
+    - RUN_INLINE_WORKERS=true
     - LOG_LEVEL=INFO
     - LOG_FORMAT=text
   depends_on: &backend-depends
     postgres:
-      condition: service_healthy
-    redis:
       condition: service_healthy
 
 services:
@@ -79,22 +71,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── Redis Broker ────────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: meter-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
   # ── FastAPI Backend ──────────────────────────────────────────────────────────
   backend:
     <<: *backend-common
@@ -105,7 +81,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./frontend:/frontend:ro
+      - ./meter-frontend/dist:/frontend:ro
       - firmware_store:/app/firmware
       - backup_store:/app/backups
     healthcheck:
@@ -114,32 +90,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── Celery Worker ───────────────────────────────────────────────────────────
-  celery-worker:
-    <<: *backend-common
-    container_name: meter-celery-worker
-    command: celery -A core.celery_app.celery_app worker --loglevel=INFO --concurrency=2
-    volumes:
-      - firmware_store:/app/firmware
-      - backup_store:/app/backups
-
-  # ── Celery Beat Scheduler ───────────────────────────────────────────────────
-  celery-beat:
-    <<: *backend-common
-    container_name: meter-celery-beat
-    command: >
-      celery -A core.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
-
-  # ── Flower Celery Monitor ───────────────────────────────────────────────────
-  flower:
-    <<: *backend-common
-    container_name: meter-flower
-    command: celery -A core.celery_app.celery_app flower --port=5555
-    ports:
-      - "5555:5555"
-
 volumes:
   postgres_data:
-  redis_data:
   firmware_store:
   backup_store:

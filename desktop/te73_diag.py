@@ -12,7 +12,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 import serial
 from dlms.hdlc import fcs16, make_hdlc
 
-PORT = "COM18"
+import serial.tools.list_ports as _lp
+PORT = sys.argv[1] if len(sys.argv) > 1 else next(
+    (p.device for p in _lp.comports()
+     if 'usb' in p.device.lower() or 'serial' in p.device.lower()),
+    _lp.comports()[0].device if _lp.comports() else "COM1"
+)
 
 # SNRM frame (Client 16 -> Server 1)
 SNRM = make_hdlc(0x03, 0x21, 0x93)

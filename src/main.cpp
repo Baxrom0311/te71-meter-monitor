@@ -1,138 +1,339 @@
 /**
- * CE 303 Smart Bridge — IEC 62056-21 Mode C
+ * Meter Monitor — ESP32 Firmware v3.4.0
  *
- * USB (9600 8N1) ↔ RS-485 (300→9600, 7E1)
+ * Arxitektura:
+ *   common.h                   → WiFi, HTTP, NVS, OTA, backend API
+ *   sensors/electricity.h      → TE71/TE73 RS-485 DLMS protokol
+ *   sensors/water.h            → (kelajak) Suv hisoblagichi
  *
- * Maxsus USB buyruqlari (Python dan):
- *   ~B300~   → RS-485 ni 300 baud ga o'tkazish (sign-on uchun)
- *   ~B9600~  → RS-485 ni 9600 baud ga o'tkazish (data uchun)
- *   ~B4800~  → RS-485 ni 4800 baud ga o'tkazish
- *   ~BAUD?~  → Joriy baud ni javob berish
+ * Build environments (platformio.ini):
+ *   pio run -e electricity     → Elektr hisoblagich (TE71/TE73)
+ *   pio run -e water           → Suv hisoblagichi (kelajak)
  *
- * Boshqa barcha baytlar → shaffof ko'prik
- *
- * Pinlar: GPIO16=RX, GPIO17=TX, GPIO4=DE/RE
+ * Birinchi sozlash:
+ *   1. "MeterSetup" WiFi AP → 192.168.4.1
+ *   2. Server URL kiriting: http://67.205.171.93
+ *   3. Device Token kiriting (backend DEVICE_API_TOKEN qiymati)
+ *   4. Save → ESP32 restart → tayyor
  */
 
-#include <Arduino.h>
+#define FW_VERSION "3.4.0"
 
-// ── Pinlar ────────────────────────────────────────────────────────────────────
-static constexpr uint8_t PIN_DE_RE = 4;
-static constexpr uint8_t PIN_RX485 = 16;
-static constexpr uint8_t PIN_TX485 = 17;
+// ─── Umumiy framework ────────────────────────────────────────────────────────
+#include "common.h"
 
-// ── Sozlamalar ────────────────────────────────────────────────────────────────
-static constexpr uint32_t BAUD_USB   = 9600;
-static constexpr uint32_t INTER_BYTE = 50;
-static constexpr size_t   BUF_SIZE   = 512;
+// ─── Sensor tanlash (build flag orqali) ──────────────────────────────────────
+#ifdef SENSOR_ELECTRICITY
+  #include "sensors/electricity.h"
 
-static uint32_t current_rs485_baud = 300;  // Boshlang'ich: 300 baud
+#elif defined(SENSOR_WATER)
+  // Kelajakda:
+  // #include "sensors/water.h"
+  #error "SENSOR_WATER hali tayyor emas. sensors/water.h faylini yarating."
 
-// ── RS-485 boshqarish ─────────────────────────────────────────────────────────
-inline void rs485_tx() {
-  digitalWrite(PIN_DE_RE, HIGH);
-  delayMicroseconds(200);
+#else
+  #error "Build flag kerak: -DSENSOR_ELECTRICITY yoki -DSENSOR_WATER"
+#endif
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// App konstantalar
+// ═══════════════════════════════════════════════════════════════════════════════
+#define WIFI_AP_NAME      "MeterSetup"
+#define WIFI_AP_PASS      "meter1234"
+#define READ_INTERVAL_MS  30000UL   // Har 30s da o'qish
+#define CMD_POLL_MS       60000UL   // Har 60s da command poll
+#define HEALTH_CHECK_MS   60000UL   // Har 60s da server check
+#define OFFLINE_BUF_SIZE  50        // Offline buffer hajmi
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// App state
+// ═══════════════════════════════════════════════════════════════════════════════
+static char  device_id[20] = "";
+static bool  registered    = false;
+static bool  server_ok     = false;
+static int   pending_relay = 0;   // 0=yo'q, 1=relay_off, 2=relay_on
+
+static unsigned long last_read_ms   = 0;
+static unsigned long last_cmd_ms    = 0;
+static unsigned long last_health_ms = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Offline buffer (JSON stringlar)
+// Server o'chiq bo'lganda o'qishlarni vaqtincha saqlash
+// ═══════════════════════════════════════════════════════════════════════════════
+static String off_buf[OFFLINE_BUF_SIZE];
+static int    off_head  = 0;
+static int    off_count = 0;
+
+static void buf_push(const String& json) {
+    off_buf[off_head] = json;
+    off_head = (off_head + 1) % OFFLINE_BUF_SIZE;
+    if (off_count < OFFLINE_BUF_SIZE) off_count++;
+    else Serial.println("Buffer to'ldi — eng eski o'qish o'chirildi");
 }
-inline void rs485_rx() {
-  Serial2.flush();                              // TX tamom bo'lguncha kut
-  // 1 char vaqti + margin: 300 baud=33ms, 1200=8ms, 9600=1ms
-  uint32_t char_us = 10000000UL / current_rs485_baud + 500;
-  delayMicroseconds(char_us);
-  digitalWrite(PIN_DE_RE, LOW);
+
+static void buf_flush() {
+    if (off_count == 0 || !server_ok) return;
+    Serial.printf("Buffer: %d ta o'qish yuborilmoqda\n", off_count);
+    int start = (off_head - off_count + OFFLINE_BUF_SIZE) % OFFLINE_BUF_SIZE;
+    int sent = 0;
+    for (int i = 0; i < off_count; i++) {
+        if (!http_post("/api/readings", off_buf[(start + i) % OFFLINE_BUF_SIZE]))
+            break;
+        sent++;
+        delay(50);
+    }
+    off_count -= sent;
+    if (off_count < 0) off_count = 0;
+    if (sent > 0) Serial.printf("Buffer: %d ta yuborildi\n", sent);
 }
 
-void rs485_set_baud(uint32_t baud) {
-  current_rs485_baud = baud;
-  Serial2.end();
-  delay(10);
-  Serial2.begin(baud, SERIAL_8N1, PIN_RX485, PIN_TX485);
-  delay(10);
+// ═══════════════════════════════════════════════════════════════════════════════
+// Registratsiya yordamchi
+// ═══════════════════════════════════════════════════════════════════════════════
+static bool do_register() {
+    return app_register(
+        device_id,
+        "electricity",               // utility_type
+        g_sensor_meta.sensor_type,   // meter_type: "te71" | "te73"
+        g_sensor_meta.meter_serial,
+        FW_VERSION,
+        g_sensor_meta.meter_baud
+    );
 }
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Setup
+// ═══════════════════════════════════════════════════════════════════════════════
 void setup() {
-  pinMode(PIN_DE_RE, OUTPUT);
-  rs485_rx();
+    Serial.begin(115200);
+    delay(200);
 
-  Serial.begin(BAUD_USB);
-  // Boshlash: 300 baud 8N1 (IEC sign-on uchun)
-  Serial2.begin(300, SERIAL_8N1, PIN_RX485, PIN_TX485);
+    // Device ID = WiFi MAC
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(device_id, sizeof(device_id), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-  delay(200);
-  Serial.println(F("\r\n=== CE303 Smart Bridge ==="));
-  Serial.println(F("USB: 9600 8N1 | RS485: 300 7E1 (boshlang'ich)"));
-  Serial.println(F("Buyruqlar: ~B300~ ~B9600~ ~B4800~ ~BAUD?~"));
-  Serial.println(F("=========================="));
-}
+    Serial.println();
+    Serial.println("╔══════════════════════════════════════╗");
+    Serial.println("║      Meter Monitor v" FW_VERSION "          ║");
+    Serial.println("╚══════════════════════════════════════╝");
+    Serial.printf("Qurilma ID : %s\n", device_id);
 
-// ── Maxsus buyruq tekshirish: ~Bxxxx~ ─────────────────────────────────────────
-// buf ichida ~B...~ pattern qidiramiz
-bool check_cmd(uint8_t* buf, size_t len, uint32_t* new_baud, bool* query) {
-  // Minimal: ~B3~ = 4 bytes
-  for (size_t i = 0; i + 2 < len; i++) {
-    if (buf[i] == '~' && buf[i+1] == 'B') {
-      // '?' query
-      if (i+3 < len && buf[i+2] == 'A' && buf[i+3] == 'U') {
-        // ~BAUD?~
-        *query = true;
-        return true;
-      }
-      // Raqam: ~B300~ yoki ~B9600~ ...
-      uint32_t val = 0;
-      size_t j = i + 2;
-      while (j < len && buf[j] >= '0' && buf[j] <= '9') {
-        val = val * 10 + (buf[j] - '0');
-        j++;
-      }
-      if (j < len && buf[j] == '~' && val > 0) {
-        *new_baud = val;
-        return true;
-      }
+    // NVS dan config yuklash
+    cfg_load();
+    Serial.printf("Server     : %s\n", g_cfg.server_url);
+    Serial.printf("Token      : %s\n",
+        g_cfg.device_token[0] ? "✓ sozlangan" : "✗ YO'Q — WiFiManager da kiriting!");
+
+    // BOOT tugmasi (GPIO0) uzoq bosilsa → WiFi sozlamalarini o'chirish
+    pinMode(0, INPUT_PULLUP);
+    if (digitalRead(0) == LOW) {
+        delay(3000);
+        if (digitalRead(0) == LOW) {
+            Serial.println("[BOOT] WiFi sozlamalari o'chirilmoqda...");
+            WiFiManager wm;
+            wm.resetSettings();
+            Serial.println("[BOOT] Qayta ishga tushirilmoqda...");
+            ESP.restart();
+        }
     }
-  }
-  return false;
+
+    // WiFi: avval tez ulanish, keyin WiFiManager
+    // NVS dagi seriya raqamini WiFiManager sahifasida ko'rsatamiz
+    wifi_quick("12", "12345678");
+    wifi_setup(WIFI_AP_NAME, WIFI_AP_PASS,
+               device_id, g_cfg.meter_serial);
+
+    // Server tekshirish + OTA
+    server_ok = server_check();
+    if (server_ok) ota_check(device_id, FW_VERSION);
+
+    // ── RS-485 sensor ulanish ──────────────────────────────────────────────
+    sensor_init();
+    Serial.println("WiFi → pause (RS-485 o'qish)");
+    wifi_pause();
+
+    Serial.println("Hisoblagichga ulanilmoqda...");
+    bool meter_found = false;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        if (sensor_connect()) {
+            Serial.printf("  Ulandi! Baud: %d\n", g_sensor_meta.meter_baud);
+            // Seriya raqamini o'qish
+            dlms_get_string(1, OBIS_SERIAL, 2,
+                            g_sensor_meta.meter_serial,
+                            sizeof(g_sensor_meta.meter_serial));
+            Serial.printf("  Seriya: %s\n", g_sensor_meta.meter_serial);
+            // TE71/TE73 auto-detect
+            sensor_detect_type();
+            meter_found = true;
+            // Seriya raqamini NVS ga saqlaymiz (keyingi WiFiManager da ko'rsatish uchun)
+            cfg_save_meter_serial(g_sensor_meta.meter_serial);
+            break;
+        }
+        Serial.printf("  Urinish %d/3 — muvaffaqiyatsiz\n", attempt);
+        delay(500);
+    }
+    if (!meter_found) {
+        Serial.println("Diqqat: hisoblagich topilmadi! Offline rejimda davom etiladi.");
+    }
+
+    // WiFi qayta yoqish
+    Serial.println("WiFi → resume");
+    wifi_resume();
+
+    server_ok = server_check();
+    if (server_ok) {
+        registered = do_register();
+        buf_flush();
+    }
+
+    // ── Foydalanuvchi uchun qo'llanma ────────────────────────────────────────
+    Serial.println();
+    Serial.println("┌─────────────────────────────────────────────┐");
+    Serial.println("│  Dashboard da qurilmangizni topish uchun:   │");
+    Serial.printf( "│  Qurilma ID : %-30s│\n", device_id);
+    Serial.printf( "│  Hisoblagich: %-30s│\n",
+        g_sensor_meta.meter_serial[0] ? g_sensor_meta.meter_serial : "topilmadi");
+    Serial.printf( "│  Tur        : %-30s│\n",
+        g_sensor_meta.sensor_type[0]  ? g_sensor_meta.sensor_type  : "aniqlanmadi");
+    Serial.println("│  Server: http://67.205.171.93               │");
+    Serial.println("└─────────────────────────────────────────────┘");
+
+    Serial.println("Tayyor!\n");
 }
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Loop
+// ═══════════════════════════════════════════════════════════════════════════════
 void loop() {
-  static uint8_t  usb_buf[BUF_SIZE];
-  static size_t   usb_len  = 0;
-  static uint32_t last_usb = 0;
+    unsigned long now = millis();
+    bool meter_time = (now - last_read_ms >= READ_INTERVAL_MS || last_read_ms == 0);
 
-  // ── RS-485 → USB: har doim forward ───────────────────────────────────────
-  while (Serial2.available()) {
-    Serial.write(Serial2.read());
-  }
-
-  // ── USB baytlarni to'plash ────────────────────────────────────────────────
-  while (Serial.available()) {
-    uint8_t b = Serial.read();
-    if (usb_len < BUF_SIZE) usb_buf[usb_len++] = b;
-    last_usb = millis();
-  }
-
-  // 50ms pauza bo'ldi → frame tugagan
-  if (usb_len > 0 && (millis() - last_usb) >= INTER_BYTE) {
-
-    uint32_t new_baud = 0;
-    bool     is_query = false;
-
-    if (check_cmd(usb_buf, usb_len, &new_baud, &is_query)) {
-      // Maxsus buyruq
-      if (is_query) {
-        Serial.printf("BAUD:%u\r\n", current_rs485_baud);
-      } else {
-        rs485_set_baud(new_baud);
-        Serial.printf("OK:BAUD:%u\r\n", new_baud);
-      }
-    } else {
-      // Oddiy ma'lumot → RS-485 ga yuborish
-      rs485_tx();
-      Serial2.write(usb_buf, usb_len);
-      Serial2.flush();
-      rs485_rx();
+    // ── Meter o'qish vaqti emas: WiFi saqlab turish ──────────────────────────
+    if (!meter_time && WiFi.status() != WL_CONNECTED) {
+        WiFi.reconnect();
+        delay(1000);
+        return;
     }
 
-    usb_len = 0;
-  }
+    // ── Server health check (har 60s, meter o'qishdan tashqarida) ───────────
+    if (!meter_time && now - last_health_ms >= HEALTH_CHECK_MS) {
+        last_health_ms = now;
+        bool prev = server_ok;
+        server_ok = server_check();
+        if (server_ok && !prev) {
+            Serial.println("Server qaytdi!");
+            if (!registered) registered = do_register();
+            buf_flush();
+            ota_check(device_id, FW_VERSION);
+        }
+    }
+
+    // ── Har 30s da meter o'qish ──────────────────────────────────────────────
+    if (meter_time) {
+        last_read_ms = now;
+
+        // WiFi radio o'chirish (RF → RS-485 parity xato qiladi)
+        wifi_pause();
+
+        // DLMS ulanish (yo'q bo'lsa)
+        if (!dlms_connected) {
+            Serial.print("Ulanilmoqda...");
+            if (!sensor_connect()) {
+                Serial.println(" XATO!");
+                wifi_resume();
+                return;
+            }
+            Serial.println(" OK");
+            // Serial va type birinchi marta aniqlanmagan bo'lsa
+            if (!g_sensor_meta.meter_serial[0])
+                dlms_get_string(1, OBIS_SERIAL, 2,
+                                g_sensor_meta.meter_serial,
+                                sizeof(g_sensor_meta.meter_serial));
+            if (!g_sensor_meta.sensor_type[0])
+                sensor_detect_type();
+        }
+
+        // Relay buyrug'i — DLMS session ichida bajarish
+        if (pending_relay) {
+            bool ok = sensor_relay(pending_relay);
+            Serial.printf("Relay %s: %s\n",
+                pending_relay == 2 ? "ON" : "OFF",
+                ok ? "OK" : "XATO");
+            pending_relay = 0;
+        }
+
+        // Ma'lumotlarni o'qish
+        SensorData d;
+        bool read_ok = sensor_read(d);
+
+        // WiFi qaytarish
+        bool wifi_ok = wifi_resume();
+
+        // ── Serial monitor ──────────────────────────────────────────────────
+        Serial.println("---");
+        if (strcmp(d.sensor_type, "te73") == 0) {
+            Serial.printf("V: L1=%.2f  L2=%.2f  L3=%.2f V\n",
+                isnan(d.voltage_l1) ? 0 : d.voltage_l1,
+                isnan(d.voltage_l2) ? 0 : d.voltage_l2,
+                isnan(d.voltage_l3) ? 0 : d.voltage_l3);
+            Serial.printf("I: L1=%.3f  L2=%.3f  L3=%.3f A\n",
+                isnan(d.current_l1) ? 0 : d.current_l1,
+                isnan(d.current_l2) ? 0 : d.current_l2,
+                isnan(d.current_l3) ? 0 : d.current_l3);
+        } else {
+            Serial.printf("V=%.2f V  I=%.3f A\n",
+                isnan(d.voltage_l1) ? 0 : d.voltage_l1,
+                isnan(d.current_l1) ? 0 : d.current_l1);
+        }
+        Serial.printf("P=%.0f W  F=%.2f Hz  E=%.3f kWh  PF=%.3f\n",
+            isnan(d.power_w)     ? 0 : d.power_w,
+            isnan(d.frequency)   ? 0 : d.frequency,
+            isnan(d.energy_kwh)  ? 0 : d.energy_kwh,
+            isnan(d.pf)          ? 0 : d.pf);
+
+        if (!read_ok) {
+            Serial.println("O'qish xato — DLMS qayta ulanadi");
+            dlms_disconnect();
+            last_health_ms = millis();
+            return;
+        }
+
+        // ── Serverga yuborish ──────────────────────────────────────────────
+        String json = sensor_build_json(device_id, FW_VERSION, d);
+
+        if (wifi_ok) {
+            server_ok = server_check();
+            if (server_ok) {
+                if (!registered) registered = do_register();
+                buf_flush();
+                if (!http_post("/api/readings", json)) {
+                    server_ok = false;
+                    buf_push(json);
+                    Serial.printf("Yuborilmadi → buffer: %d/%d\n",
+                        off_count, OFFLINE_BUF_SIZE);
+                }
+            } else {
+                buf_push(json);
+                Serial.printf("Server xato → buffer: %d/%d\n",
+                    off_count, OFFLINE_BUF_SIZE);
+            }
+        } else {
+            buf_push(json);
+            Serial.printf("WiFi yo'q → buffer: %d/%d\n",
+                off_count, OFFLINE_BUF_SIZE);
+        }
+
+        last_health_ms = millis();
+    }
+
+    // ── Command poll + status (har 60s) ──────────────────────────────────────
+    if (server_ok && WiFi.status() == WL_CONNECTED &&
+        now - last_cmd_ms >= CMD_POLL_MS) {
+        last_cmd_ms = now;
+        app_poll_commands(device_id, &pending_relay);
+        app_send_status(device_id, FW_VERSION);
+    }
 }
