@@ -552,6 +552,8 @@ async def process_due_ota_batches_once(limit_per_batch: int | None = None) -> di
             processed.append(await process_ota_batch(batch_id, limit_per_batch))
         except HTTPException as exc:
             errors.append({"batch_id": batch_id, "error": exc.detail})
+        except Exception as exc:
+            errors.append({"batch_id": batch_id, "error": str(exc)})
     return {"ok": not errors, "batches": len(batch_ids), "processed": processed, "errors": errors}
 
 

@@ -118,7 +118,7 @@ async def list_building_utilities(building_id: int) -> dict:
 
 
 async def update_building_utility(building_id: int, utility_id: int, body: BuildingUtilityUpdate) -> dict:
-    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
@@ -367,7 +367,7 @@ async def get_measurement_point(point_id: int) -> dict:
 
 
 async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) -> dict:
-    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
