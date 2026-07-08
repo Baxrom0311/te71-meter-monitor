@@ -8,6 +8,7 @@ import {
   AlertRule,
   EnergyAnalytics,
   AuditLog,
+  AuditLogListResponse,
   User,
   Reading,
   DeviceHistoryResponse,
@@ -179,15 +180,20 @@ export function useUsers(): UseQueryResult<User[]> {
 }
 
 // Audit Logs (Admin)
-export function useAuditLogs(limit?: number, offset?: number): UseQueryResult<AuditLog[]> {
+export function useAuditLogs(
+  limit = 100,
+  page = 1,
+  filters?: { action?: string; entity_type?: string; username?: string },
+): UseQueryResult<AuditLogListResponse> {
   return useQuery({
-    queryKey: ['audit-logs', limit, offset],
+    queryKey: ['audit-logs', limit, page, filters],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (limit) params.append('limit', limit.toString())
-      if (offset) params.append('offset', offset.toString())
+      const params = new URLSearchParams({ limit: limit.toString(), page: page.toString() })
+      if (filters?.action) params.append('action', filters.action)
+      if (filters?.entity_type) params.append('entity_type', filters.entity_type)
+      if (filters?.username) params.append('username', filters.username)
       const { data } = await apiClient.get(`/api/audit-logs?${params}`)
-      return data.logs ?? data.audit_logs ?? data
+      return data as AuditLogListResponse
     },
   })
 }

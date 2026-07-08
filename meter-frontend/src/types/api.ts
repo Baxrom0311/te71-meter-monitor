@@ -42,13 +42,17 @@ export interface Device {
   utility_type: string
   device_role: string | null
   firmware_mode: string
-  meter_type: string
+  meter_type: string | null
   meter_serial: string | null
   software_version: string | null
   chip_model: string | null
   rssi: number | null
   ip: string | null
   fw_version: string | null
+  building: string | null
+  floor: string | null
+  room: string | null
+  group_name: string | null
   is_active: boolean
   last_seen: number | null  // Unix timestamp seconds
   registered: number | null
@@ -88,6 +92,7 @@ export interface Alert {
   id: number
   device_id: string
   building_id: number | null
+  point_id: number | null
   utility_type: string
   severity: 'info' | 'warning' | 'critical'
   kind: string
@@ -194,6 +199,13 @@ export interface AuditLog {
   entity_type: string | null
   entity_id: string | null
   detail: string | null
+}
+
+export interface AuditLogListResponse {
+  audit_logs: AuditLog[]
+  total: number
+  page: number
+  pages: number
 }
 
 // Firmware
