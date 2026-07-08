@@ -157,6 +157,33 @@ export interface EnergyAnalytics {
   data: EnergyPoint[]
 }
 
+export interface HourlyUtilityStat {
+  id: number
+  bucket_ts: number
+  building_id: number | null
+  point_id: number | null
+  device_id: string
+  utility_type: string
+  samples: number
+  avg_voltage_l1: number | null
+  avg_power_w: number | null
+  max_energy_kwh: number | null
+  avg_pressure_bar: number | null
+  avg_pressure_bottom_bar: number | null
+  avg_pressure_top_bar: number | null
+  avg_flow_rate: number | null
+  max_volume_m3: number | null
+  leak_count: number | null
+  created_at: number | null
+  updated_at: number | null
+}
+
+export interface HourlyUtilityStatsResponse {
+  stats: HourlyUtilityStat[]
+  hours: number
+  total: number
+}
+
 // Audit Log
 export interface AuditLog {
   id: number

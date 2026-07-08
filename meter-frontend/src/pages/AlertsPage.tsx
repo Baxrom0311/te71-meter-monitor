@@ -8,9 +8,16 @@ import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
 import clsx from 'clsx'
-import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
-import { notifySuccess } from '@/lib/toast'
+import { notifyError, notifySuccess } from '@/lib/toast'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { TableSkeleton } from '@/components/Skeleton'
+import { AlertRule } from '@/types/api'
+
+type AlertConfirmAction =
+  | { type: 'clear-all' }
+  | { type: 'delete-rule'; id: number }
 
 export default function AlertsPage() {
   const { data: alerts, isLoading: alertsLoading, isError: alertsError, error: alertsQueryError, refetch: refetchAlerts } = useAlerts()
@@ -23,6 +30,7 @@ export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState<'history' | 'rules'>('history')
 
   const [clearing, setClearing] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<AlertConfirmAction | null>(null)
 
   // Rule Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -44,11 +52,11 @@ export default function AlertsPage() {
       notifySuccess('Ogohlantirish tozalandi')
     } catch (err) {
       console.error('Error clearing alert:', err)
+      notifyError('Ogohlantirish tozalanmadi', getApiErrorMessage(err))
     }
   }
 
   const handleClearAll = async () => {
-    if (!confirm('Haqiqatdan ham barcha ogohlantirishlarni o\'chirmoqchisiz?')) return
     setClearing(true)
     try {
       await apiClient.post('/api/alerts/clear-all')
@@ -56,8 +64,10 @@ export default function AlertsPage() {
       notifySuccess('Ogohlantirishlar tozalandi')
     } catch (err) {
       console.error('Error clearing all alerts:', err)
+      notifyError('Ogohlantirishlar tozalanmadi', getApiErrorMessage(err))
     } finally {
       setClearing(false)
+      setConfirmAction(null)
     }
   }
 
@@ -99,17 +109,19 @@ export default function AlertsPage() {
   }
 
   const handleDeleteRule = async (id: number) => {
-    if (!confirm('Haqiqatdan ham ushbu qoidani o\'chirmoqchisiz?')) return
     try {
       await apiClient.delete(`/api/alert-rules/${id}`)
       queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
       notifySuccess('Qoida o‘chirildi')
     } catch (err) {
       console.error('Error deleting rule:', err)
+      notifyError('Qoida o‘chirilmadi', getApiErrorMessage(err))
+    } finally {
+      setConfirmAction(null)
     }
   }
 
-  const handleToggleRule = async (rule: any) => {
+  const handleToggleRule = async (rule: AlertRule) => {
     try {
       await apiClient.put(`/api/alert-rules/${rule.id}`, {
         ...rule,
@@ -119,6 +131,7 @@ export default function AlertsPage() {
       notifySuccess(rule.enabled ? 'Qoida o‘chirildi' : 'Qoida yoqildi')
     } catch (err) {
       console.error('Error toggling rule status:', err)
+      notifyError('Qoida yangilanmadi', getApiErrorMessage(err))
     }
   }
 
@@ -136,7 +149,7 @@ export default function AlertsPage() {
           <div className="flex items-center gap-3">
             {activeTab === 'history' && isAdmin && activeAlertsCount > 0 && (
               <button
-                onClick={handleClearAll}
+                onClick={() => setConfirmAction({ type: 'clear-all' })}
                 disabled={clearing}
                 className="flex items-center gap-2 px-4 py-2 bg-red-650 hover:bg-red-750 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow"
               >
@@ -186,12 +199,12 @@ export default function AlertsPage() {
         {activeTab === 'history' ? (
           /* Alerts History Log */
           alertsLoading ? (
-            <LoadingBlock title="Ogohlantirishlar yuklanmoqda" />
+            <TableSkeleton rows={6} />
           ) : alertsError ? (
             <ErrorBlock message={getApiErrorMessage(alertsQueryError)} onRetry={() => refetchAlerts()} />
           ) : alerts && alerts.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
-              <div className="overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -276,6 +289,46 @@ export default function AlertsPage() {
                   </tbody>
                 </table>
               </div>
+              <div className="md:hidden mobile-card-list p-3">
+                {alerts.map((alert) => (
+                  <div key={alert.id} className="mobile-data-card">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{alert.kind}</p>
+                        <p className="text-xs text-gray-500 mt-1">{alert.message ?? '—'}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 px-2 py-1 rounded-full text-[11px] font-bold ${
+                          alert.severity === 'critical'
+                            ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                            : alert.severity === 'warning'
+                              ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
+                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        }`}
+                      >
+                        {alert.severity}
+                      </span>
+                    </div>
+                    <div className="mobile-data-row">
+                      <span className="mobile-data-label">{translations.alerts.timestamp}</span>
+                      <span className="mobile-data-value">{formatDistanceToNow(new Date(alert.ts * 1000), { addSuffix: true })}</span>
+                    </div>
+                    <div className="mobile-data-row">
+                      <span className="mobile-data-label">{translations.alerts.status}</span>
+                      <span className="mobile-data-value">{alert.cleared ? translations.alerts.cleared : translations.alerts.open}</span>
+                    </div>
+                    {isAdmin && !alert.cleared && (
+                      <button
+                        onClick={() => handleClearAlert(alert.id)}
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 transition"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Tozalash
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <EmptyBlock title={translations.common.noData} message="Hozircha ogohlantirishlar mavjud emas." />
@@ -283,12 +336,12 @@ export default function AlertsPage() {
         ) : (
           /* Alert Rules Tab */
           rulesLoading ? (
-            <LoadingBlock title="Qoidalar yuklanmoqda" />
+            <TableSkeleton rows={6} />
           ) : rulesError ? (
             <ErrorBlock message={getApiErrorMessage(rulesQueryError)} onRetry={() => refetchRules()} />
           ) : alertRules && alertRules.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
-              <div className="overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -346,7 +399,7 @@ export default function AlertsPage() {
                           {isAdmin && (
                             <td className="px-6 py-3.5 text-right">
                               <button
-                                onClick={() => handleDeleteRule(rule.id)}
+                                onClick={() => setConfirmAction({ type: 'delete-rule', id: rule.id })}
                                 className="p-1.5 bg-red-500/10 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white rounded transition shadow-sm border border-red-500/20"
                               >
                                 <Trash2 className="w-4.5 h-4.5" />
@@ -358,6 +411,62 @@ export default function AlertsPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+              <div className="md:hidden mobile-card-list p-3">
+                {alertRules.map((rule) => {
+                  const building = buildings?.find(b => b.id === rule.building_id)
+                  return (
+                    <div key={rule.id} className="mobile-data-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{rule.kind}</p>
+                          <p className="text-xs text-gray-500">{building ? building.name : 'Barcha binolar'}</p>
+                        </div>
+                        <button
+                          onClick={() => isAdmin && handleToggleRule(rule)}
+                          disabled={!isAdmin}
+                          className="shrink-0"
+                        >
+                          {rule.enabled ? (
+                            <ToggleRight className="w-6 h-6 text-green-500" />
+                          ) : (
+                            <ToggleLeft className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">Datchik</span>
+                        <span className="mobile-data-value">
+                          {rule.utility_type
+                            ? (translations.deviceTypes[rule.utility_type as keyof typeof translations.deviceTypes] || rule.utility_type)
+                            : 'Barchasi'}
+                        </span>
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">Chegara</span>
+                        <span className="mobile-data-value font-mono">
+                          {rule.min_value !== null ? `>= ${rule.min_value}` : ''}
+                          {rule.min_value !== null && rule.max_value !== null ? ' va ' : ''}
+                          {rule.max_value !== null ? `<= ${rule.max_value}` : ''}
+                          {rule.min_value === null && rule.max_value === null ? '—' : ''}
+                        </span>
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">Daraja</span>
+                        <span className="mobile-data-value">{rule.severity}</span>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => setConfirmAction({ type: 'delete-rule', id: rule.id })}
+                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          O‘chirish
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ) : (
@@ -516,6 +625,23 @@ export default function AlertsPage() {
             </div>
           </div>
         )}
+        <ConfirmDialog
+          open={confirmAction !== null}
+          title={confirmAction?.type === 'clear-all' ? 'Barcha ogohlantirishlarni tozalash' : 'Qoidani o‘chirish'}
+          message={
+            confirmAction?.type === 'clear-all'
+              ? 'Barcha ochiq ogohlantirishlar tozalanadi. Amalni davom ettirasizmi?'
+              : 'Bu chegara qoidasi o‘chiriladi. Keyingi o‘lchovlarda bu qoida ishlamaydi.'
+          }
+          confirmLabel={confirmAction?.type === 'clear-all' ? 'Barchasini tozalash' : 'O‘chirish'}
+          tone="danger"
+          pending={clearing}
+          onConfirm={() => {
+            if (confirmAction?.type === 'clear-all') handleClearAll()
+            if (confirmAction?.type === 'delete-rule') handleDeleteRule(confirmAction.id)
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
       </div>
     </RootLayout>
   )

@@ -6,9 +6,11 @@ import { translations } from '@/i18n/translations'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
-import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
-import { notify, notifySuccess } from '@/lib/toast'
+import { notify, notifyError, notifySuccess } from '@/lib/toast'
+import { TableSkeleton } from '@/components/Skeleton'
+import { User } from '@/types/api'
 
 export default function UsersPage() {
   const { data: users, isLoading, isError, error: queryError, refetch } = useUsers()
@@ -59,7 +61,7 @@ export default function UsersPage() {
     }
   }
 
-  const handleToggleActive = async (targetUser: any) => {
+  const handleToggleActive = async (targetUser: User) => {
     if (targetUser.id === currentUser?.id) {
       notify({ type: 'warning', title: 'Amal bajarilmadi', message: 'O‘zingizning faollik holatingizni o‘zgartira olmaysiz.' })
       return
@@ -74,10 +76,11 @@ export default function UsersPage() {
       notifySuccess('Foydalanuvchi yangilandi')
     } catch (err) {
       console.error('Error toggling user status:', err)
+      notifyError('Foydalanuvchi yangilanmadi', getApiErrorMessage(err))
     }
   }
 
-  const openEditModal = (targetUser: any) => {
+  const openEditModal = (targetUser: User) => {
     setEditUserId(targetUser.id)
     setEditRole(targetUser.role)
     setEditIsActive(targetUser.is_active)
@@ -131,12 +134,12 @@ export default function UsersPage() {
 
         {/* Users Table */}
         {isLoading ? (
-          <LoadingBlock title="Foydalanuvchilar yuklanmoqda" />
+          <TableSkeleton rows={6} />
         ) : isError ? (
           <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : users && users.length > 0 ? (
           <div className="glass-card rounded-xl overflow-hidden shadow-lg">
-            <div className="overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-600 dark:text-gray-400">
@@ -205,6 +208,51 @@ export default function UsersPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="md:hidden mobile-card-list p-3">
+              {users.map((u) => (
+                <div key={u.id} className="mobile-data-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-950 dark:text-gray-100 truncate">
+                        {u.username}
+                        {u.id === currentUser?.id && (
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-full font-semibold">Siz</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500">ID: {u.id}</p>
+                    </div>
+                    <span className={`shrink-0 px-2 py-1 text-[11px] font-bold rounded-full ${
+                      u.is_active ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-550 dark:text-red-400'
+                    }`}>
+                      {u.is_active ? translations.users.active : translations.users.inactive}
+                    </span>
+                  </div>
+                  <div className="mobile-data-row">
+                    <span className="mobile-data-label">{translations.users.role}</span>
+                    <span className="mobile-data-value">{u.role === 'admin' ? translations.users.admin : translations.users.user}</span>
+                  </div>
+                  {isAdmin && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleToggleActive(u)}
+                        disabled={u.id === currentUser?.id}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-750 transition"
+                      >
+                        {u.is_active ? <ToggleRight className="w-4 h-4 text-green-500" /> : <ToggleLeft className="w-4 h-4 text-gray-500" />}
+                        Status
+                      </button>
+                      <button
+                        onClick={() => openEditModal(u)}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 transition"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Tahrirlash
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         ) : (

@@ -13,6 +13,7 @@ import {
   DeviceHistoryResponse,
   OtaBatch,
   BuildingsEnergySummaryResponse,
+  HourlyUtilityStatsResponse,
 } from '@/types/api'
 
 // Summary
@@ -32,6 +33,26 @@ export function useEnergySummary(days = 30): UseQueryResult<BuildingsEnergySumma
     queryKey: ['energy-summary', days],
     queryFn: async () => {
       const { data } = await apiClient.get(`/api/analytics/energy/summary?days=${days}`)
+      return data
+    },
+  })
+}
+
+export function useHourlyStats(
+  hours = 24,
+  buildingId?: number,
+  utilityType?: string,
+): UseQueryResult<HourlyUtilityStatsResponse> {
+  return useQuery({
+    queryKey: ['hourly-stats', hours, buildingId, utilityType],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        hours: hours.toString(),
+        limit: '1000',
+        ...(buildingId && { building_id: buildingId.toString() }),
+        ...(utilityType && utilityType !== 'all' && { utility_type: utilityType }),
+      })
+      const { data } = await apiClient.get(`/api/analytics/hourly?${params}`)
       return data
     },
   })
