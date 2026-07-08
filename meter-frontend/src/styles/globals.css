@@ -418,6 +418,52 @@
     background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.7), rgba(16, 185, 129, 0.45), transparent);
   }
 
+  @keyframes toastIn {
+    0% {
+      opacity: 0;
+      transform: translate3d(18px, -8px, 0) scale(0.97);
+      filter: blur(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  .animate-toast-in {
+    animation: toastIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .toast-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .toast-card::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.8), rgba(16, 185, 129, 0.5), transparent);
+  }
+
+  .state-block {
+    min-height: 9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9rem;
+    padding: 2rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    text-align: left;
+  }
+
   @keyframes aurora {
     0%, 100% {
       opacity: 0.45;
@@ -613,6 +659,90 @@
   .bg-signal-column {
     background: linear-gradient(180deg, transparent, rgba(59, 130, 246, 0.8), rgba(16, 185, 129, 0.5), transparent);
     box-shadow: 0 0 24px rgba(59, 130, 246, 0.24);
+  }
+
+  @keyframes skeletonShimmer {
+    0% {
+      background-position: 160% 0;
+    }
+    100% {
+      background-position: -160% 0;
+    }
+  }
+
+  .skeleton {
+    border-radius: 0.6rem;
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.16) 45%, rgba(148, 163, 184, 0.30) 52%, rgba(148, 163, 184, 0.16) 60%, transparent 100%),
+      color-mix(in srgb, var(--bg-secondary) 78%, rgba(148, 163, 184, 0.14));
+    background-size: 220% 100%, 100% 100%;
+    animation: skeletonShimmer 1.45s ease-in-out infinite;
+  }
+
+  .mobile-card-list {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .mobile-data-card {
+    background-color: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    padding: 0.9rem;
+    box-shadow: 0 12px 30px rgba(2, 6, 23, 0.10);
+  }
+
+  .mobile-data-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.65rem;
+    margin-top: 0.65rem;
+    border-top: 1px solid var(--border-primary);
+    font-size: 0.78rem;
+  }
+
+  .mobile-data-label {
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+  }
+
+  .mobile-data-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    text-align: right;
+    word-break: break-word;
+  }
+
+  .map-preview-grid {
+    background:
+      radial-gradient(circle at 24% 26%, rgba(59, 130, 246, 0.16), transparent 18%),
+      radial-gradient(circle at 72% 68%, rgba(16, 185, 129, 0.16), transparent 20%),
+      linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+      color-mix(in srgb, var(--bg-secondary) 88%, rgba(15, 23, 42, 0.20));
+    background-size: auto, auto, 36px 36px, 36px 36px, auto;
+  }
+
+  .map-preview-roads {
+    background:
+      linear-gradient(28deg, transparent 0 44%, rgba(59, 130, 246, 0.18) 44.4%, rgba(59, 130, 246, 0.18) 45.2%, transparent 45.6%),
+      linear-gradient(132deg, transparent 0 54%, rgba(16, 185, 129, 0.16) 54.4%, rgba(16, 185, 129, 0.16) 55.4%, transparent 55.8%),
+      linear-gradient(90deg, transparent 0 30%, rgba(148, 163, 184, 0.12) 30.4%, rgba(148, 163, 184, 0.12) 31%, transparent 31.4%);
+    mask-image: linear-gradient(180deg, transparent, black 10%, black 92%, transparent);
+  }
+
+  @media (max-width: 640px) {
+    .chart-panel {
+      padding: 1rem !important;
+    }
+
+    .chart-panel .recharts-wrapper,
+    .chart-panel .recharts-surface {
+      font-size: 0.72rem;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

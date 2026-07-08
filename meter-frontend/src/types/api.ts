@@ -76,6 +76,13 @@ export interface Reading {
   energy_kwh: number | null
 }
 
+export interface DeviceHistoryResponse {
+  device_id?: string
+  hours?: number
+  total?: number
+  readings: Reading[]
+}
+
 // Alert
 export interface Alert {
   id: number
@@ -89,6 +96,21 @@ export interface Alert {
   cleared: boolean
   ts: number
   cleared_at: number | null
+}
+
+export interface AlertRule {
+  id: number
+  kind: string
+  utility_type: string | null
+  building_id: number | null
+  min_value: number | null
+  max_value: number | null
+  severity: 'info' | 'warning' | 'critical' | string
+  message: string | null
+  dedupe_sec: number
+  enabled: boolean
+  created_at?: number | null
+  updated_at?: number | null
 }
 
 // Summary — real /api/summary response

@@ -12,21 +12,24 @@ import { translations } from '@/i18n/translations'
 import { Device, WebSocketMessage } from '@/types/api'
 import apiClient from '@/lib/api'
 import { chartTheme } from '@/lib/chartTheme'
+import { EmptyBlock } from '@/components/StateBlock'
+import { notifySuccess } from '@/lib/toast'
+import { ChartSkeleton, KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
-  const { data: summary } = useSummary()
+  const { data: summary, isLoading: summaryLoading } = useSummary()
   const { data: devices, isLoading: devicesLoading } = useDevices()
   const { data: buildings } = useBuildings()
-  const { data: energyData } = useEnergyAnalytics('hour',
+  const { data: energyData, isLoading: energyLoading } = useEnergyAnalytics('hour',
     Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000),
     Math.floor(Date.now() / 1000)
   )
   const { data: alerts } = useAlerts(false, 5)
-  const { data: energySummary } = useEnergySummary(30)
+  const { data: energySummary, isLoading: energySummaryLoading } = useEnergySummary(30)
   const wsMessage = useWebSocket()
   const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({})
   const [deviceToAssign, setDeviceToAssign] = useState<Device | null>(null)
@@ -40,6 +43,7 @@ export default function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
       queryClient.invalidateQueries({ queryKey: ['summary'] })
+      notifySuccess('Qurilma biriktirildi')
       setDeviceToAssign(null)
     },
   })
@@ -229,39 +233,46 @@ export default function DashboardPage() {
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard
-            title={translations.kpi.totalDevices}
-            value={summary?.devices_total || 0}
-            icon={<Zap className="w-5 h-5" />}
-            subtitle={`${summary?.devices_online || 0} ${translations.dashboard.online}`}
-            color="primary"
-          />
-          <KPICard
-            title={translations.kpi.totalBuildings}
-            value={summary?.buildings || 0}
-            icon={<Home className="w-5 h-5" />}
-            color="green"
-          />
-          <KPICard
-            title={translations.kpi.activeAlerts}
-            value={summary?.alerts_active || 0}
-            icon={<Bell className="w-5 h-5" />}
-            subtitle={`${0} ${translations.alerts.critical}`}
-            color={summary?.alerts_active && summary.alerts_active > 0 ? 'red' : 'green'}
-          />
-          <KPICard
-            title={translations.kpi.readingsToday}
-            value={summary?.reads_last_hour || 0}
-            icon={<TrendingUp className="w-5 h-5" />}
-            color="yellow"
-          />
-        </div>
+        {summaryLoading ? (
+          <KPISkeletonGrid />
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <KPICard
+              title={translations.kpi.totalDevices}
+              value={summary?.devices_total || 0}
+              icon={<Zap className="w-5 h-5" />}
+              subtitle={`${summary?.devices_online || 0} ${translations.dashboard.online}`}
+              color="primary"
+            />
+            <KPICard
+              title={translations.kpi.totalBuildings}
+              value={summary?.buildings || 0}
+              icon={<Home className="w-5 h-5" />}
+              color="green"
+            />
+            <KPICard
+              title={translations.kpi.activeAlerts}
+              value={summary?.alerts_active || 0}
+              icon={<Bell className="w-5 h-5" />}
+              subtitle={`${0} ${translations.alerts.critical}`}
+              color={summary?.alerts_active && summary.alerts_active > 0 ? 'red' : 'green'}
+            />
+            <KPICard
+              title={translations.kpi.readingsToday}
+              value={summary?.reads_last_hour || 0}
+              icon={<TrendingUp className="w-5 h-5" />}
+              color="yellow"
+            />
+          </div>
+        )}
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Energy Chart */}
-          <div className="glass-card chart-panel rounded-xl p-6 shadow">
+          {energyLoading ? (
+            <ChartSkeleton titleWidth="w-36" />
+          ) : (
+          <div className="glass-card chart-panel rounded-xl p-4 sm:p-6 shadow">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100">{translations.dashboard.energy}</h2>
@@ -269,7 +280,8 @@ export default function DashboardPage() {
               </div>
               <span className="chart-chip">kWh</span>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
+            {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -313,10 +325,17 @@ export default function DashboardPage() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            ) : (
+              <EmptyBlock title="Grafik maʼlumoti yo‘q" message="Oxirgi 24 soat uchun energiya ko‘rsatkichlari topilmadi." />
+            )}
           </div>
+          )}
 
           {/* Building Wise Energy Summary Chart */}
-          <div className="glass-card chart-panel rounded-xl p-6 shadow">
+          {energySummaryLoading ? (
+            <ChartSkeleton titleWidth="w-44" />
+          ) : (
+          <div className="glass-card chart-panel rounded-xl p-4 sm:p-6 shadow">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100">Binolar bo'yicha sarf</h2>
@@ -325,7 +344,7 @@ export default function DashboardPage() {
               <span className="chart-chip">30 kun</span>
             </div>
             {energySummary?.summary && energySummary.summary.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={energySummary.summary} barCategoryGap="26%">
                   <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
                   <XAxis dataKey="building_name" stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} />
@@ -343,11 +362,10 @@ export default function DashboardPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm italic">
-                Tahliliy taqqoslash uchun ma'lumot yetarli emas
-              </div>
+              <EmptyBlock title="Taqqoslash maʼlumoti yo‘q" message="Tahliliy taqqoslash uchun maʼlumot yetarli emas." />
             )}
           </div>
+          )}
         </div>
 
         {/* Devices Table & Alerts Sidebar */}
@@ -358,11 +376,10 @@ export default function DashboardPage() {
               <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100 mb-6">{translations.devices.title}</h2>
 
               {devicesLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                </div>
+                <TableSkeleton rows={5} />
               ) : assignedDevices && assignedDevices.length > 0 ? (
-                <div className="overflow-x-auto">
+                <>
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -414,12 +431,51 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center py-8 gap-2 text-gray-500 dark:text-gray-400 text-sm italic">
-                  {unassignedDevices.length > 0
-                    ? 'Binoga biriktirilgan qurilmalar yo\'q — yuqoridagi qurilmalarni biriktiring'
-                    : translations.common.noData}
+                <div className="sm:hidden mobile-card-list">
+                  {assignedDevices.map((device) => (
+                    <button
+                      key={device.id}
+                      onClick={() => navigate(`/devices/${device.id}`)}
+                      className="mobile-data-card text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{device.name ?? device.id}</p>
+                          <p className="text-xs text-gray-500 font-mono truncate">{device.id}</p>
+                        </div>
+                        <span className={`shrink-0 mt-1 h-2.5 w-2.5 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">{translations.devices.type}</span>
+                        <span className="mobile-data-value">
+                          {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                        </span>
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">{translations.devices.ip}</span>
+                        <span className="mobile-data-value font-mono">{device.ip || '—'}</span>
+                      </div>
+                      <div className="mobile-data-row">
+                        <span className="mobile-data-label">{translations.devices.lastSeen}</span>
+                        <span className="mobile-data-value">
+                          {device.last_seen
+                            ? formatDistanceToNow(new Date(device.last_seen * 1000), { addSuffix: false })
+                            : '—'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
+                </>
+              ) : (
+                <EmptyBlock
+                  title={translations.common.noData}
+                  message={
+                    unassignedDevices.length > 0
+                      ? 'Binoga biriktirilgan qurilmalar yo‘q — yuqoridagi qurilmalarni biriktiring'
+                      : 'Hozircha qurilmalar mavjud emas.'
+                  }
+                />
               )}
             </div>
           </div>

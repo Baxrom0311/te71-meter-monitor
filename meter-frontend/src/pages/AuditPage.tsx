@@ -5,9 +5,11 @@ import { useAuditLogs } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import { Search, Filter, ShieldCheck, UserCheck, Key, Database } from 'lucide-react'
 import clsx from 'clsx'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
 
 export default function AuditPage() {
-  const { data: auditLogs, isLoading } = useAuditLogs()
+  const { data: auditLogs, isLoading, isError, error: queryError, refetch } = useAuditLogs()
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('')
@@ -83,9 +85,9 @@ export default function AuditPage() {
 
         {/* Audit Table */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Audit yozuvlari yuklanmoqda" />
+        ) : isError ? (
+          <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : filteredLogs && filteredLogs.length > 0 ? (
           <div className="glass-card rounded-xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
@@ -131,10 +133,7 @@ export default function AuditPage() {
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-600 dark:text-gray-400 font-medium">{translations.common.noData}</p>
-            <p className="text-gray-500 dark:text-gray-550 text-sm mt-1">Ushbu filtrga mos keluvchi audit yozuvlari topilmadi</p>
-          </div>
+          <EmptyBlock title={translations.common.noData} message="Ushbu filtrga mos keluvchi audit yozuvlari topilmadi" />
         )}
       </div>
     </RootLayout>

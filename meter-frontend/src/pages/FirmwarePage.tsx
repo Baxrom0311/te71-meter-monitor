@@ -7,6 +7,9 @@ import { useDevices, useFirmwareList, useOtaBatches } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import apiClient from '@/lib/api'
 import { Device, Firmware, OtaBatch } from '@/types/api'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
 
 function formatTs(ts: number | null | undefined) {
   if (!ts) return '-'
@@ -21,9 +24,9 @@ function statusClass(status: string) {
 }
 
 export default function FirmwarePage() {
-  const { data: firmwareList = [], isLoading } = useFirmwareList()
+  const { data: firmwareList = [], isLoading, isError, error: firmwareQueryError, refetch: refetchFirmware } = useFirmwareList()
   const { isAdmin } = useAuth()
-  const { data: batches = [], isLoading: batchesLoading } = useOtaBatches(isAdmin)
+  const { data: batches = [], isLoading: batchesLoading, isError: batchesError, error: batchesQueryError, refetch: refetchBatches } = useOtaBatches(isAdmin)
   const { data: devices = [] } = useDevices()
   const queryClient = useQueryClient()
 
@@ -105,8 +108,9 @@ export default function FirmwarePage() {
       await queryClient.invalidateQueries({ queryKey: ['firmware'] })
       setIsUploadOpen(false)
       resetUploadForm()
+      notifySuccess('Firmware yuklandi', `v${version.trim()} katalogga qo‘shildi.`)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Firmware yuklashda xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -147,8 +151,9 @@ export default function FirmwarePage() {
       setSelectedDeviceIds([])
       setDevicesPerHour(100)
       setScheduledAt('')
+      notifySuccess('OTA batch yaratildi')
     } catch (err: any) {
-      setBatchError(err.response?.data?.detail || 'OTA batch yaratishda xatolik yuz berdi')
+      setBatchError(getApiErrorMessage(err))
     } finally {
       setBatchSubmitting(false)
     }
@@ -159,6 +164,7 @@ export default function FirmwarePage() {
     try {
       await apiClient.post(`/api/ota/batches/${batchId}/process`)
       await queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+      notifySuccess('OTA batch ishga tushdi')
     } finally {
       setWorkingBatchId(null)
     }
@@ -169,6 +175,7 @@ export default function FirmwarePage() {
     try {
       await apiClient.post(`/api/ota/batches/${batchId}/cancel`)
       await queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+      notifySuccess('OTA batch bekor qilindi')
     } finally {
       setWorkingBatchId(null)
     }
@@ -207,9 +214,9 @@ export default function FirmwarePage() {
             </div>
 
             {isLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              </div>
+              <LoadingBlock title="Firmware katalogi yuklanmoqda" />
+            ) : isError ? (
+              <ErrorBlock message={getApiErrorMessage(firmwareQueryError)} onRetry={() => refetchFirmware()} />
             ) : firmwareList.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {firmwareList.map((fw: Firmware) => (
@@ -268,10 +275,7 @@ export default function FirmwarePage() {
                 ))}
               </div>
             ) : (
-              <div className="glass-card rounded-xl p-12 text-center shadow">
-                <p className="text-gray-400">{translations.common.noData}</p>
-                <p className="text-gray-500 text-sm mt-1">Hozircha yuklangan firmware fayllari mavjud emas</p>
-              </div>
+              <EmptyBlock title={translations.common.noData} message="Hozircha yuklangan firmware fayllari mavjud emas" />
             )}
           </div>
 
@@ -407,8 +411,12 @@ export default function FirmwarePage() {
           </div>
           <div className="overflow-x-auto">
             {batchesLoading ? (
-              <div className="py-8 flex justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div className="p-5">
+                <LoadingBlock title="OTA batchlar yuklanmoqda" />
+              </div>
+            ) : batchesError ? (
+              <div className="p-5">
+                <ErrorBlock message={getApiErrorMessage(batchesQueryError)} onRetry={() => refetchBatches()} />
               </div>
             ) : batches.length > 0 ? (
               <table className="w-full text-sm">
@@ -477,7 +485,9 @@ export default function FirmwarePage() {
                 </tbody>
               </table>
             ) : (
-              <div className="p-8 text-center text-gray-600 dark:text-gray-400 font-medium">OTA batchlar hali mavjud emas.</div>
+              <div className="p-5">
+                <EmptyBlock title="OTA batchlar mavjud emas" message="Hozircha hech qanday rollout batch yaratilmagan." />
+              </div>
             )}
           </div>
         </section>

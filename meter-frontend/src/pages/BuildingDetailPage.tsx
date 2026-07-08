@@ -8,6 +8,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@/contexts/ThemeContext'
 import apiClient from '@/lib/api'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifyError, notifySuccess } from '@/lib/toast'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 
 export default function BuildingDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -17,8 +20,20 @@ export default function BuildingDetailPage() {
   const queryClient = useQueryClient()
 
   const buildingIdInt = id ? parseInt(id) : 0
-  const { data: building, isLoading: buildingLoading } = useBuildingById(id || '')
-  const { data: devices, isLoading: devicesLoading } = useDevices(100)
+  const {
+    data: building,
+    isLoading: buildingLoading,
+    isError: buildingIsError,
+    error: buildingQueryError,
+    refetch: refetchBuilding,
+  } = useBuildingById(id || '')
+  const {
+    data: devices,
+    isLoading: devicesLoading,
+    isError: devicesIsError,
+    error: devicesQueryError,
+    refetch: refetchDevices,
+  } = useDevices(100)
 
   // Bind Device modal states
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -72,9 +87,10 @@ export default function BuildingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
       setIsModalOpen(false)
       setSelectedDeviceId('')
+      notifySuccess('Qurilma biriktirildi')
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.detail || 'Qurilmani biriktirishda xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setBinding(false)
     }
@@ -93,8 +109,10 @@ export default function BuildingDetailPage() {
         })
       }
       queryClient.invalidateQueries({ queryKey: ['devices'] })
+      notifySuccess('Qurilma binodan uzildi')
     } catch (err) {
       console.error('Error unbinding device:', err)
+      notifyError('Qurilmani uzishda xatolik', getApiErrorMessage(err))
     }
   }
 
@@ -132,9 +150,10 @@ export default function BuildingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['building', id] })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       setIsEditModalOpen(false)
+      notifySuccess('Bino yangilandi')
     } catch (err: any) {
       console.error(err)
-      setEditError(err.response?.data?.detail || 'Binoni tahrirlashda xatolik yuz berdi')
+      setEditError(getApiErrorMessage(err))
     } finally {
       setUpdating(false)
     }
@@ -145,10 +164,11 @@ export default function BuildingDetailPage() {
     try {
       await apiClient.delete(`/api/buildings/${buildingIdInt}`)
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      notifySuccess('Bino o‘chirildi')
       navigate('/buildings')
     } catch (err) {
       console.error('Error deleting building:', err)
-      alert('Binoni o\'chirishda xatolik yuz berdi. Ehtimol, unga datchiklar bog\'langandir.')
+      notifyError('Binoni o‘chirishda xatolik', getApiErrorMessage(err))
     }
   }
 
@@ -166,9 +186,13 @@ export default function BuildingDetailPage() {
 
         {/* Building Details */}
         {buildingLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Bino yuklanmoqda..." message="Bino maʼlumotlari va bog‘langan qurilmalar olinmoqda." />
+        ) : buildingIsError ? (
+          <ErrorBlock
+            title="Bino maʼlumotlari olinmadi"
+            message={getApiErrorMessage(buildingQueryError)}
+            onRetry={() => refetchBuilding()}
+          />
         ) : building ? (
           <div className="space-y-6">
             {/* Building Info Card */}
@@ -262,9 +286,13 @@ export default function BuildingDetailPage() {
               </div>
 
               {devicesLoading ? (
-                <div className="flex justify-center py-6">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                </div>
+                <LoadingBlock title="Qurilmalar yuklanmoqda..." message="Bino bilan bog‘langan qurilmalar tekshirilmoqda." />
+              ) : devicesIsError ? (
+                <ErrorBlock
+                  title="Qurilmalar olinmadi"
+                  message={getApiErrorMessage(devicesQueryError)}
+                  onRetry={() => refetchDevices()}
+                />
               ) : buildingDevices.length > 0 ? (
                 <div className="overflow-x-auto pt-2">
                   <table className="w-full text-sm text-left">
@@ -311,14 +339,15 @@ export default function BuildingDetailPage() {
                   </table>
                 </div>
               ) : (
-                <p className="text-gray-500 italic text-sm text-center py-6">Ushbu binoga hali hech qanday qurilma biriktirilmagan.</p>
+                <EmptyBlock
+                  title="Qurilma biriktirilmagan"
+                  message="Ushbu binoga hali hech qanday qurilma biriktirilmagan."
+                />
               )}
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-400">{translations.common.noData}</p>
-          </div>
+          <EmptyBlock title="Bino topilmadi" message={translations.common.noData} />
         )}
 
         {/* Edit Building Modal */}

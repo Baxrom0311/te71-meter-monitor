@@ -6,6 +6,9 @@ import { translations } from '@/i18n/translations'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useTheme } from '@/contexts/ThemeContext'
 import { chartTheme } from '@/lib/chartTheme'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
 
 export default function AnalyticsPage() {
   const { data: buildings } = useBuildings()
@@ -14,7 +17,7 @@ export default function AnalyticsPage() {
 
   // Filters State
   const [buildingId, setBuildingId] = useState<string>('')
-  const [granularity, setGranularity] = useState<string>('day')
+  const [granularity, setGranularity] = useState<'hour' | 'day' | 'month'>('day')
   const [dateRange, setDateRange] = useState<string>('7d')
 
   // Date picker states
@@ -40,7 +43,7 @@ export default function AnalyticsPage() {
   const bId = buildingId ? parseInt(buildingId) : undefined
 
   // Fetch energy analytics
-  const { data: analyticsData, isLoading } = useEnergyAnalytics(granularity, fromTs, toTs, bId)
+  const { data: analyticsData, isLoading, isError, error: analyticsError, refetch } = useEnergyAnalytics(granularity, fromTs, toTs, bId)
 
   // Chart and Table data formatter
   const formattedData = useMemo(() => {
@@ -95,6 +98,7 @@ export default function AnalyticsPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    notifySuccess('CSV eksport qilindi')
   }
 
   return (
@@ -138,7 +142,7 @@ export default function AnalyticsPage() {
             <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Granulyarlik</label>
             <select
               value={granularity}
-              onChange={(e) => setGranularity(e.target.value)}
+              onChange={(e) => setGranularity(e.target.value as 'hour' | 'day' | 'month')}
               className="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-gray-100 text-sm focus:outline-none focus:border-blue-500"
             >
               <option value="hour">Soatlik</option>
@@ -197,9 +201,9 @@ export default function AnalyticsPage() {
 
         {/* Loading Spinner */}
         {isLoading ? (
-          <div className="flex justify-center py-24">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Tahlil maʼlumotlari yuklanmoqda" />
+        ) : isError ? (
+          <ErrorBlock message={getApiErrorMessage(analyticsError)} onRetry={() => refetch()} />
         ) : formattedData.length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
             {/* Energy delta chart */}
@@ -286,10 +290,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-400">{translations.common.noData}</p>
-            <p className="text-gray-500 text-sm mt-1">Ushbu sana oralig'ida o'lchovlar topilmadi</p>
-          </div>
+          <EmptyBlock title={translations.common.noData} message="Ushbu sana oralig‘ida o‘lchovlar topilmadi" />
         )}
       </div>
     </RootLayout>

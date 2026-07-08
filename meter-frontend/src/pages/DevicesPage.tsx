@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle } from 'lucide-react'
+import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDevices, useBuildings } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,10 +9,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
 import clsx from 'clsx'
 import { Device } from '@/types/api'
+import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
+import { TableSkeleton } from '@/components/Skeleton'
 
 export default function DevicesPage() {
   const navigate = useNavigate()
-  const { data: devices, isLoading } = useDevices()
+  const { data: devices, isLoading, isError, error: queryError, refetch } = useDevices()
   const { data: buildings } = useBuildings()
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
@@ -39,6 +43,7 @@ export default function DevicesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
+      notifySuccess('Qurilma biriktirildi')
       setDeviceToAssign(null)
     },
   })
@@ -47,6 +52,9 @@ export default function DevicesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'type' | 'status'>('name')
+  const [page, setPage] = useState(1)
+  const pageSize = 12
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,6 +83,7 @@ export default function DevicesPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['devices'] })
+      notifySuccess('Qurilma saqlandi', `${deviceId} ro‘yxatdan o‘tdi.`)
       setIsModalOpen(false)
       // Reset form
       setDeviceId('')
@@ -85,7 +94,7 @@ export default function DevicesPage() {
       setMeterSerial('')
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.detail || 'Xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -110,8 +119,46 @@ export default function DevicesPage() {
         (statusFilter === 'offline' && !device.online)
 
       return matchesSearch && matchesType && matchesStatus
+    }).sort((a, b) => {
+      if (sortBy === 'status') return Number(b.online) - Number(a.online)
+      if (sortBy === 'type') return a.utility_type.localeCompare(b.utility_type)
+      return (a.name ?? a.id).localeCompare(b.name ?? b.id)
     })
-  }, [devices, searchQuery, typeFilter, statusFilter])
+  }, [devices, searchQuery, typeFilter, statusFilter, sortBy])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, typeFilter, statusFilter, sortBy])
+
+  const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize))
+  const pagedDevices = useMemo(
+    () => filteredDevices.slice((page - 1) * pageSize, page * pageSize),
+    [filteredDevices, page],
+  )
+
+  const handleExportCSV = () => {
+    if (filteredDevices.length === 0) return
+    const rows = [
+      ['ID', 'Name', 'Utility', 'Status', 'IP', 'Firmware', 'Building ID'].join(','),
+      ...filteredDevices.map((device) => [
+        device.id,
+        device.name ?? '',
+        device.utility_type,
+        device.online ? 'online' : 'offline',
+        device.ip ?? '',
+        device.fw_version ?? '',
+        device.building_id ?? '',
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ]
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `devices_${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    notifySuccess('CSV eksport qilindi', `${filteredDevices.length} ta qurilma eksport qilindi.`)
+  }
 
   return (
     <RootLayout>
@@ -134,7 +181,7 @@ export default function DevicesPage() {
         </div>
 
         {/* Filters Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center glass-card rounded-xl p-5 shadow">
+        <div className="flex flex-col xl:flex-row gap-4 justify-between items-stretch xl:items-center glass-card rounded-xl p-4 sm:p-5 shadow">
           {/* Search Bar */}
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-gray-500" />
@@ -148,7 +195,7 @@ export default function DevicesPage() {
           </div>
 
           {/* Quick Filters */}
-          <div className="flex flex-wrap gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap gap-3 w-full xl:w-auto">
             {/* Utility Type Filter */}
             <select
               value={typeFilter}
@@ -159,6 +206,16 @@ export default function DevicesPage() {
               <option value="electricity">Elektr</option>
               <option value="water">Suv</option>
               <option value="gas">Gaz</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'type' | 'status')}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+            >
+              <option value="name">Saralash: nomi</option>
+              <option value="type">Saralash: turi</option>
+              <option value="status">Saralash: status</option>
             </select>
 
             {/* Status Filters */}
@@ -199,17 +256,47 @@ export default function DevicesPage() {
                 Offline
               </button>
             </div>
+
+            <button
+              onClick={handleExportCSV}
+              disabled={filteredDevices.length === 0}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 disabled:opacity-45 dark:bg-gray-850 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-800 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </button>
           </div>
         </div>
 
         {/* Devices Table */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <TableSkeleton rows={8} />
+        ) : isError ? (
+          <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : filteredDevices && filteredDevices.length > 0 ? (
           <div className="glass-card rounded-xl overflow-hidden shadow-lg">
-            <div className="overflow-x-auto">
+            <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                {filteredDevices.length} ta natija · {page}/{totalPages} sahifa
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                >
+                  Oldingi
+                </button>
+                <button
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                >
+                  Keyingi
+                </button>
+              </div>
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -232,7 +319,7 @@ export default function DevicesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDevices.map((device) => (
+                  {pagedDevices.map((device) => (
                     <tr
                       key={device.id}
                       className={clsx(
@@ -300,12 +387,58 @@ export default function DevicesPage() {
                 </tbody>
               </table>
             </div>
+            <div className="md:hidden mobile-card-list p-3">
+              {pagedDevices.map((device) => (
+                <div key={device.id} className="mobile-data-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      onClick={() => navigate(`/devices/${device.id}`)}
+                      className="text-left min-w-0"
+                    >
+                      <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{device.name ?? device.id}</p>
+                      <p className="text-xs text-gray-500 font-mono truncate">{device.id}</p>
+                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {device.building_id === null && (
+                        <span className="px-1.5 py-0.5 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded font-semibold border border-yellow-500/25">
+                          yangi
+                        </span>
+                      )}
+                      <span className={`h-2.5 w-2.5 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
+                    </div>
+                  </div>
+                  <div className="mobile-data-row">
+                    <span className="mobile-data-label">{translations.devices.type}</span>
+                    <span className="mobile-data-value">
+                      {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                    </span>
+                  </div>
+                  <div className="mobile-data-row">
+                    <span className="mobile-data-label">{translations.devices.ip}</span>
+                    <span className="mobile-data-value font-mono">{device.ip ?? '—'}</span>
+                  </div>
+                  <div className="mobile-data-row">
+                    <span className="mobile-data-label">{translations.devices.firmware}</span>
+                    <span className="mobile-data-value font-mono">{device.fw_version ?? '—'}</span>
+                  </div>
+                  {device.building_id === null && isAdmin && (
+                    <button
+                      onClick={() => {
+                        setDeviceToAssign(device)
+                        setAssignName(device.meter_serial || device.name || device.id)
+                        setAssignBuildingId('')
+                      }}
+                      className="mt-3 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
+                    >
+                      Biriktirish
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-400">{translations.common.noData}</p>
-            <p className="text-gray-500 text-sm mt-1">Ushbu filtrga mos keluvchi qurilmalar topilmadi</p>
-          </div>
+          <EmptyBlock title={translations.common.noData} message="Ushbu filtrga mos keluvchi qurilmalar topilmadi" />
         )}
 
         {/* Quick Assign Modal */}

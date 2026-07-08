@@ -1,5 +1,7 @@
 import axios, { AxiosInstance } from 'axios'
 import { getTokenFromStorage, removeTokenFromStorage } from './auth'
+import { getApiErrorMessage } from './errors'
+import { notify } from './toast'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -26,9 +28,24 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       removeTokenFromStorage()
-      window.location.href = '/login'
+      window.sessionStorage.setItem(
+        'meter-toast',
+        JSON.stringify({
+          type: 'warning',
+          title: 'Sessiya tugadi',
+          message: 'Xavfsizlik uchun qaytadan login qiling.',
+        }),
+      )
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login')
+      }
+    } else if (status === 403) {
+      notify({ type: 'warning', title: 'Ruxsat yetarli emas', message: getApiErrorMessage(error) })
+    } else if (!status || status >= 500) {
+      notify({ type: 'error', title: 'Server bilan muammo', message: getApiErrorMessage(error) })
     }
     return Promise.reject(error)
   },

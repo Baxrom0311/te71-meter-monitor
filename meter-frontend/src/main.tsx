@@ -4,7 +4,16 @@ import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './styles/globals.css'
 
-registerSW({ immediate: true })
+const updateServiceWorker = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    window.dispatchEvent(new CustomEvent('meter:pwa-update-ready'))
+  },
+})
+
+window.addEventListener('meter:pwa-update-apply', () => {
+  updateServiceWorker(true)
+})
 
 try {
   const root = document.getElementById('root')

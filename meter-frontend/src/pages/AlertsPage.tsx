@@ -8,10 +8,13 @@ import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
 import clsx from 'clsx'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
 
 export default function AlertsPage() {
-  const { data: alerts, isLoading: alertsLoading } = useAlerts()
-  const { data: alertRules, isLoading: rulesLoading } = useAlertRules()
+  const { data: alerts, isLoading: alertsLoading, isError: alertsError, error: alertsQueryError, refetch: refetchAlerts } = useAlerts()
+  const { data: alertRules, isLoading: rulesLoading, isError: rulesError, error: rulesQueryError, refetch: refetchRules } = useAlertRules()
   const { data: buildings } = useBuildings()
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
@@ -38,6 +41,7 @@ export default function AlertsPage() {
     try {
       await apiClient.post(`/api/alerts/${id}/clear`)
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      notifySuccess('Ogohlantirish tozalandi')
     } catch (err) {
       console.error('Error clearing alert:', err)
     }
@@ -49,6 +53,7 @@ export default function AlertsPage() {
     try {
       await apiClient.post('/api/alerts/clear-all')
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      notifySuccess('Ogohlantirishlar tozalandi')
     } catch (err) {
       console.error('Error clearing all alerts:', err)
     } finally {
@@ -84,9 +89,10 @@ export default function AlertsPage() {
       setSeverity('warning')
       setMessage('')
       setDedupeSec('300')
+      notifySuccess('Qoida yaratildi')
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.detail || 'Qoidani yaratishda xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -97,6 +103,7 @@ export default function AlertsPage() {
     try {
       await apiClient.delete(`/api/alert-rules/${id}`)
       queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      notifySuccess('Qoida o‘chirildi')
     } catch (err) {
       console.error('Error deleting rule:', err)
     }
@@ -109,6 +116,7 @@ export default function AlertsPage() {
         enabled: !rule.enabled,
       })
       queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      notifySuccess(rule.enabled ? 'Qoida o‘chirildi' : 'Qoida yoqildi')
     } catch (err) {
       console.error('Error toggling rule status:', err)
     }
@@ -178,9 +186,9 @@ export default function AlertsPage() {
         {activeTab === 'history' ? (
           /* Alerts History Log */
           alertsLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            </div>
+            <LoadingBlock title="Ogohlantirishlar yuklanmoqda" />
+          ) : alertsError ? (
+            <ErrorBlock message={getApiErrorMessage(alertsQueryError)} onRetry={() => refetchAlerts()} />
           ) : alerts && alerts.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
               <div className="overflow-x-auto">
@@ -270,16 +278,14 @@ export default function AlertsPage() {
               </div>
             </div>
           ) : (
-            <div className="glass-card rounded-xl p-12 text-center shadow">
-              <p className="text-gray-600 dark:text-gray-400 font-medium">{translations.common.noData}</p>
-            </div>
+            <EmptyBlock title={translations.common.noData} message="Hozircha ogohlantirishlar mavjud emas." />
           )
         ) : (
           /* Alert Rules Tab */
           rulesLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            </div>
+            <LoadingBlock title="Qoidalar yuklanmoqda" />
+          ) : rulesError ? (
+            <ErrorBlock message={getApiErrorMessage(rulesQueryError)} onRetry={() => refetchRules()} />
           ) : alertRules && alertRules.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
               <div className="overflow-x-auto">
@@ -355,10 +361,7 @@ export default function AlertsPage() {
               </div>
             </div>
           ) : (
-            <div className="glass-card rounded-xl p-12 text-center shadow">
-              <p className="text-gray-600 dark:text-gray-400 font-medium">{translations.common.noData}</p>
-              <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Sizda hali chegara qoidalari sozlanmagan.</p>
-            </div>
+            <EmptyBlock title={translations.common.noData} message="Sizda hali chegara qoidalari sozlanmagan." />
           )
         )}
 

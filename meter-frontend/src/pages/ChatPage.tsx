@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { MessageSquare, Trash, Send, Sparkles, AlertCircle, Bot } from 'lucide-react'
-import { getTokenFromStorage } from '@/lib/auth'
-import { translations } from '@/i18n/translations'
+import { MessageSquare, Trash, Send, Sparkles, Bot } from 'lucide-react'
+import { getTokenFromStorage, removeTokenFromStorage } from '@/lib/auth'
+import { notify } from '@/lib/toast'
 import clsx from 'clsx'
 
 interface Message {
@@ -12,6 +13,7 @@ interface Message {
 }
 
 export default function ChatPage() {
+  const navigate = useNavigate()
   const [message, setMessage] = useState('')
   const [history, setHistory] = useState<Message[]>([])
   const [provider, setProvider] = useState('gemini')
@@ -93,8 +95,36 @@ export default function ChatPage() {
       })
 
       if (!response.ok) {
-        const body = await response.json()
-        throw new Error(body.detail || `HTTP ${response.status}`)
+        let message = `HTTP ${response.status}`
+        try {
+          const body = await response.json()
+          if (typeof body.detail === 'string') message = body.detail
+          else if (typeof body.message === 'string') message = body.message
+        } catch {
+          // Non-JSON error responses still get a status-specific message below.
+        }
+
+        if (response.status === 401) {
+          removeTokenFromStorage()
+          window.sessionStorage.setItem(
+            'meter-toast',
+            JSON.stringify({
+              type: 'warning',
+              title: 'Sessiya tugadi',
+              message: 'Xavfsizlik uchun qaytadan login qiling.',
+            }),
+          )
+          navigate('/login', { replace: true })
+          return
+        }
+
+        if (response.status === 403) {
+          notify({ type: 'warning', title: 'Ruxsat yetarli emas', message })
+        } else if (response.status >= 500) {
+          notify({ type: 'error', title: 'Server bilan muammo', message })
+        }
+
+        throw new Error(message)
       }
 
       if (!response.body) throw new Error('Response body is empty')

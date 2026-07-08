@@ -6,9 +6,12 @@ import { translations } from '@/i18n/translations'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notify, notifySuccess } from '@/lib/toast'
 
 export default function UsersPage() {
-  const { data: users, isLoading } = useUsers()
+  const { data: users, isLoading, isError, error: queryError, refetch } = useUsers()
   const { user: currentUser, isAdmin } = useAuth()
   const queryClient = useQueryClient()
 
@@ -42,6 +45,7 @@ export default function UsersPage() {
         role,
       })
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      notifySuccess('Foydalanuvchi yaratildi', username)
       setIsModalOpen(false)
       // Reset form
       setUsername('')
@@ -49,7 +53,7 @@ export default function UsersPage() {
       setRole('user')
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.detail || 'Xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -57,7 +61,7 @@ export default function UsersPage() {
 
   const handleToggleActive = async (targetUser: any) => {
     if (targetUser.id === currentUser?.id) {
-      alert('Siz o\'zingizning faollik holatingizni o\'zgartira olmaysiz!')
+      notify({ type: 'warning', title: 'Amal bajarilmadi', message: 'O‘zingizning faollik holatingizni o‘zgartira olmaysiz.' })
       return
     }
 
@@ -67,6 +71,7 @@ export default function UsersPage() {
         role: targetUser.role,
       })
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      notifySuccess('Foydalanuvchi yangilandi')
     } catch (err) {
       console.error('Error toggling user status:', err)
     }
@@ -94,10 +99,11 @@ export default function UsersPage() {
         password: editPassword.trim() || null,
       })
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      notifySuccess('Foydalanuvchi tahrirlandi')
       setIsEditModalOpen(false)
     } catch (err: any) {
       console.error(err)
-      setEditError(err.response?.data?.detail || 'Foydalanuvchini tahrirlashda xatolik yuz berdi')
+      setEditError(getApiErrorMessage(err))
     } finally {
       setUpdating(false)
     }
@@ -125,9 +131,9 @@ export default function UsersPage() {
 
         {/* Users Table */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Foydalanuvchilar yuklanmoqda" />
+        ) : isError ? (
+          <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : users && users.length > 0 ? (
           <div className="glass-card rounded-xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
@@ -202,9 +208,7 @@ export default function UsersPage() {
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-400">{translations.common.noData}</p>
-          </div>
+          <EmptyBlock title={translations.common.noData} message="Hozircha foydalanuvchilar ro‘yxati bo‘sh." />
         )}
 
         {/* Create User Modal */}

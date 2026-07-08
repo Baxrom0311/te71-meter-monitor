@@ -10,6 +10,15 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import apiClient from '@/lib/api'
 import { chartTheme } from '@/lib/chartTheme'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+
+type PendingCommand =
+  | { type: 'reboot' }
+  | { type: 'relay'; action: 'on' | 'off' }
+  | { type: 'status' }
 
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -18,25 +27,31 @@ export default function DeviceDetailPage() {
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
   const queryClient = useQueryClient()
-  const { data: device, isLoading } = useDeviceById(id || '')
+  const {
+    data: device,
+    isLoading,
+    isError,
+    error: deviceQueryError,
+    refetch,
+  } = useDeviceById(id || '')
   const { data: latestReading } = useDeviceLatest(id || '')
   const { data: historyData } = useDeviceHistory(id || '', 24)
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [pendingCommand, setPendingCommand] = useState<PendingCommand | null>(null)
 
   if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
 
   const handleReboot = async () => {
-    if (!confirm('Haqiqatdan ham ushbu qurilmani qayta yuklamoqchisiz?')) return
     setLoadingAction('reboot')
     setMsg(null)
     try {
       await apiClient.post(`/api/devices/${id}/reboot`)
-      setMsg('Reboot buyrug\'i yuborildi')
+      notifySuccess('Reboot buyrug‘i yuborildi')
     } catch (err: any) {
       console.error(err)
-      setMsg(err.response?.data?.detail || 'Reboot qilishda xatolik yuz berdi')
+      setMsg(getApiErrorMessage(err))
     } finally {
       setLoadingAction(null)
     }
@@ -47,10 +62,10 @@ export default function DeviceDetailPage() {
     setMsg(null)
     try {
       await apiClient.post(`/api/devices/${id}/relay`, { action })
-      setMsg(`Releni ${action === 'on' ? 'yoqish' : 'o\'chirish'} buyrug\'i yuborildi`)
+      notifySuccess(`Releni ${action === 'on' ? 'yoqish' : 'o‘chirish'} buyrug‘i yuborildi`)
     } catch (err: any) {
       console.error(err)
-      setMsg(err.response?.data?.detail || 'Releni boshqarishda xatolik yuz berdi')
+      setMsg(getApiErrorMessage(err))
     } finally {
       setLoadingAction(null)
     }
@@ -68,13 +83,25 @@ export default function DeviceDetailPage() {
         utility_type: device.utility_type,
       })
       queryClient.invalidateQueries({ queryKey: ['device', id] })
-      setMsg(`Qurilma statusi ${nextStatus ? 'faollashtirildi' : 'faolsizlantirildi'}`)
+      notifySuccess(`Qurilma statusi ${nextStatus ? 'faollashtirildi' : 'faolsizlantirildi'}`)
     } catch (err: any) {
       console.error(err)
-      setMsg(err.response?.data?.detail || 'Statusni o\'zgartirishda xatolik yuz berdi')
+      setMsg(getApiErrorMessage(err))
     } finally {
       setLoadingAction(null)
     }
+  }
+
+  const executePendingCommand = () => {
+    if (!pendingCommand) return
+    if (pendingCommand.type === 'reboot') {
+      handleReboot()
+    } else if (pendingCommand.type === 'relay') {
+      handleRelay(pendingCommand.action)
+    } else {
+      handleToggleStatus()
+    }
+    setPendingCommand(null)
   }
 
   // Chart data: convert historical readings to Recharts format
@@ -111,9 +138,13 @@ export default function DeviceDetailPage() {
 
         {/* Device Details */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Qurilma yuklanmoqda..." message="Qurilma holati va so‘nggi telemetriya olinmoqda." />
+        ) : isError ? (
+          <ErrorBlock
+            title="Qurilma maʼlumotlari olinmadi"
+            message={getApiErrorMessage(deviceQueryError)}
+            onRetry={() => refetch()}
+          />
         ) : device ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -181,7 +212,7 @@ export default function DeviceDetailPage() {
                   <div className="flex flex-col gap-3">
                     {/* Reboot Button */}
                     <button
-                      onClick={handleReboot}
+                      onClick={() => setPendingCommand({ type: 'reboot' })}
                       disabled={loadingAction !== null}
                       className="flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm"
                     >
@@ -192,7 +223,7 @@ export default function DeviceDetailPage() {
                     {/* Relay Controls */}
                     <div className="grid grid-cols-2 gap-2 mt-1">
                       <button
-                        onClick={() => handleRelay('on')}
+                        onClick={() => setPendingCommand({ type: 'relay', action: 'on' })}
                         disabled={loadingAction !== null}
                         className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
                       >
@@ -200,7 +231,7 @@ export default function DeviceDetailPage() {
                         Rele ON
                       </button>
                       <button
-                        onClick={() => handleRelay('off')}
+                        onClick={() => setPendingCommand({ type: 'relay', action: 'off' })}
                         disabled={loadingAction !== null}
                         className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
                       >
@@ -211,7 +242,7 @@ export default function DeviceDetailPage() {
 
                     {/* Toggle Active Status */}
                     <button
-                      onClick={handleToggleStatus}
+                      onClick={() => setPendingCommand({ type: 'status' })}
                       disabled={loadingAction !== null}
                       className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-850 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-200 rounded-lg transition text-sm font-semibold border border-gray-300 dark:border-gray-700 mt-1 shadow-sm"
                     >
@@ -280,9 +311,10 @@ export default function DeviceDetailPage() {
                   )}
                 </div>
               ) : (
-                <div className="p-8 glass-card border border-gray-300 dark:border-gray-800 rounded-2xl text-center text-sm text-gray-600 dark:text-gray-400 italic shadow-sm animate-pulse">
-                  Qurilmadan hali hech qanday ko'rsatkich kelib tushmagan.
-                </div>
+                <EmptyBlock
+                  title="Ko‘rsatkich kelmagan"
+                  message="Qurilmadan hali hech qanday ko‘rsatkich kelib tushmagan."
+                />
               )}
             </div>
 
@@ -357,11 +389,31 @@ export default function DeviceDetailPage() {
             )}
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow-sm">
-            <p className="text-gray-600 dark:text-gray-400 font-medium">{translations.common.noData}</p>
-          </div>
+          <EmptyBlock title="Qurilma topilmadi" message={translations.common.noData} />
         )}
       </div>
+      <ConfirmDialog
+        open={pendingCommand !== null}
+        title={
+          pendingCommand?.type === 'reboot'
+            ? 'Qurilmani reboot qilish'
+            : pendingCommand?.type === 'relay'
+              ? `Releni ${pendingCommand.action === 'on' ? 'yoqish' : 'o‘chirish'}`
+              : 'Qurilma statusini o‘zgartirish'
+        }
+        message={
+          pendingCommand?.type === 'reboot'
+            ? 'Bu buyruq ESP32 qurilmasini qayta yuklaydi. Amalni davom ettirasizmi?'
+            : pendingCommand?.type === 'relay'
+              ? 'Bu buyruq qurilma relesiga darhol yuboriladi. Amalni tasdiqlang.'
+              : 'Qurilmaning faol/faol emas holati o‘zgartiriladi.'
+        }
+        confirmLabel="Buyruq yuborish"
+        tone={pendingCommand?.type === 'relay' && pendingCommand.action === 'off' ? 'danger' : 'default'}
+        pending={loadingAction !== null}
+        onConfirm={executePendingCommand}
+        onCancel={() => setPendingCommand(null)}
+      />
     </RootLayout>
   )
 }

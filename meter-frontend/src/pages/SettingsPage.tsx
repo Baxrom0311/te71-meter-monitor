@@ -3,27 +3,28 @@ import { Settings, Info, Save, Bot, Key, Radio } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { translations } from '@/i18n/translations'
 import { useSummary } from '@/hooks/queries'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
 
 export default function SettingsPage() {
-  const { data: summary } = useSummary()
+  const { data: summary, isLoading: summaryLoading, isError: summaryIsError, error: summaryError, refetch: refetchSummary } = useSummary()
 
   // Telegram Notifications Mock State
-  const [botToken, setBotToken] = useState('5839201948:AAFlk3849Dk2849Dk_f81747Djs9')
-  const [chatId, setChatId] = useState('-100192840192')
+  const [botToken, setBotToken] = useState('')
+  const [chatId, setChatId] = useState('')
   const [tgEnabled, setTgEnabled] = useState(true)
 
   // API Config State
   const [apiBase, setApiBase] = useState(import.meta.env.VITE_API_URL || 'http://localhost:8001')
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    setMsg(null)
     setTimeout(() => {
       setSaving(false)
-      setMsg('Sozlamalar muvaffaqiyatli saqlandi!')
+      notifySuccess('Sozlamalar saqlandi', 'Frontend sozlamalari lokal holatda yangilandi.')
     }, 800)
   }
 
@@ -35,12 +36,6 @@ export default function SettingsPage() {
           <Settings className="w-8 h-8 text-blue-500" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{translations.settings.title}</h1>
         </div>
-
-        {msg && (
-          <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-sm text-green-400">
-            {msg}
-          </div>
-        )}
 
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
           {/* System Settings & API */}
@@ -99,11 +94,12 @@ export default function SettingsPage() {
                 <div className="relative">
                   <input
                     type="password"
-                    disabled={!tgEnabled}
-                    value={botToken}
-                    onChange={(e) => setBotToken(e.target.value)}
-                    className="w-full pl-3.5 pr-10 py-2 rounded-lg glass-input font-mono text-sm focus:outline-none disabled:opacity-40"
-                  />
+                  disabled={!tgEnabled}
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  placeholder="Bot tokenni kiriting"
+                  className="w-full pl-3.5 pr-10 py-2 rounded-lg glass-input font-mono text-sm focus:outline-none disabled:opacity-40"
+                />
                   <Key className="absolute right-3.5 top-2.5 h-4.5 w-4.5 text-gray-400" />
                 </div>
               </div>
@@ -129,24 +125,36 @@ export default function SettingsPage() {
               Tizim holati (System Health)
             </h2>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
-                <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">WS ulanishlar</span>
-                <strong className="text-xl font-extrabold text-blue-500 font-mono">{summary?.ws_clients ?? 0} ta</strong>
+            {summaryLoading ? (
+              <LoadingBlock title="Tizim holati yuklanmoqda..." message="Serverdan health va monitoring ko‘rsatkichlari olinmoqda." />
+            ) : summaryIsError ? (
+              <ErrorBlock
+                title="Tizim holati olinmadi"
+                message={getApiErrorMessage(summaryError)}
+                onRetry={() => refetchSummary()}
+              />
+            ) : summary ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
+                  <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">WS ulanishlar</span>
+                  <strong className="text-xl font-extrabold text-blue-500 font-mono">{summary.ws_clients ?? 0} ta</strong>
+                </div>
+                <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
+                  <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">O'lchov nuqtalari</span>
+                  <strong className="text-xl font-extrabold text-green-500 font-mono">{summary.measurement_points ?? 0} ta</strong>
+                </div>
+                <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
+                  <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">Binolar soni</span>
+                  <strong className="text-xl font-extrabold text-purple-500 font-mono">{summary.buildings ?? 0} ta</strong>
+                </div>
+                <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
+                  <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">Datchiklar jami</span>
+                  <strong className="text-xl font-extrabold text-yellow-600 dark:text-yellow-500 font-mono">{summary.devices_total ?? 0} ta</strong>
+                </div>
               </div>
-              <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
-                <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">O'lchov nuqtalari</span>
-                <strong className="text-xl font-extrabold text-green-500 font-mono">{summary?.measurement_points ?? 0} ta</strong>
-              </div>
-              <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
-                <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">Binolar soni</span>
-                <strong className="text-xl font-extrabold text-purple-500 font-mono">{summary?.buildings ?? 0} ta</strong>
-              </div>
-              <div className="bg-gray-100/30 dark:bg-gray-950/40 p-4 border border-gray-350 dark:border-gray-800 rounded-xl shadow-inner">
-                <span className="text-xs text-gray-500 block uppercase tracking-wider mb-1">Datchiklar jami</span>
-                <strong className="text-xl font-extrabold text-yellow-600 dark:text-yellow-500 font-mono">{summary?.devices_total ?? 0} ta</strong>
-              </div>
-            </div>
+            ) : (
+              <EmptyBlock title="Tizim holati topilmadi" message="Server health maʼlumot qaytarmadi." />
+            )}
 
             <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg flex gap-3 text-xs text-blue-400">
               <Info className="w-5 h-5 shrink-0" />

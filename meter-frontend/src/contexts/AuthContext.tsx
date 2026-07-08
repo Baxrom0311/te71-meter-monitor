@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User } from '@/types/api'
-import { decodeJWT, getTokenFromStorage, setTokenInStorage, removeTokenFromStorage } from '@/lib/auth'
+import { decodeJWT, getTokenFromStorage, setTokenInStorage, removeTokenFromStorage, isTokenExpired } from '@/lib/auth'
 
 interface AuthContextType {
   user: User | null
@@ -23,6 +23,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = getTokenFromStorage()
     if (storedToken) {
       try {
+        if (isTokenExpired(storedToken)) {
+          removeTokenFromStorage()
+          window.sessionStorage.setItem(
+            'meter-toast',
+            JSON.stringify({
+              type: 'warning',
+              title: 'Sessiya tugadi',
+              message: 'Xavfsizlik uchun qaytadan login qiling.',
+            }),
+          )
+          setIsLoading(false)
+          return
+        }
         const decoded = decodeJWT(storedToken)
         if (decoded && decoded.sub && decoded.username) {
           setToken(storedToken)
@@ -58,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         logout,
-        isAdmin: user?.role === 'admin' ?? false,
+        isAdmin: user?.role === 'admin',
       }}
     >
       {children}

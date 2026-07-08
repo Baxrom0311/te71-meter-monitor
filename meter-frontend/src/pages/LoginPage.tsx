@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { LoginResponse } from '@/types/api'
 import { translations } from '@/i18n/translations'
+import { getApiErrorMessage } from '@/lib/errors'
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Foydalanuvchi nomi talab qilinadi'),
@@ -48,7 +49,7 @@ export default function LoginPage() {
       navigate('/dashboard', { replace: true })
     } catch (error: unknown) {
       console.error('[v0] Login error:', error)
-      setServerError(translations.login.error)
+      setServerError(getApiErrorMessage(error) || translations.login.error)
     } finally {
       setIsLoading(false)
     }

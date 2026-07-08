@@ -7,14 +7,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { getApiErrorMessage } from '@/lib/errors'
+import { notifySuccess } from '@/lib/toast'
 
 export default function BuildingsPage() {
-  const { data: buildings, isLoading } = useBuildings()
+  const { data: buildings, isLoading, isError, error: queryError, refetch } = useBuildings()
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedMapBuildingId, setSelectedMapBuildingId] = useState<number | null>(null)
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -47,6 +51,7 @@ export default function BuildingsPage() {
         description: description || null,
       })
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      notifySuccess('Bino qo‘shildi', `${name} muvaffaqiyatli yaratildi.`)
       setIsModalOpen(false)
       // Reset form
       setName('')
@@ -59,7 +64,7 @@ export default function BuildingsPage() {
       setDescription('')
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.detail || 'Xatolik yuz berdi')
+      setError(getApiErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -79,6 +84,34 @@ export default function BuildingsPage() {
       )
     })
   }, [buildings, searchQuery])
+
+  const mappedBuildings = useMemo(
+    () => filteredBuildings.filter((b) => b.latitude != null && b.longitude != null),
+    [filteredBuildings],
+  )
+
+  const selectedMapBuilding = mappedBuildings.find((b) => b.id === selectedMapBuildingId) ?? mappedBuildings[0]
+
+  const mapBounds = useMemo(() => {
+    if (mappedBuildings.length === 0) return null
+    const lats = mappedBuildings.map((b) => b.latitude as number)
+    const lngs = mappedBuildings.map((b) => b.longitude as number)
+    return {
+      minLat: Math.min(...lats),
+      maxLat: Math.max(...lats),
+      minLng: Math.min(...lngs),
+      maxLng: Math.max(...lngs),
+    }
+  }, [mappedBuildings])
+
+  const getMarkerPosition = (lat: number, lng: number) => {
+    if (!mapBounds) return { left: '50%', top: '50%' }
+    const latRange = mapBounds.maxLat - mapBounds.minLat || 0.01
+    const lngRange = mapBounds.maxLng - mapBounds.minLng || 0.01
+    const left = 10 + ((lng - mapBounds.minLng) / lngRange) * 80
+    const top = 90 - ((lat - mapBounds.minLat) / latRange) * 80
+    return { left: `${left}%`, top: `${top}%` }
+  }
 
   return (
     <RootLayout>
@@ -114,11 +147,77 @@ export default function BuildingsPage() {
           </div>
         </div>
 
+        {mappedBuildings.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-5">
+            <div className="glass-card rounded-2xl overflow-hidden min-h-[320px] relative">
+              <div className="absolute inset-0 map-preview-grid" />
+              <div className="absolute inset-0 map-preview-roads" />
+              {mappedBuildings.map((building) => {
+                const active = selectedMapBuilding?.id === building.id
+                const position = getMarkerPosition(building.latitude as number, building.longitude as number)
+                return (
+                  <button
+                    key={building.id}
+                    onClick={() => setSelectedMapBuildingId(building.id)}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 group ${active ? 'z-20' : 'z-10'}`}
+                    style={position}
+                    title={building.name}
+                  >
+                    <span className={`block rounded-full border-2 shadow-lg transition ${active ? 'h-5 w-5 bg-blue-500 border-white shadow-blue-500/40' : 'h-3.5 w-3.5 bg-emerald-500 border-white/80 hover:scale-125'}`} />
+                    <span className={`absolute left-1/2 top-6 -translate-x-1/2 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-bold shadow-lg transition ${active ? 'opacity-100 bg-blue-600 text-white' : 'opacity-0 group-hover:opacity-100 bg-gray-950 text-white'}`}>
+                      {building.name}
+                    </span>
+                  </button>
+                )
+              })}
+              <div className="absolute left-4 top-4 glass-card rounded-xl px-3 py-2">
+                <p className="text-xs font-bold text-gray-950 dark:text-gray-100">Binolar xaritasi</p>
+                <p className="text-[11px] text-gray-600 dark:text-gray-400">{mappedBuildings.length} ta koordinatali bino</p>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-2xl p-5 space-y-4">
+              {selectedMapBuilding ? (
+                <>
+                  <div>
+                    <p className="text-xs font-bold uppercase text-gray-500 mb-1">Tanlangan bino</p>
+                    <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{selectedMapBuilding.name}</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{selectedMapBuilding.address ?? 'Manzil kiritilmagan'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-gray-300 dark:border-gray-800 p-3">
+                      <p className="text-[11px] uppercase font-bold text-gray-500">Latitude</p>
+                      <p className="font-mono text-sm text-gray-950 dark:text-gray-100">{selectedMapBuilding.latitude}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-300 dark:border-gray-800 p-3">
+                      <p className="text-[11px] uppercase font-bold text-gray-500">Longitude</p>
+                      <p className="font-mono text-sm text-gray-950 dark:text-gray-100">{selectedMapBuilding.longitude}</p>
+                    </div>
+                  </div>
+                  {selectedMapBuilding.maps_url && (
+                    <a
+                      href={selectedMapBuilding.maps_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Google Mapsda ochish
+                    </a>
+                  )}
+                </>
+              ) : (
+                <EmptyBlock title="Koordinata yo‘q" message="Xaritada ko‘rsatish uchun latitude/longitude kerak." />
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Buildings Grid */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
+          <LoadingBlock title="Binolar yuklanmoqda" />
+        ) : isError ? (
+          <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : filteredBuildings && filteredBuildings.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredBuildings.map((building) => (
@@ -184,10 +283,7 @@ export default function BuildingsPage() {
             ))}
           </div>
         ) : (
-          <div className="glass-card rounded-xl p-12 text-center shadow">
-            <p className="text-gray-400">{translations.common.noData}</p>
-            <p className="text-gray-500 text-sm mt-1">Ushbu filtrga mos keluvchi binolar topilmadi</p>
-          </div>
+          <EmptyBlock title={translations.common.noData} message="Ushbu filtrga mos keluvchi binolar topilmadi" />
         )}
 
         {/* Add Building Modal */}

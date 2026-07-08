@@ -5,9 +5,12 @@ import {
   Building,
   Device,
   Alert,
+  AlertRule,
   EnergyAnalytics,
   AuditLog,
   User,
+  Reading,
+  DeviceHistoryResponse,
   OtaBatch,
   BuildingsEnergySummaryResponse,
 } from '@/types/api'
@@ -36,17 +39,19 @@ export function useEnergySummary(days = 30): UseQueryResult<BuildingsEnergySumma
 
 // Energy Analytics
 export function useEnergyAnalytics(
-  granularity: 'hour' | 'day' = 'hour',
+  granularity: 'hour' | 'day' | 'month' = 'hour',
   fromTs?: number,
   toTs?: number,
+  buildingId?: number,
 ): UseQueryResult<EnergyAnalytics> {
   return useQuery({
-    queryKey: ['energy-analytics', granularity, fromTs, toTs],
+    queryKey: ['energy-analytics', granularity, fromTs, toTs, buildingId],
     queryFn: async () => {
       const params = new URLSearchParams({
         granularity,
         ...(fromTs && { from_ts: fromTs.toString() }),
         ...(toTs && { to_ts: toTs.toString() }),
+        ...(buildingId && { building_id: buildingId.toString() }),
       })
       const { data } = await apiClient.get(`/api/analytics/energy?${params}`)
       return data
@@ -103,7 +108,7 @@ export function useDeviceById(id: string): UseQueryResult<Device> {
   })
 }
 
-export function useDeviceLatest(id: string) {
+export function useDeviceLatest(id: string): UseQueryResult<Reading> {
   return useQuery({
     queryKey: ['device-latest', id],
     queryFn: async () => {
@@ -115,7 +120,7 @@ export function useDeviceLatest(id: string) {
   })
 }
 
-export function useDeviceHistory(id: string, hours = 24) {
+export function useDeviceHistory(id: string, hours = 24): UseQueryResult<DeviceHistoryResponse> {
   return useQuery({
     queryKey: ['device-history', id, hours],
     queryFn: async () => {
@@ -190,7 +195,7 @@ export function useOtaBatches(enabled = true): UseQueryResult<OtaBatch[]> {
 }
 
 // Alert Rules
-export function useAlertRules() {
+export function useAlertRules(): UseQueryResult<AlertRule[]> {
   return useQuery({
     queryKey: ['alert-rules'],
     queryFn: async () => {
