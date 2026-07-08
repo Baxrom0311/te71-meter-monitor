@@ -7,6 +7,9 @@ from repositories.base import BaseRepository
 class BuildingRepository(BaseRepository[Building]):
     model = Building
 
+    async def list_all(self) -> list[Building]:
+        return list((await self.session.scalars(select(Building).order_by(Building.id))).all())
+
     async def list_ordered(self) -> list[Building]:
         return list((await self.session.scalars(select(Building).order_by(desc(Building.id)))).all())
 
@@ -14,6 +17,12 @@ class BuildingRepository(BaseRepository[Building]):
         return list(
             (await self.session.scalars(select(Building).where(Building.is_active.is_(True)).order_by(desc(Building.id)))).all()
         )
+
+    async def list_by_ids(self, building_ids: set[int] | list[int]) -> list[Building]:
+        ids = list(building_ids)
+        if not ids:
+            return []
+        return list((await self.session.scalars(select(Building).where(Building.id.in_(ids)))).all())
 
 
 class BuildingUtilityRepository(BaseRepository[BuildingUtility]):
@@ -57,6 +66,24 @@ class PremiseRepository(BaseRepository[Premise]):
 
 class MeasurementPointRepository(BaseRepository[MeasurementPoint]):
     model = MeasurementPoint
+
+    async def list_for_building(
+        self,
+        building_id: int,
+        utility_type: str | None = None,
+    ) -> list[MeasurementPoint]:
+        stmt = select(MeasurementPoint).where(
+            and_(MeasurementPoint.building_id == building_id, MeasurementPoint.is_active.is_(True))
+        )
+        if utility_type:
+            stmt = stmt.where(MeasurementPoint.utility_type == utility_type)
+        return list(
+            (
+                await self.session.scalars(
+                    stmt.order_by(MeasurementPoint.utility_type, MeasurementPoint.role)
+                )
+            ).all()
+        )
 
     async def active_for_building_role(
         self,

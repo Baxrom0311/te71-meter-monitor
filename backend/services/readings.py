@@ -1,21 +1,19 @@
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, and_, desc, func, inspect, select
-from sqlalchemy.orm import aliased
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
-from models.entities import Device, MeasurementPoint, Reading
+from models.entities import Device, Reading
 from models.schemas import MeterReading, MeterReadingBatch
+from repositories.base import model_to_dict
+from repositories.buildings import MeasurementPointRepository
 from repositories.devices import DeviceRepository
 from repositories.readings import ReadingRepository
 from services import alerts as alert_service
-
-
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
+from services.websocket import ws_manager
 
 
 def _validate_range(name: str, value: float | None, minimum: float | None = None, maximum: float | None = None) -> None:
@@ -46,76 +44,83 @@ def _validate_reading(body: MeterReading) -> None:
     _validate_range("temperature_c", body.temperature_c, settings.min_temperature_c, settings.max_temperature_c)
 
 
+async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: int) -> list[dict]:
+    """Bitta session ichida reading saqlash. Alert broadcastlarni qaytaradi."""
+    if body.reading_id:
+        if await ReadingRepository(session).exists_external_id(body.device_id, body.reading_id):
+            return []
+
+    device_repo = DeviceRepository(session)
+    device = await device_repo.get(body.device_id)
+    if not device:
+        device = Device(
+            id=body.device_id,
+            name=body.device_id,
+            utility_type=body.utility_type,
+            registered=ts,
+            created_at=ts,
+        )
+        device_repo.add(device)
+
+    device.last_seen = ts
+    device.utility_type = body.utility_type or device.utility_type
+    device.software_version = body.software_version or body.fw_version or device.software_version
+    device.hardware_version = body.hardware_version or device.hardware_version
+    device.fw_version = body.fw_version or device.fw_version
+    device.building_id = body.building_id or device.building_id
+    device.point_id = body.point_id or device.point_id
+    device.updated_at = ts
+
+    await alert_service.clear_offline_alerts_for_device(session, body.device_id)
+
+    reading = Reading(
+        device_id=body.device_id,
+        reading_id=body.reading_id,
+        sequence_no=body.sequence_no,
+        building_id=body.building_id or device.building_id,
+        point_id=body.point_id or device.point_id,
+        utility_type=body.utility_type,
+        sensor_type=body.sensor_type,
+        ts=ts,
+        voltage_l1=body.voltage_l1,
+        voltage_l2=body.voltage_l2,
+        voltage_l3=body.voltage_l3,
+        current_l1=body.current_l1,
+        current_l2=body.current_l2,
+        current_l3=body.current_l3,
+        power_w=body.power_w,
+        power_var=body.power_var,
+        frequency=body.frequency,
+        pf=body.pf,
+        energy_kwh=body.energy_kwh,
+        energy_t1=body.energy_t1,
+        energy_t2=body.energy_t2,
+        energy_t3=body.energy_t3,
+        energy_t4=body.energy_t4,
+        relay_on=body.relay_on,
+        pressure_bar=body.pressure_bar,
+        pressure_bottom_bar=body.pressure_bottom_bar,
+        pressure_top_bar=body.pressure_top_bar,
+        flow_rate=body.flow_rate,
+        volume_m3=body.volume_m3,
+        temperature_c=body.temperature_c,
+        leak_detected=body.leak_detected,
+        valve_open=body.valve_open,
+        raw_payload=json.dumps(body.model_dump(), ensure_ascii=False, default=str),
+        created_at=ts,
+    )
+    ReadingRepository(session).add(reading)
+    return await alert_service.check_alerts(session, body)
+
+
 async def save_reading(body: MeterReading) -> int:
     _validate_reading(body)
     ts = now_ts()
     async with SessionLocal() as session:
-        if body.reading_id:
-            if await ReadingRepository(session).exists_external_id(body.device_id, body.reading_id):
-                return ts
-
-        device_repo = DeviceRepository(session)
-        device = await device_repo.get(body.device_id)
-        if not device:
-            device = Device(
-                id=body.device_id,
-                name=body.device_id,
-                utility_type=body.utility_type,
-                registered=ts,
-                created_at=ts,
-            )
-            device_repo.add(device)
-
-        device.last_seen = ts
-        device.utility_type = body.utility_type or device.utility_type
-        device.software_version = body.software_version or body.fw_version or device.software_version
-        device.hardware_version = body.hardware_version or device.hardware_version
-        device.fw_version = body.fw_version or device.fw_version
-        device.building_id = body.building_id or device.building_id
-        device.point_id = body.point_id or device.point_id
-        device.updated_at = ts
-
-        reading = Reading(
-            device_id=body.device_id,
-            reading_id=body.reading_id,
-            sequence_no=body.sequence_no,
-            building_id=body.building_id or device.building_id,
-            point_id=body.point_id or device.point_id,
-            utility_type=body.utility_type,
-            sensor_type=body.sensor_type,
-            ts=ts,
-            voltage_l1=body.voltage_l1,
-            voltage_l2=body.voltage_l2,
-            voltage_l3=body.voltage_l3,
-            current_l1=body.current_l1,
-            current_l2=body.current_l2,
-            current_l3=body.current_l3,
-            power_w=body.power_w,
-            power_var=body.power_var,
-            frequency=body.frequency,
-            pf=body.pf,
-            energy_kwh=body.energy_kwh,
-            energy_t1=body.energy_t1,
-            energy_t2=body.energy_t2,
-            energy_t3=body.energy_t3,
-            energy_t4=body.energy_t4,
-            relay_on=body.relay_on,
-            pressure_bar=body.pressure_bar,
-            pressure_bottom_bar=body.pressure_bottom_bar,
-            pressure_top_bar=body.pressure_top_bar,
-            flow_rate=body.flow_rate,
-            volume_m3=body.volume_m3,
-            temperature_c=body.temperature_c,
-            leak_detected=body.leak_detected,
-            valve_open=body.valve_open,
-            raw_payload=json.dumps(body.model_dump(), ensure_ascii=False, default=str),
-            created_at=ts,
-        )
-        ReadingRepository(session).add(reading)
-        alert_broadcasts = await alert_service.check_alerts(session, body)
+        alert_broadcasts = await _save_reading_internal(session, body, ts)
         await session.commit()
     for msg in alert_broadcasts:
-        await alert_service.ws_manager.broadcast(msg)
+        await ws_manager.broadcast(msg)
     return ts
 
 
@@ -136,29 +141,37 @@ async def save_reading_batch(body: MeterReadingBatch) -> dict:
     accepted = 0
     skipped = 0
     errors: list[dict] = []
-    timestamps: list[int] = []
+    all_alert_broadcasts: list[dict] = []
+    ts = now_ts()
 
-    for index, reading in enumerate(body.readings):
-        try:
-            if reading.reading_id:
-                async with SessionLocal() as session:
+    # Bitta session ichida barcha readinglarni saqlash
+    async with SessionLocal() as session:
+        for index, reading in enumerate(body.readings):
+            try:
+                _validate_reading(reading)
+                if reading.reading_id:
                     if await ReadingRepository(session).exists_external_id(reading.device_id, reading.reading_id):
                         skipped += 1
                         continue
-            ts = await save_reading(reading)
-            timestamps.append(ts)
-            accepted += 1
-        except HTTPException as exc:
-            errors.append({"index": index, "error": exc.detail})
-        except Exception as exc:
-            errors.append({"index": index, "error": str(exc)})
+                broadcasts = await _save_reading_internal(session, reading, ts)
+                all_alert_broadcasts.extend(broadcasts)
+                accepted += 1
+            except HTTPException as exc:
+                errors.append({"index": index, "error": exc.detail})
+            except Exception as exc:
+                errors.append({"index": index, "error": str(exc)})
+        await session.commit()
+
+    # Alert broadcastlarni session tashqarisida yuborish
+    for msg in all_alert_broadcasts:
+        await ws_manager.broadcast(msg)
 
     return {
         "ok": not errors,
         "accepted": accepted,
         "skipped": skipped,
         "errors": errors,
-        "last_ts": timestamps[-1] if timestamps else None,
+        "last_ts": ts if accepted else None,
     }
 
 
@@ -167,7 +180,7 @@ async def latest_reading(device_id: str) -> dict:
         row = await ReadingRepository(session).latest_for_device(device_id)
     if not row:
         raise HTTPException(404, "Ma'lumot yo'q")
-    return _as_dict(row)
+    return model_to_dict(row)
 
 
 async def reading_history(device_id: str, page: int, limit: int, hours: int | None) -> dict:
@@ -177,40 +190,20 @@ async def reading_history(device_id: str, page: int, limit: int, hours: int | No
         repo = ReadingRepository(session)
         total = await repo.count_history(device_id, cutoff)
         rows = await repo.history(device_id, offset, limit, cutoff)
-    return {"readings": [_as_dict(row) for row in rows], "total": total, "page": page, "pages": (total + limit - 1) // limit}
+    return {"readings": [model_to_dict(row) for row in rows], "total": total, "page": page, "pages": (total + limit - 1) // limit}
 
 
 async def building_latest_readings(building_id: int, utility_type: str | None = None) -> dict:
     async with SessionLocal() as session:
-        points_stmt = select(MeasurementPoint).where(
-            and_(MeasurementPoint.building_id == building_id, MeasurementPoint.is_active.is_(True))
-        )
-        if utility_type:
-            points_stmt = points_stmt.where(MeasurementPoint.utility_type == utility_type)
-        points = (await session.scalars(points_stmt.order_by(MeasurementPoint.utility_type, MeasurementPoint.role))).all()
+        points = await MeasurementPointRepository(session).list_for_building(building_id, utility_type)
         point_ids = [p.id for p in points]
-
-        # Har bir point uchun eng oxirgi reading — bitta query
-        r_inner = aliased(Reading)
-        latest_subq = (
-            select(func.max(r_inner.ts).label("max_ts"), r_inner.point_id)
-            .where(r_inner.point_id.in_(point_ids))
-            .group_by(r_inner.point_id)
-            .subquery()
-        )
-        readings_stmt = select(Reading).join(
-            latest_subq,
-            and_(Reading.point_id == latest_subq.c.point_id, Reading.ts == latest_subq.c.max_ts),
-        )
-        readings_by_point: dict[int, Reading] = {
-            r.point_id: r for r in (await session.scalars(readings_stmt)).all()
-        }
+        readings_by_point = await ReadingRepository(session).latest_by_point_ids(point_ids)
 
         result = []
         for point in points:
-            row = _as_dict(point)
+            row = model_to_dict(point)
             reading = readings_by_point.get(point.id)
-            row["latest_reading"] = _as_dict(reading) if reading else None
+            row["latest_reading"] = model_to_dict(reading) if reading else None
             result.append(row)
     return {"building_id": building_id, "points": result}
 
@@ -223,22 +216,14 @@ async def building_reading_history(
     hours: int | None,
 ) -> dict:
     offset = (page - 1) * limit
-    stmt = select(Reading).where(Reading.building_id == building_id)
-    count_stmt = select(func.count()).select_from(Reading).where(Reading.building_id == building_id)
-    if utility_type:
-        stmt = stmt.where(Reading.utility_type == utility_type)
-        count_stmt = count_stmt.where(Reading.utility_type == utility_type)
-    if hours:
-        cutoff = now_ts() - hours * 3600
-        stmt = stmt.where(Reading.ts > cutoff)
-        count_stmt = count_stmt.where(Reading.ts > cutoff)
-    stmt = stmt.order_by(desc(Reading.ts)).limit(limit).offset(offset)
+    cutoff = now_ts() - hours * 3600 if hours else None
     async with SessionLocal() as session:
-        total = await session.scalar(count_stmt) or 0
-        rows = (await session.scalars(stmt)).all()
+        repo = ReadingRepository(session)
+        total = await repo.count_building_history(building_id, utility_type, cutoff)
+        rows = await repo.building_history(building_id, offset, limit, utility_type, cutoff)
     return {
         "building_id": building_id,
-        "readings": [_as_dict(row) for row in rows],
+        "readings": [model_to_dict(row) for row in rows],
         "total": total,
         "page": page,
         "pages": (total + limit - 1) // limit,

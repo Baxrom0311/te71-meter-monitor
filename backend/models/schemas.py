@@ -33,23 +33,50 @@ class FirmwareMode(StrEnum):
     auto = "auto"
 
 
+class ChatProvider(StrEnum):
+    gemini = "gemini"
+    deepseek = "deepseek"
+
+
+class ChatRole(StrEnum):
+    user = "user"
+    model = "model"
+
+
 class BuildingUtilityStatus(StrEnum):
     active = "active"
     disabled = "disabled"
     maintenance = "maintenance"
 
 
+class ChatHistoryMessage(BaseModel):
+    role: ChatRole
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=8000)
+    history: list[ChatHistoryMessage] = Field(default_factory=list, max_length=20)
+    provider: ChatProvider = ChatProvider.gemini
+
+
 class BuildingCreate(BaseModel):
-    name: str
-    address: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+    maps_url: Optional[str] = Field(None, max_length=1000)
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
     floors: int = Field(1, ge=1)
     entrances_count: int = Field(1, ge=1)
     description: Optional[str] = None
 
 
 class BuildingUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+    maps_url: Optional[str] = Field(None, max_length=1000)
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
     floors: Optional[int] = Field(None, ge=1)
     entrances_count: Optional[int] = Field(None, ge=1)
     description: Optional[str] = None
@@ -123,6 +150,9 @@ class BuildingResponse(BaseModel):
     id: int
     name: str
     address: Optional[str] = None
+    maps_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     floors: int
     entrances_count: int
     description: Optional[str] = None
@@ -760,7 +790,6 @@ class SummaryResponse(BaseModel):
 
 class HealthWorkersResponse(BaseModel):
     inline: bool
-    celery_broker: bool
 
 
 class HealthResponse(BaseModel):

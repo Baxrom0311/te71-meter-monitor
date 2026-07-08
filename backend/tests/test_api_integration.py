@@ -101,6 +101,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("DeviceListResponse", schemas)
         self.assertIn("DeviceConfigResponse", schemas)
         self.assertIn("DeviceProvisioningTokenListResponse", schemas)
+        self.assertIn("ChatRequest", schemas)
+        self.assertIn("ChatHistoryMessage", schemas)
         restore_schema = openapi["paths"]["/api/backups/restore/{filename}"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(restore_schema["$ref"], "#/components/schemas/BackupRestoreResponse")
         audit_schema = openapi["paths"]["/api/audit-logs"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -115,6 +117,10 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(devices_schema["$ref"], "#/components/schemas/DeviceListResponse")
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
+        chat_request_schema = openapi["paths"]["/api/chat"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+        self.assertEqual(chat_request_schema["$ref"], "#/components/schemas/ChatRequest")
+        chat_response_content = openapi["paths"]["/api/chat"]["post"]["responses"]["200"]["content"]
+        self.assertIn("text/event-stream", chat_response_content)
 
     async def test_backup_management_api_lifecycle(self) -> None:
         admin_headers = await self._admin_headers()
@@ -154,6 +160,63 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
 
         missing_download = await self.client.get(f"/api/backups/download/{filename}", headers=admin_headers)
         self.assertEqual(missing_download.status_code, 404, missing_download.text)
+
+    async def test_building_maps_fields_lifecycle(self) -> None:
+        admin_headers = await self._admin_headers()
+        created = await self.client.post(
+            "/api/buildings",
+            headers=admin_headers,
+            json={
+                "name": "Maps Building",
+                "address": "Toshkent, Yunusobod",
+                "maps_url": "https://maps.google.com/?q=41.2995,69.2401",
+                "latitude": 41.2995,
+                "longitude": 69.2401,
+                "floors": 12,
+                "entrances_count": 2,
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        building_id = created.json()["id"]
+
+        fetched = await self.client.get(f"/api/buildings/{building_id}", headers=admin_headers)
+        self.assertEqual(fetched.status_code, 200, fetched.text)
+        self.assertEqual(fetched.json()["maps_url"], "https://maps.google.com/?q=41.2995,69.2401")
+        self.assertEqual(fetched.json()["latitude"], 41.2995)
+        self.assertEqual(fetched.json()["longitude"], 69.2401)
+
+        updated = await self.client.put(
+            f"/api/buildings/{building_id}",
+            headers=admin_headers,
+            json={
+                "maps_url": "https://www.google.com/maps/place/41.3,69.25",
+                "latitude": 41.3,
+                "longitude": 69.25,
+            },
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        fetched_again = await self.client.get(f"/api/buildings/{building_id}", headers=admin_headers)
+        self.assertEqual(fetched_again.json()["maps_url"], "https://www.google.com/maps/place/41.3,69.25")
+        self.assertEqual(fetched_again.json()["latitude"], 41.3)
+        self.assertEqual(fetched_again.json()["longitude"], 69.25)
+
+        cleared = await self.client.put(
+            f"/api/buildings/{building_id}",
+            headers=admin_headers,
+            json={"maps_url": None, "latitude": None, "longitude": None},
+        )
+        self.assertEqual(cleared.status_code, 200, cleared.text)
+        cleared_fetch = await self.client.get(f"/api/buildings/{building_id}", headers=admin_headers)
+        self.assertIsNone(cleared_fetch.json()["maps_url"])
+        self.assertIsNone(cleared_fetch.json()["latitude"])
+        self.assertIsNone(cleared_fetch.json()["longitude"])
+
+        invalid = await self.client.post(
+            "/api/buildings",
+            headers=admin_headers,
+            json={"name": "Invalid Coordinates", "latitude": 100, "longitude": 69.24},
+        )
+        self.assertEqual(invalid.status_code, 422, invalid.text)
 
     async def test_device_ingestion_ota_commands_and_audit_over_http(self) -> None:
         admin_headers = await self._admin_headers()
@@ -475,6 +538,7 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         finally:
             settings.alert_escalation_after_sec = original_escalation_after_sec
         self.assertGreaterEqual(processed_notifications["sent"], 1)
+        self.assertEqual(processed_notifications["failed"], 0)
         self.assertGreaterEqual(processed_notifications["escalated"], 1)
         self.assertEqual(processed_again["escalated"], 0)
         sent_notifications = await self.client.get("/api/alert-notifications?status=sent", headers=admin_headers)

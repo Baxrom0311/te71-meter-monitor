@@ -26,6 +26,9 @@ class Building(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     address: Mapped[str | None] = mapped_column(String(500))
+    maps_url: Mapped[str | None] = mapped_column(String(1000))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
     floors: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     entrances_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -457,9 +460,19 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), default="user", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[int | None] = mapped_column(Integer)
     last_login: Mapped[int | None] = mapped_column(Integer)
+
+
+class WorkerLock(Base):
+    __tablename__ = "worker_locks"
+
+    name: Mapped[str] = mapped_column(String(128), primary_key=True)
+    locked_until: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner: Mapped[str | None] = mapped_column(String(128))
+    updated_at: Mapped[int | None] = mapped_column(Integer)
 
 
 class AuditLog(Base):

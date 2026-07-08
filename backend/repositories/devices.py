@@ -25,6 +25,17 @@ class DeviceRepository(BaseRepository[Device]):
             stmt = stmt.where(Device.utility_type == utility_type)
         return list((await self.session.scalars(stmt)).all())
 
+    async def list_active_by_ids(self, device_ids: list[str]) -> list[Device]:
+        if not device_ids:
+            return []
+        return list(
+            (
+                await self.session.scalars(
+                    select(Device).where(and_(Device.id.in_(device_ids), Device.is_active.is_(True)))
+                )
+            ).all()
+        )
+
 
 class DeviceProvisioningTokenRepository(BaseRepository[DeviceProvisioningToken]):
     model = DeviceProvisioningToken

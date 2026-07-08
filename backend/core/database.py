@@ -27,6 +27,9 @@ async def _ensure_sqlite_columns(conn) -> None:
     table_columns: dict[str, dict[str, str]] = {
         "buildings": {
             "entrances_count": "INTEGER DEFAULT 1",
+            "maps_url": "VARCHAR(1000)",
+            "latitude": "FLOAT",
+            "longitude": "FLOAT",
             "description": "TEXT",
             "is_active": "BOOLEAN DEFAULT 1",
             "created_at": "INTEGER",
@@ -114,10 +117,12 @@ async def _ensure_sqlite_columns(conn) -> None:
         },
         "ota_batch_devices": {},
         "users": {
+            "token_version": "INTEGER DEFAULT 1",
             "failed_login_count": "INTEGER DEFAULT 0",
             "locked_until": "INTEGER",
             "last_login": "INTEGER",
         },
+        "worker_locks": {},
         "audit_logs": {},
     }
 

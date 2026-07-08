@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, and_, desc, func, inspect, select
+from sqlalchemy import Integer, and_, desc, func, select
 from sqlalchemy.orm import aliased
 
 from core.config import settings
@@ -6,20 +6,19 @@ from core.database import SessionLocal
 from core.metrics import render_http_metrics
 from core.time import now_ts
 from models.entities import Alert, Building, Command, Device, MeasurementPoint, Reading
+from repositories.base import model_to_dict
 from services import devices as devices_service
 from services.websocket import ws_manager
 
 
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
 
 
 async def build_snapshot() -> dict:
     async with SessionLocal() as session:
         devices = (await session.scalars(select(Device).where(Device.is_active.is_(True)))).all()
         alerts = (await session.scalars(select(Alert).order_by(desc(Alert.ts)).limit(20))).all()
-    device_rows = [_as_dict(device) | {"online": devices_service.online_status(device.last_seen)} for device in devices]
-    return {"devices": device_rows, "alerts": [_as_dict(alert) for alert in alerts]}
+    device_rows = [model_to_dict(device) | {"online": devices_service.online_status(device.last_seen)} for device in devices]
+    return {"devices": device_rows, "alerts": [model_to_dict(alert) for alert in alerts]}
 
 
 async def summary() -> dict:
@@ -93,7 +92,6 @@ async def health() -> dict:
         "data_keep_days": settings.data_keep_days,
         "workers": {
             "inline": settings.run_inline_workers,
-            "celery_broker": bool(settings.celery_broker_url),
         },
     }
 

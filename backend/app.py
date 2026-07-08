@@ -5,8 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -30,6 +29,7 @@ from routers.health import router as health_router
 from routers.ota import router as ota_router
 from routers.telemetry import router as telemetry_router
 from routers.websocket import router as websocket_router
+from routers.chat import router as chat_router
 from services.auth import bootstrap_admin
 from services.background import (
     alert_notification_worker,
@@ -106,15 +106,16 @@ app.include_router(ota_router)
 app.include_router(auth_router)
 app.include_router(websocket_router)
 app.include_router(health_router)
+app.include_router(chat_router)
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
+# Vite frontend static assets.
+if settings.static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(settings.static_dir / "assets")), name="assets")
+
+# SPA catch-all — barcha /api/* dan tashqari yo'llar index.html qaytaradi
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def spa_fallback(full_path: str):
     index_file = settings.static_dir / "index.html"
     if index_file.exists():
-        return HTMLResponse(index_file.read_text(encoding="utf-8"))
+        return FileResponse(index_file)
     return HTMLResponse(f"<h1>{settings.app_name} v{settings.app_version}</h1>")
-
-# Frontend — serve all HTML pages and static assets
-# Mount happens after all /api/* routes so API always takes precedence
-if settings.static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(settings.static_dir), html=True), name="frontend")

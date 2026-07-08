@@ -4,10 +4,13 @@ from pathlib import Path
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development").lower()
     db_path: Path = Path(os.getenv("DB_PATH", "data/meters.db"))
-    database_url: str = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://meter:meter_password@localhost:5432/meter_monitor",
+    )
     ota_dir: Path = Path(os.getenv("OTA_DIR", "firmware"))
     backup_dir: Path = Path(os.getenv("BACKUP_DIR", "backups"))
-    static_dir: Path = Path(os.getenv("STATIC_DIR", "../frontend"))
+    static_dir: Path = Path(os.getenv("STATIC_DIR", "../meter-frontend/dist"))
     backup_keep_days: int = int(os.getenv("BACKUP_KEEP_DAYS", "14"))
     audit_keep_days: int = int(os.getenv("AUDIT_KEEP_DAYS", "180"))
 
@@ -40,10 +43,9 @@ class Settings:
     ota_batch_retry_timeout_sec: int = int(os.getenv("OTA_BATCH_RETRY_TIMEOUT_SEC", "900"))
     ota_batch_max_retries: int = int(os.getenv("OTA_BATCH_MAX_RETRIES", "3"))
     device_api_token: str = os.getenv("DEVICE_API_TOKEN", "")
-    celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    celery_result_backend: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     run_inline_workers: bool = os.getenv("RUN_INLINE_WORKERS", "true").lower() in {"1", "true", "yes", "on"}
-    ready_check_redis: bool = os.getenv("READY_CHECK_REDIS", "false").lower() in {"1", "true", "yes", "on"}
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_format: str = os.getenv("LOG_FORMAT", "text").lower()
 
@@ -62,6 +64,14 @@ class Settings:
     gas_pressure_max_bar: float = float(os.getenv("GAS_PRESSURE_MAX_BAR", "5.0"))
     alert_dedupe_sec: int = int(os.getenv("ALERT_DEDUPE_SEC", "600"))
     alert_escalation_after_sec: int = int(os.getenv("ALERT_ESCALATION_AFTER_SEC", "300"))
+    alert_notification_channels: list[str] = [
+        item.strip().lower()
+        for item in os.getenv("ALERT_NOTIFICATION_CHANNELS", "internal").split(",")
+        if item.strip()
+    ]
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
+    alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL", "")
 
     app_name: str = "Meter Monitor"
     app_version: str = "4.0"
@@ -107,6 +117,12 @@ class Settings:
             errors.append("Retention kunlari kamida 1 bo'lishi kerak")
         if self.alert_escalation_after_sec < 0:
             errors.append("ALERT_ESCALATION_AFTER_SEC manfiy bo'lmasligi kerak")
+        if self.is_production and not self.database_url.startswith(("postgresql+asyncpg://", "postgresql://")):
+            errors.append("Productionda DATABASE_URL PostgreSQL bo'lishi kerak")
+        allowed_channels = {"internal", "telegram", "webhook"}
+        invalid_channels = [item for item in self.alert_notification_channels if item not in allowed_channels]
+        if invalid_channels:
+            errors.append(f"ALERT_NOTIFICATION_CHANNELS noto'g'ri: {', '.join(invalid_channels)}")
 
         if not self.is_production:
             if errors:
@@ -124,6 +140,12 @@ class Settings:
             errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
         if self.trusted_hosts == ["*"]:
             errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
+        if "telegram" in self.alert_notification_channels and (
+            not self.telegram_bot_token or not self.telegram_chat_id
+        ):
+            errors.append("Telegram alert channel uchun TELEGRAM_BOT_TOKEN va TELEGRAM_CHAT_ID kerak")
+        if "webhook" in self.alert_notification_channels and not self.alert_webhook_url:
+            errors.append("Webhook alert channel uchun ALERT_WEBHOOK_URL kerak")
         if errors:
             raise RuntimeError("; ".join(errors))
 

@@ -3,28 +3,26 @@ import json
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import and_, desc, func, inspect, select
-from sqlalchemy.orm import selectinload
 
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
 from models.entities import (
     Command,
-    Device,
     Firmware,
     FirmwareCompatibility,
     FirmwareInstallEvent,
-    MeasurementPoint,
     OTABatch,
     OTABatchDevice,
 )
 from models.schemas import OTABatchCreate, OtaInstallReport
-from repositories.devices import CommandRepository
+from repositories.base import model_to_dict
+from repositories.buildings import MeasurementPointRepository
+from repositories.devices import CommandRepository, DeviceRepository
+from repositories.firmware import FirmwareRepository
+from repositories.ota import FirmwareInstallEventRepository, OTABatchDeviceRepository, OTABatchRepository
 
 
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
 
 
 def _version_tuple(version: str | None) -> tuple[int, int, int] | None:
@@ -147,8 +145,8 @@ def _firmware_matches_device(firmware: Firmware, target: dict[str, str | None]) 
 
 
 def _firmware_response(firmware: Firmware, *, device_id: str | None = None) -> dict:
-    data = _as_dict(firmware)
-    data["compatibilities"] = [_as_dict(row) for row in firmware.compatibilities]
+    data = model_to_dict(firmware)
+    data["compatibilities"] = [model_to_dict(row) for row in firmware.compatibilities]
     if device_id:
         data["url"] = f"/api/ota/firmware/{firmware.filename}?device_id={device_id}"
     else:
@@ -157,7 +155,7 @@ def _firmware_response(firmware: Firmware, *, device_id: str | None = None) -> d
 
 
 def _batch_response(batch: OTABatch) -> dict:
-    data = _as_dict(batch)
+    data = model_to_dict(batch)
     processed = (batch.success_count or 0) + (batch.failure_count or 0) + (batch.skipped_count or 0)
     data["progress_percentage"] = round((processed / batch.total_devices) * 100, 1) if batch.total_devices else 0.0
     data["pending_count"] = max((batch.total_devices or 0) - processed, 0)
@@ -168,7 +166,7 @@ def _batch_detail_response(batch: OTABatch) -> dict:
     return {
         **_batch_response(batch),
         "firmware": _firmware_response(batch.firmware),
-        "devices": [_as_dict(device) for device in batch.devices],
+        "devices": [model_to_dict(device) for device in batch.devices],
     }
 
 
@@ -240,7 +238,7 @@ async def ota_upload(
         ],
     )
     async with SessionLocal() as session:
-        session.add(firmware)
+        FirmwareRepository(session).add(firmware)
         await session.flush()
         response = {"ok": True, **_firmware_response(firmware)}
         await session.commit()
@@ -249,19 +247,13 @@ async def ota_upload(
 
 async def ota_list() -> dict:
     async with SessionLocal() as session:
-        rows = (
-            await session.scalars(
-                select(Firmware)
-                .options(selectinload(Firmware.compatibilities))
-                .order_by(desc(Firmware.uploaded))
-            )
-        ).all()
+        rows = await FirmwareRepository(session).list_latest_with_compatibilities()
     return {"firmware": [_firmware_response(row) for row in rows]}
 
 
 async def ota_delete(firmware_id: int) -> dict:
     async with SessionLocal() as session:
-        firmware = await session.get(Firmware, firmware_id)
+        firmware = await FirmwareRepository(session).get(firmware_id)
         if not firmware:
             raise HTTPException(404, "Topilmadi")
         if firmware.active:
@@ -269,15 +261,15 @@ async def ota_delete(firmware_id: int) -> dict:
         path = Path(settings.ota_dir) / firmware.filename
         if path.exists():
             path.unlink()
-        await session.delete(firmware)
+        await FirmwareRepository(session).delete(firmware)
         await session.commit()
     return {"ok": True}
 
 
 async def ota_check(device_id: str, current_version: str) -> dict:
     async with SessionLocal() as session:
-        device = await session.get(Device, device_id)
-        point = await session.get(MeasurementPoint, device.point_id) if device and device.point_id else None
+        device = await DeviceRepository(session).get(device_id)
+        point = await MeasurementPointRepository(session).get(device.point_id) if device and device.point_id else None
         target = {
             "utility_type": device.utility_type if device else None,
             "firmware_mode": device.firmware_mode if device else "auto",
@@ -286,14 +278,7 @@ async def ota_check(device_id: str, current_version: str) -> dict:
             "sensor_type": point.sensor_type if point else None,
             "converter_type": point.converter_type if point else None,
         }
-        candidates = (
-            await session.scalars(
-                select(Firmware)
-                .options(selectinload(Firmware.compatibilities))
-                .where(Firmware.active.is_(True))
-                .order_by(desc(Firmware.uploaded))
-            )
-        ).all()
+        candidates = await FirmwareRepository(session).list_active_with_compatibilities()
         firmware = next(
             (
                 row
@@ -313,10 +298,10 @@ async def ota_check(device_id: str, current_version: str) -> dict:
 async def ota_report(body: OtaInstallReport) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        device = await session.get(Device, body.device_id)
+        device = await DeviceRepository(session).get(body.device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
-        if body.firmware_id and not await session.get(Firmware, body.firmware_id):
+        if body.firmware_id and not await FirmwareRepository(session).get(body.firmware_id):
             raise HTTPException(404, "Firmware topilmadi")
         event = FirmwareInstallEvent(
             device_id=body.device_id,
@@ -328,20 +313,11 @@ async def ota_report(body: OtaInstallReport) -> dict:
             ts=ts,
             created_at=ts,
         )
-        session.add(event)
+        FirmwareInstallEventRepository(session).add(event)
         if body.firmware_id:
-            batch_device = await session.scalar(
-                select(OTABatchDevice)
-                .join(OTABatch, OTABatchDevice.batch_id == OTABatch.id)
-                .where(
-                    and_(
-                        OTABatch.firmware_id == body.firmware_id,
-                        OTABatchDevice.device_id == body.device_id,
-                        OTABatchDevice.status.in_(["pending", "notified", "downloading", "failed"]),
-                    )
-                )
-                .order_by(desc(OTABatchDevice.id))
-                .limit(1)
+            batch_device = await OTABatchDeviceRepository(session).latest_for_report(
+                body.firmware_id,
+                body.device_id,
             )
             if batch_device:
                 batch_device.updated_at = ts
@@ -369,47 +345,21 @@ async def ota_report(body: OtaInstallReport) -> dict:
 
 
 async def ota_events(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
-    stmt = select(FirmwareInstallEvent).order_by(desc(FirmwareInstallEvent.ts)).limit(limit)
-    if device_id:
-        stmt = stmt.where(FirmwareInstallEvent.device_id == device_id)
-    if status:
-        stmt = stmt.where(FirmwareInstallEvent.status == status)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
-    return {"events": [_as_dict(row) for row in rows], "total": len(rows)}
+        rows = await FirmwareInstallEventRepository(session).list_filtered(device_id, status, limit)
+    return {"events": [model_to_dict(row) for row in rows], "total": len(rows)}
 
 
 async def _refresh_batch_counts(session, firmware_id: int | None = None, batch_id: int | None = None) -> None:
-    stmt = select(OTABatch)
-    if firmware_id:
-        stmt = stmt.where(OTABatch.firmware_id == firmware_id)
-    if batch_id:
-        stmt = stmt.where(OTABatch.id == batch_id)
-    batches = (await session.scalars(stmt)).all()
+    batch_repo = OTABatchRepository(session)
+    device_repo = OTABatchDeviceRepository(session)
+    batches = await batch_repo.list_refresh_targets(firmware_id, batch_id)
     ts = now_ts()
     for batch in batches:
-        success = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(
-                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "success")
-            )
-        ) or 0
-        failed = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(
-                and_(
-                    OTABatchDevice.batch_id == batch.id,
-                    OTABatchDevice.status == "failed",
-                    OTABatchDevice.retry_count >= settings.ota_batch_max_retries,
-                )
-            )
-        ) or 0
-        skipped = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(
-                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "skipped")
-            )
-        ) or 0
-        total = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(OTABatchDevice.batch_id == batch.id)
-        ) or 0
+        success = await device_repo.status_count(batch.id, "success")
+        failed = await device_repo.status_count(batch.id, "failed", settings.ota_batch_max_retries)
+        skipped = await device_repo.status_count(batch.id, "skipped")
+        total = await device_repo.total_count(batch.id)
         batch.success_count = success
         batch.failure_count = failed
         batch.skipped_count = skipped
@@ -422,16 +372,7 @@ async def _refresh_batch_counts(session, firmware_id: int | None = None, batch_i
 
 async def _prepare_batch_retries(session, batch_id: int, ts: int) -> dict:
     timeout_cutoff = ts - settings.ota_batch_retry_timeout_sec
-    retryable = (
-        await session.scalars(
-            select(OTABatchDevice).where(
-                and_(
-                    OTABatchDevice.batch_id == batch_id,
-                    OTABatchDevice.status.in_(["failed", "notified", "downloading"]),
-                )
-            )
-        )
-    ).all()
+    retryable = await OTABatchDeviceRepository(session).retryable(batch_id)
     reset = 0
     skipped = 0
     for row in retryable:
@@ -454,18 +395,31 @@ async def _prepare_batch_retries(session, batch_id: int, ts: int) -> dict:
     return {"retry_reset": reset, "retry_skipped": skipped}
 
 
+async def _claim_pending_batch_devices(batch_id: int, limit: int, ts: int) -> list[int]:
+    if limit <= 0:
+        return []
+
+    async with SessionLocal() as session:
+        repo = OTABatchDeviceRepository(session)
+        candidate_ids = await repo.candidate_pending_ids(batch_id, limit)
+        claimed_ids: list[int] = []
+        for row_id in candidate_ids:
+            if await repo.claim_pending(row_id, ts):
+                claimed_ids.append(row_id)
+        await session.commit()
+    return claimed_ids
+
+
 async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
     device_ids = list(dict.fromkeys(body.device_ids))
     if not device_ids:
         raise HTTPException(422, "device_ids bo'sh bo'lmasin")
     ts = now_ts()
     async with SessionLocal() as session:
-        firmware = await session.get(Firmware, body.firmware_id)
+        firmware = await FirmwareRepository(session).get(body.firmware_id)
         if not firmware:
             raise HTTPException(404, "Firmware topilmadi")
-        devices = (
-            await session.scalars(select(Device).where(and_(Device.id.in_(device_ids), Device.is_active.is_(True))))
-        ).all()
+        devices = await DeviceRepository(session).list_active_by_ids(device_ids)
         found_ids = {device.id for device in devices}
         missing = [device_id for device_id in device_ids if device_id not in found_ids]
         if missing:
@@ -482,10 +436,10 @@ async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
             created_at=ts,
             updated_at=ts,
         )
-        session.add(batch)
+        OTABatchRepository(session).add(batch)
         await session.flush()
         for device in devices:
-            session.add(
+            OTABatchDeviceRepository(session).add(
                 OTABatchDevice(
                     batch_id=batch.id,
                     device_id=device.id,
@@ -496,30 +450,19 @@ async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
                 )
             )
         await session.commit()
-        batch = await session.scalar(
-            select(OTABatch)
-            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities), selectinload(OTABatch.devices))
-            .where(OTABatch.id == batch.id)
-        )
+        batch = await OTABatchRepository(session).get_detail(batch.id)
     return {"ok": True, "batch": _batch_detail_response(batch)}
 
 
 async def list_ota_batches(status: str | None = None, limit: int = 100) -> dict:
-    stmt = select(OTABatch).order_by(desc(OTABatch.created_at)).limit(limit)
-    if status:
-        stmt = stmt.where(OTABatch.status == status)
     async with SessionLocal() as session:
-        rows = (await session.scalars(stmt)).all()
+        rows = await OTABatchRepository(session).list_filtered(status, limit)
     return {"batches": [_batch_response(row) for row in rows], "total": len(rows)}
 
 
 async def get_ota_batch(batch_id: int) -> dict:
     async with SessionLocal() as session:
-        batch = await session.scalar(
-            select(OTABatch)
-            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities), selectinload(OTABatch.devices))
-            .where(OTABatch.id == batch_id)
-        )
+        batch = await OTABatchRepository(session).get_detail(batch_id)
     if not batch:
         raise HTTPException(404, "OTA batch topilmadi")
     return _batch_detail_response(batch)
@@ -528,11 +471,7 @@ async def get_ota_batch(batch_id: int) -> dict:
 async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        batch = await session.scalar(
-            select(OTABatch)
-            .options(selectinload(OTABatch.firmware).selectinload(Firmware.compatibilities))
-            .where(OTABatch.id == batch_id)
-        )
+        batch = await OTABatchRepository(session).get_with_firmware(batch_id)
         if not batch:
             raise HTTPException(404, "OTA batch topilmadi")
         if batch.status in {"completed", "failed", "cancelled"}:
@@ -541,30 +480,29 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
             raise HTTPException(400, "OTA batch hali schedule vaqtiga yetmadi")
 
         retry_result = await _prepare_batch_retries(session, batch.id, ts)
+        await _refresh_batch_counts(session, batch_id=batch.id)
+        checked_batch_id = batch.id
+        devices_per_hour = batch.devices_per_hour or 1
+        await session.commit()
 
-        notified_last_hour = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(
-                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.notified_at > ts - 3600)
-            )
-        ) or 0
-        available = max((batch.devices_per_hour or 1) - notified_last_hour, 0)
+        notified_last_hour = await OTABatchDeviceRepository(session).notified_count_since(checked_batch_id, ts - 3600)
+        available = max(devices_per_hour - notified_last_hour, 0)
         if limit is not None:
             available = min(available, limit)
 
-        rows = (
-            await session.scalars(
-                select(OTABatchDevice)
-                .where(and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending"))
-                .order_by(OTABatchDevice.id)
-                .limit(available)
-            )
-        ).all()
+    claimed_ids = await _claim_pending_batch_devices(batch_id, available, ts)
+
+    async with SessionLocal() as session:
+        batch = await OTABatchRepository(session).get_with_firmware(batch_id)
+        if not batch:
+            raise HTTPException(404, "OTA batch topilmadi")
+        rows = await OTABatchDeviceRepository(session).claimed_processing(batch.id, claimed_ids)
 
         queued = 0
         skipped = retry_result["retry_skipped"]
         command_repo = CommandRepository(session)
         for row in rows:
-            device = await session.get(Device, row.device_id)
+            device = await DeviceRepository(session).get(row.device_id)
             if not device or not device.is_active:
                 row.status = "skipped"
                 row.error_message = "Device inactive or missing"
@@ -573,6 +511,9 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
                 continue
             pending_count = await command_repo.active_pending_count(row.device_id, ts)
             if pending_count >= settings.command_max_pending_per_device:
+                row.status = "pending"
+                row.error_message = "Pending command limit reached"
+                row.updated_at = ts
                 skipped += 1
                 continue
             command = Command(
@@ -594,11 +535,7 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
             batch.status = "in_progress"
             batch.started_at = batch.started_at or ts
         await _refresh_batch_counts(session, batch_id=batch.id)
-        remaining = await session.scalar(
-            select(func.count()).select_from(OTABatchDevice).where(
-                and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending")
-            )
-        ) or 0
+        remaining = await OTABatchDeviceRepository(session).pending_count(batch.id)
         await session.commit()
     return {"ok": True, "batch_id": batch_id, "queued": queued, "skipped": skipped, "remaining": remaining}
 
@@ -606,18 +543,7 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
 async def process_due_ota_batches_once(limit_per_batch: int | None = None) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        batch_ids = (
-            await session.scalars(
-                select(OTABatch.id)
-                .where(
-                    and_(
-                        OTABatch.status.in_(["pending", "in_progress"]),
-                        (OTABatch.scheduled_at.is_(None)) | (OTABatch.scheduled_at <= ts),
-                    )
-                )
-                .order_by(OTABatch.scheduled_at.is_(None), OTABatch.scheduled_at, OTABatch.id)
-            )
-        ).all()
+        batch_ids = await OTABatchRepository(session).due_ids(ts)
 
     processed = []
     errors = []
@@ -632,7 +558,7 @@ async def process_due_ota_batches_once(limit_per_batch: int | None = None) -> di
 async def cancel_ota_batch(batch_id: int) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
-        batch = await session.get(OTABatch, batch_id)
+        batch = await OTABatchRepository(session).get(batch_id)
         if not batch:
             raise HTTPException(404, "OTA batch topilmadi")
         if batch.status in {"completed", "failed", "cancelled"}:
@@ -640,13 +566,7 @@ async def cancel_ota_batch(batch_id: int) -> dict:
         batch.status = "cancelled"
         batch.completed_at = ts
         batch.updated_at = ts
-        pending = (
-            await session.scalars(
-                select(OTABatchDevice).where(
-                    and_(OTABatchDevice.batch_id == batch.id, OTABatchDevice.status == "pending")
-                )
-            )
-        ).all()
+        pending = await OTABatchDeviceRepository(session).pending_rows(batch.id)
         for row in pending:
             row.status = "skipped"
             row.error_message = "Batch cancelled"

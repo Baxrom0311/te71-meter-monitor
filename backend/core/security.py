@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
@@ -47,11 +48,12 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(user_id: int, username: str, role: str) -> str:
+def create_access_token(user_id: int, username: str, role: str, token_version: int = 1) -> str:
     payload = {
         "sub": user_id,
         "username": username,
         "role": role,
+        "tv": token_version,
         "exp": now_ts() + settings.access_token_ttl_sec,
     }
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
@@ -73,18 +75,58 @@ def decode_access_token(token: str) -> dict:
         raise HTTPException(401, "Token noto'g'ri yoki muddati tugagan")
 
 
+# Oddiy TTL cache — har bir authenticated so'rovda DB query oldini olish
+_user_status_cache: dict[int, tuple[float, str, str, bool, int]] = {}
+_USER_CACHE_TTL = 300  # 5 daqiqa
+
+
+def invalidate_user_cache(user_id: int) -> None:
+    """User parol/role o'zgarganda cache ni tozalash."""
+    _user_status_cache.pop(user_id, None)
+
+
 async def current_token_payload(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:
     if not credentials:
         raise HTTPException(401, "Authorization token kerak")
-    payload = decode_access_token(credentials.credentials)
+    return await validate_access_token(credentials.credentials)
+
+
+async def validate_access_token(token: str) -> dict:
+    payload = decode_access_token(token)
+
+    user_id = payload.get("sub")
+    now = time.time()
+
+    # Cache dan tekshirish
+    cached = _user_status_cache.get(user_id)
+    if cached:
+        expire_ts, cached_username, cached_role, cached_active, cached_token_version = cached
+        if now < expire_ts:
+            if not cached_active:
+                raise HTTPException(401, "User aktiv emas")
+            if cached_username != payload.get("username") or cached_role != payload.get("role"):
+                raise HTTPException(401, "Token eskirgan, qayta login qiling")
+            if cached_token_version != int(payload.get("tv") or 0):
+                raise HTTPException(401, "Token eskirgan, qayta login qiling")
+            return payload
+
+    # Cache da yo'q yoki eskirgan — DB dan o'qish
     async with SessionLocal() as session:
-        user = await session.get(User, payload.get("sub"))
+        user = await session.get(User, user_id)
     if not user or not user.is_active:
+        _user_status_cache[user_id] = (now + _USER_CACHE_TTL, "", "", False, 0)
         raise HTTPException(401, "User aktiv emas")
     if user.username != payload.get("username") or user.role != payload.get("role"):
+        _user_status_cache.pop(user_id, None)
         raise HTTPException(401, "Token eskirgan, qayta login qiling")
+    if user.token_version != int(payload.get("tv") or 0):
+        _user_status_cache.pop(user_id, None)
+        raise HTTPException(401, "Token eskirgan, qayta login qiling")
+
+    # Cache ga saqlash
+    _user_status_cache[user_id] = (now + _USER_CACHE_TTL, user.username, user.role, user.is_active, user.token_version)
     return payload
 
 

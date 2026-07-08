@@ -1,18 +1,17 @@
 from fastapi import HTTPException
-from sqlalchemy import inspect
 
 from core.config import settings
 from core.database import SessionLocal
 from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
-from models.entities import Building, Device, DeviceProvisioningToken, MeasurementPoint
+from models.entities import Device, DeviceProvisioningToken
 from models.schemas import DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
+from repositories.base import model_to_dict
+from repositories.buildings import BuildingRepository, MeasurementPointRepository
 from repositories.devices import DeviceProvisioningTokenRepository, DeviceRepository
 from services.websocket import ws_manager
 
 
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
 
 
 def _online(last_seen: int | None) -> bool:
@@ -56,8 +55,8 @@ async def verify_device_access(device_id: str | None, token: str | None) -> None
 async def get_device_config(device_id: str) -> dict:
     async with SessionLocal() as session:
         device = await DeviceRepository(session).get(device_id)
-        point = await session.get(MeasurementPoint, device.point_id) if device and device.point_id else None
-        building = await session.get(Building, device.building_id) if device and device.building_id else None
+        point = await MeasurementPointRepository(session).get(device.point_id) if device and device.point_id else None
+        building = await BuildingRepository(session).get(device.building_id) if device and device.building_id else None
 
     mode = device.firmware_mode if device else "auto"
     utility_type = device.utility_type if device else "electricity"
@@ -68,9 +67,9 @@ async def get_device_config(device_id: str) -> dict:
         "utility_type": utility_type,
         "device_role": device.device_role if device else None,
         "building_id": device.building_id if device else None,
-        "building": _as_dict(building) if building else None,
+        "building": model_to_dict(building) if building else None,
         "measurement_point_id": device.point_id if device else None,
-        "measurement_point": _as_dict(point) if point else None,
+        "measurement_point": model_to_dict(point) if point else None,
         "hardware_version": device.hardware_version if device else None,
         "software_version": device.software_version if device else None,
         "token_required": bool(settings.device_api_token or (device and device.api_token_hash)),
@@ -197,6 +196,9 @@ async def update_device_status(body: DeviceStatus) -> dict:
         device.build_number = body.build_number or device.build_number
         device.last_seen = ts if body.online else device.last_seen
         device.updated_at = ts
+        if body.online:
+            from services.alerts import clear_offline_alerts_for_device
+            await clear_offline_alerts_for_device(session, body.device_id)
         await session.commit()
     await ws_manager.broadcast({"type": "status", "device_id": body.device_id, "online": body.online})
     return {"ok": True}
@@ -209,15 +211,16 @@ async def list_devices(
     building: str | None = None,
     utility_type: str | None = None,
 ) -> dict:
+    cutoff = now_ts() - settings.offline_sec
     async with SessionLocal() as session:
         rows = await DeviceRepository(session).list_filtered(meter_type, group, building, utility_type)
 
     devices = []
     for device in rows:
-        row = _as_dict(device) | {"online": _online(device.last_seen)}
-        if online is not None and row["online"] != online:
+        is_online = (device.last_seen or 0) > cutoff
+        if online is not None and is_online != online:
             continue
-        devices.append(row)
+        devices.append(model_to_dict(device) | {"online": is_online})
     return {"devices": devices, "total": len(devices)}
 
 
@@ -226,7 +229,7 @@ async def get_device(device_id: str) -> dict:
         device = await DeviceRepository(session).get(device_id)
     if not device:
         raise HTTPException(404, "Qurilma topilmadi")
-    return _as_dict(device) | {"online": _online(device.last_seen)}
+    return model_to_dict(device) | {"online": _online(device.last_seen)}
 
 
 async def update_device(device_id: str, body: DeviceUpdate) -> dict:
@@ -234,13 +237,15 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     async with SessionLocal() as session:
+        building_repo = BuildingRepository(session)
+        point_repo = MeasurementPointRepository(session)
         device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
-        if fields.get("building_id") and not await session.get(Building, fields["building_id"]):
+        if fields.get("building_id") and not await building_repo.get(fields["building_id"]):
             raise HTTPException(404, "Building topilmadi")
         if fields.get("point_id"):
-            point = await session.get(MeasurementPoint, fields["point_id"])
+            point = await point_repo.get(fields["point_id"])
             if not point:
                 raise HTTPException(404, "Measurement point topilmadi")
             building_id = fields.get("building_id") or device.building_id
@@ -294,10 +299,12 @@ async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: 
     token = generate_secret_token()
     ts = now_ts()
     async with SessionLocal() as session:
-        if body.building_id and not await session.get(Building, body.building_id):
+        building_repo = BuildingRepository(session)
+        point_repo = MeasurementPointRepository(session)
+        if body.building_id and not await building_repo.get(body.building_id):
             raise HTTPException(404, "Building topilmadi")
         if body.point_id:
-            point = await session.get(MeasurementPoint, body.point_id)
+            point = await point_repo.get(body.point_id)
             if not point:
                 raise HTTPException(404, "Measurement point topilmadi")
             if body.building_id and point.building_id and point.building_id != body.building_id:
@@ -339,7 +346,7 @@ async def list_provisioning_tokens(active_only: bool = True, limit: int = 100) -
         rows = await DeviceProvisioningTokenRepository(session).list_filtered(active_only, limit, ts)
     result = []
     for row in rows:
-        data = _as_dict(row)
+        data = model_to_dict(row)
         data.pop("token_hash", None)
         result.append(data)
     return {"tokens": result}
@@ -359,6 +366,6 @@ async def revoke_provisioning_token(token_id: int, admin: dict) -> dict:
             row.revoked_by_username = admin.get("username")
             await session.commit()
             await session.refresh(row)
-    data = _as_dict(row)
+    data = model_to_dict(row)
     data.pop("token_hash", None)
     return {"ok": True, "token": data}

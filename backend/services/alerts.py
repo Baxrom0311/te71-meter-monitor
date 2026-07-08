@@ -1,13 +1,14 @@
 from fastapi import HTTPException
-from sqlalchemy import and_, inspect, or_, select, update
 
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
-from models.entities import Alert, AlertNotification, AlertRule, Building
+from models.entities import Alert, AlertNotification, AlertRule
 from models.schemas import AlertRuleCreate, AlertRuleUpdate, MeterReading
 from repositories.alerts import AlertNotificationRepository, AlertRepository, AlertRuleRepository
-from services.websocket import ws_manager
+from repositories.base import model_to_dict
+from repositories.buildings import BuildingRepository
+from services.notifications import send_alert_notification
 
 ALERT_RULE_KINDS = {
     "undervoltage",
@@ -20,8 +21,6 @@ ALERT_RULE_KINDS = {
 }
 
 
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
 
 
 def _validate_alert_rule_values(kind: str, min_value: float | None, max_value: float | None) -> None:
@@ -38,18 +37,11 @@ def _validate_alert_rule_values(kind: str, min_value: float | None, max_value: f
 
 
 async def _alert_rules_for_reading(session, reading: MeterReading) -> dict[str, AlertRule]:
-    stmt = select(AlertRule).where(
-        and_(
-            AlertRule.enabled.is_(True),
-            AlertRule.kind.in_(ALERT_RULE_KINDS),
-            or_(AlertRule.utility_type.is_(None), AlertRule.utility_type == str(reading.utility_type)),
-        )
+    rows = await AlertRuleRepository(session).matching_for_reading(
+        str(reading.utility_type),
+        reading.building_id,
+        ALERT_RULE_KINDS,
     )
-    if reading.building_id is not None:
-        stmt = stmt.where(or_(AlertRule.building_id.is_(None), AlertRule.building_id == reading.building_id))
-    else:
-        stmt = stmt.where(AlertRule.building_id.is_(None))
-    rows = (await session.scalars(stmt)).all()
     selected: dict[str, AlertRule] = {}
     selected_score: dict[str, int] = {}
     for row in rows:
@@ -115,8 +107,9 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
             undervoltage_min = _rule_min(rules.get("undervoltage"), settings.voltage_min)
             overvoltage_max = _rule_max(rules.get("overvoltage"), settings.voltage_max)
             if voltage < undervoltage_min or voltage > overvoltage_max:
-                kind = "overvoltage" if voltage > overvoltage_max else "undervoltage"
-                rule = rules.get(kind)
+                rule_kind = "overvoltage" if voltage > overvoltage_max else "undervoltage"
+                kind = f"{rule_kind}_{phase.lower()}"
+                rule = rules.get(rule_kind)
                 _queue_alert(
                     alerts,
                     Alert(
@@ -234,20 +227,11 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
             )
 
     to_broadcast = []
+    alert_repo = AlertRepository(session)
     for alert, dedupe_sec in alerts:
-        recent = await session.scalar(
-            select(Alert.id).where(
-                and_(
-                    Alert.device_id == alert.device_id,
-                    Alert.kind == alert.kind,
-                    Alert.cleared.is_(False),
-                    Alert.ts > ts - dedupe_sec,
-                )
-            )
-        )
-        if recent:
+        if await alert_repo.has_recent_duplicate(alert, ts - dedupe_sec):
             continue
-        session.add(alert)
+        alert_repo.add(alert)
         await session.flush()
         if alert.severity == "critical":
             session.add(_notification_for_alert(alert, ts))
@@ -267,35 +251,41 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
 async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int) -> dict:
     async with SessionLocal() as session:
         rows = await AlertRepository(session).list_filtered(device_id, kind, cleared, limit)
-    return {"alerts": [_as_dict(row) for row in rows]}
+    return {"alerts": [model_to_dict(row) for row in rows]}
 
 
 async def list_alert_notifications(status: str | None = None, limit: int = 100) -> dict:
     async with SessionLocal() as session:
         rows = await AlertNotificationRepository(session).list_filtered(status, limit)
-    return {"notifications": [_as_dict(row) for row in rows], "total": len(rows)}
+    return {"notifications": [model_to_dict(row) for row in rows], "total": len(rows)}
 
 
 async def dispatch_pending_notifications_once(limit: int = 100) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
         rows = await AlertNotificationRepository(session).pending(limit)
-        for row in rows:
-            row.status = "sent"
+        payloads = [model_to_dict(row) for row in rows]
+    results = []
+    for payload in payloads:
+        results.append(await send_alert_notification(payload, "sent"))
+
+    sent = 0
+    failed = 0
+    async with SessionLocal() as session:
+        repo = AlertNotificationRepository(session)
+        for payload, result in zip(payloads, results):
+            row = await repo.get(payload["id"])
+            if not row or row.status != "pending":
+                continue
+            if result["ok"]:
+                sent += 1
+                row.status = "sent"
+            else:
+                failed += 1
+                row.status = "failed"
             row.sent_at = ts
         await session.commit()
-    for row in rows:
-        await ws_manager.broadcast(
-            {
-                "type": "alert_notification",
-                "status": "sent",
-                "severity": row.severity,
-                "kind": row.kind,
-                "device_id": row.device_id,
-                "message": row.message,
-            }
-        )
-    return {"sent": len(rows)}
+    return {"sent": sent, "failed": failed}
 
 
 async def escalate_open_alerts_once(limit: int = 100) -> dict:
@@ -304,20 +294,7 @@ async def escalate_open_alerts_once(limit: int = 100) -> dict:
     created: list[AlertNotification] = []
     async with SessionLocal() as session:
         notification_repo = AlertNotificationRepository(session)
-        alerts = (
-            await session.scalars(
-                select(Alert)
-                .where(
-                    and_(
-                        Alert.cleared.is_(False),
-                        Alert.severity == "critical",
-                        Alert.ts <= cutoff,
-                    )
-                )
-                .order_by(Alert.ts)
-                .limit(limit)
-            )
-        ).all()
+        alerts = await AlertRepository(session).open_critical_due_for_escalation(cutoff, limit)
         for alert in alerts:
             if await notification_repo.has_escalation(alert.id):
                 continue
@@ -339,16 +316,7 @@ async def escalate_open_alerts_once(limit: int = 100) -> dict:
             created.append(notification)
         await session.commit()
     for row in created:
-        await ws_manager.broadcast(
-            {
-                "type": "alert_notification",
-                "status": "escalated",
-                "severity": row.severity,
-                "kind": row.kind,
-                "device_id": row.device_id,
-                "message": row.message,
-            }
-        )
+        await send_alert_notification(model_to_dict(row), "escalated")
     return {"escalated": len(created)}
 
 
@@ -366,7 +334,7 @@ async def list_alert_rules(
 ) -> dict:
     async with SessionLocal() as session:
         rows = await AlertRuleRepository(session).list_filtered(utility_type, building_id, enabled, limit)
-    return {"rules": [_as_dict(row) for row in rows], "total": len(rows), "allowed_kinds": sorted(ALERT_RULE_KINDS)}
+    return {"rules": [model_to_dict(row) for row in rows], "total": len(rows), "allowed_kinds": sorted(ALERT_RULE_KINDS)}
 
 
 async def create_alert_rule(body: AlertRuleCreate) -> dict:
@@ -374,7 +342,7 @@ async def create_alert_rule(body: AlertRuleCreate) -> dict:
     _validate_alert_rule_values(kind, body.min_value, body.max_value)
     ts = now_ts()
     async with SessionLocal() as session:
-        if body.building_id is not None and not await session.get(Building, body.building_id):
+        if body.building_id is not None and not await BuildingRepository(session).get(body.building_id):
             raise HTTPException(404, "Dom topilmadi")
         rule = AlertRule(
             building_id=body.building_id,
@@ -392,12 +360,12 @@ async def create_alert_rule(body: AlertRuleCreate) -> dict:
         session.add(rule)
         await session.commit()
         await session.refresh(rule)
-    return {"ok": True, "rule": _as_dict(rule)}
+    return {"ok": True, "rule": model_to_dict(rule)}
 
 
 async def update_alert_rule(rule_id: int, body: AlertRuleUpdate) -> dict:
     async with SessionLocal() as session:
-        rule = await session.get(AlertRule, rule_id)
+        rule = await AlertRuleRepository(session).get(rule_id)
         if not rule:
             raise HTTPException(404, "Alert rule topilmadi")
         data = body.model_dump(exclude_unset=True)
@@ -405,7 +373,7 @@ async def update_alert_rule(rule_id: int, body: AlertRuleUpdate) -> dict:
             data["kind"] = data["kind"].strip().lower()
         if "utility_type" in data and data["utility_type"] is not None:
             data["utility_type"] = str(data["utility_type"])
-        if data.get("building_id") is not None and not await session.get(Building, data["building_id"]):
+        if data.get("building_id") is not None and not await BuildingRepository(session).get(data["building_id"]):
             raise HTTPException(404, "Dom topilmadi")
         next_kind = data.get("kind", rule.kind)
         next_min = data.get("min_value", rule.min_value)
@@ -416,12 +384,12 @@ async def update_alert_rule(rule_id: int, body: AlertRuleUpdate) -> dict:
         rule.updated_at = now_ts()
         await session.commit()
         await session.refresh(rule)
-    return {"ok": True, "rule": _as_dict(rule)}
+    return {"ok": True, "rule": model_to_dict(rule)}
 
 
 async def disable_alert_rule(rule_id: int) -> dict:
     async with SessionLocal() as session:
-        rule = await session.get(AlertRule, rule_id)
+        rule = await AlertRuleRepository(session).get(rule_id)
         if not rule:
             raise HTTPException(404, "Alert rule topilmadi")
         rule.enabled = False
@@ -432,7 +400,7 @@ async def disable_alert_rule(rule_id: int) -> dict:
 
 async def clear_alert(alert_id: int) -> dict:
     async with SessionLocal() as session:
-        alert = await session.get(Alert, alert_id)
+        alert = await AlertRepository(session).get(alert_id)
         if alert:
             alert.cleared = True
             alert.cleared_at = now_ts()
@@ -441,11 +409,11 @@ async def clear_alert(alert_id: int) -> dict:
 
 
 async def clear_all_alerts(device_id: str | None) -> dict:
-    values = {"cleared": True, "cleared_at": now_ts()}
-    stmt = update(Alert).values(**values)
-    if device_id:
-        stmt = stmt.where(Alert.device_id == device_id)
     async with SessionLocal() as session:
-        await session.execute(stmt)
+        await AlertRepository(session).clear_all(now_ts(), device_id)
         await session.commit()
     return {"ok": True}
+
+
+async def clear_offline_alerts_for_device(session, device_id: str) -> None:
+    await AlertRepository(session).clear_offline_for_device(device_id, now_ts())

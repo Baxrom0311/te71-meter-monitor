@@ -2,7 +2,7 @@ from fastapi import HTTPException
 
 from core.config import settings
 from core.database import SessionLocal
-from core.security import create_access_token, hash_password, validate_password, verify_password
+from core.security import create_access_token, hash_password, invalidate_user_cache, validate_password, verify_password
 from core.time import now_ts
 from models.entities import User
 from repositories.auth import UserRepository
@@ -36,6 +36,7 @@ async def bootstrap_admin() -> None:
                 password_hash=hash_password(settings.bootstrap_admin_password),
                 role="admin",
                 is_active=True,
+                token_version=1,
                 created_at=ts,
                 updated_at=ts,
             )
@@ -65,7 +66,7 @@ async def login(body: LoginRequest) -> dict:
         user.last_login = n
         user.updated_at = n
         await session.commit()
-        token = create_access_token(user.id, user.username, user.role)
+        token = create_access_token(user.id, user.username, user.role, user.token_version)
         return {"access_token": token, "token_type": "bearer", "user": _public_user(user)}
 
 
@@ -91,12 +92,14 @@ async def create_user(body: UserCreate) -> dict:
             password_hash=hash_password(body.password),
             role=body.role,
             is_active=True,
+            token_version=1,
             created_at=ts,
             updated_at=ts,
         )
         repo.add(user)
         await session.commit()
         await session.refresh(user)
+    invalidate_user_cache(user.id)
     return _public_user(user)
 
 
@@ -140,7 +143,10 @@ async def update_user(user_id: int, body: UserUpdate, actor_id: int | None = Non
             user.role = fields["role"]
         if "is_active" in fields:
             user.is_active = fields["is_active"]
+        if any(field in fields for field in ("password", "role", "is_active")):
+            user.token_version = (user.token_version or 1) + 1
         user.updated_at = now_ts()
         await session.commit()
         await session.refresh(user)
+    invalidate_user_cache(user_id)
     return _public_user(user)

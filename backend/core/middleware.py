@@ -87,13 +87,22 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
+    _CLEANUP_INTERVAL = 300  # har 5 daqiqada tozalash
+
     def __init__(self, app):
         super().__init__(app)
         self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._last_cleanup: float = time.monotonic()
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if request.url.path in {"/health", "/ready"} or request.url.path.startswith("/static/"):
             return await call_next(request)
+
+        # Periodic cleanup — eski va bo'sh entrylarni tozalash
+        now = time.monotonic()
+        if now - self._last_cleanup > self._CLEANUP_INTERVAL:
+            self._cleanup_stale_entries(now)
+            self._last_cleanup = now
 
         limit = settings.device_rate_limit_per_minute if self._is_device_path(request.url.path) else settings.rate_limit_per_minute
         if limit > 0 and self._too_many_requests(request, limit):
@@ -115,6 +124,16 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
             return True
         hits.append(now)
         return False
+
+    def _cleanup_stale_entries(self, now: float) -> None:
+        """Bo'sh yoki 60s dan eski entrylarni tozalash — memory leak oldini olish."""
+        window_start = now - 60
+        stale_keys = [
+            key for key, hits in self._hits.items()
+            if not hits or hits[-1] < window_start
+        ]
+        for key in stale_keys:
+            del self._hits[key]
 
     @staticmethod
     def _is_device_path(path: str) -> bool:

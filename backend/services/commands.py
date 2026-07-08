@@ -11,10 +11,6 @@ from repositories.devices import CommandRepository, DeviceRepository
 from services import devices as devices_service
 
 
-def _as_dict(obj) -> dict:
-    return model_to_dict(obj)
-
-
 async def verify_command_access(command_id: int, token: str | None) -> None:
     async with SessionLocal() as session:
         command = await CommandRepository(session).get(command_id)
@@ -101,7 +97,7 @@ async def ack_command(command_id: int, result: str) -> dict:
 async def list_commands(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
     async with SessionLocal() as session:
         rows = await CommandRepository(session).list_filtered(device_id, status, limit)
-    return {"commands": [_as_dict(row) for row in rows]}
+    return {"commands": [model_to_dict(row) for row in rows]}
 
 
 async def cleanup_expired_commands_once() -> dict:

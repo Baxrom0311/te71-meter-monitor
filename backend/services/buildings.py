@@ -1,5 +1,4 @@
 from fastapi import HTTPException
-from sqlalchemy import inspect
 
 from core.database import SessionLocal
 from core.time import now_ts
@@ -15,6 +14,7 @@ from models.schemas import (
     MeasurementPointUpdate,
     PremiseCreate,
 )
+from repositories.base import model_to_dict
 from repositories.buildings import (
     BuildingRepository,
     BuildingUtilityRepository,
@@ -24,8 +24,6 @@ from repositories.buildings import (
 from repositories.devices import DeviceRepository
 
 
-def _as_dict(obj) -> dict:
-    return {attr.key: getattr(obj, attr.key) for attr in inspect(obj).mapper.column_attrs}
 
 
 async def create_building(body: BuildingCreate) -> dict:
@@ -33,6 +31,9 @@ async def create_building(body: BuildingCreate) -> dict:
     building = Building(
         name=body.name,
         address=body.address,
+        maps_url=body.maps_url,
+        latitude=body.latitude,
+        longitude=body.longitude,
         floors=body.floors,
         entrances_count=body.entrances_count,
         description=body.description,
@@ -49,7 +50,7 @@ async def create_building(body: BuildingCreate) -> dict:
 async def list_buildings() -> dict:
     async with SessionLocal() as session:
         rows = await BuildingRepository(session).list_ordered()
-    return {"buildings": [_as_dict(row) for row in rows]}
+    return {"buildings": [model_to_dict(row) for row in rows]}
 
 
 async def get_building(building_id: int) -> dict:
@@ -57,11 +58,11 @@ async def get_building(building_id: int) -> dict:
         building = await BuildingRepository(session).get(building_id)
     if not building:
         raise HTTPException(404, "Dom topilmadi")
-    return _as_dict(building)
+    return model_to_dict(building)
 
 
 async def update_building(building_id: int, body: BuildingUpdate) -> dict:
-    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
     fields["updated_at"] = now_ts()
@@ -113,7 +114,7 @@ async def create_building_utility(body: BuildingUtilityCreate) -> dict:
 async def list_building_utilities(building_id: int) -> dict:
     async with SessionLocal() as session:
         rows = await BuildingUtilityRepository(session).list_by_building(building_id)
-    return {"utilities": [_as_dict(row) for row in rows]}
+    return {"utilities": [model_to_dict(row) for row in rows]}
 
 
 async def update_building_utility(building_id: int, utility_id: int, body: BuildingUtilityUpdate) -> dict:
@@ -251,9 +252,9 @@ async def provision_building_defaults(building_id: int, body: BuildingDefaultPro
     return {
         "ok": True,
         "building_id": building_id,
-        "utilities": [_as_dict(item) for item in utilities.values()],
-        "created_points": [_as_dict(point) for point in created_points],
-        "existing_points": [_as_dict(point) for point in existing_points],
+        "utilities": [model_to_dict(item) for item in utilities.values()],
+        "created_points": [model_to_dict(point) for point in created_points],
+        "existing_points": [model_to_dict(point) for point in existing_points],
     }
 
 
@@ -279,7 +280,7 @@ async def create_premise(body: PremiseCreate) -> dict:
 async def list_premises(building_id: int | None = None) -> dict:
     async with SessionLocal() as session:
         rows = await PremiseRepository(session).list_by_building(building_id)
-    return {"premises": [_as_dict(row) for row in rows]}
+    return {"premises": [model_to_dict(row) for row in rows]}
 
 
 async def _validate_measurement_point_refs(
@@ -362,7 +363,7 @@ async def get_measurement_point(point_id: int) -> dict:
         point = await MeasurementPointRepository(session).get(point_id)
     if not point:
         raise HTTPException(404, "Measurement point topilmadi")
-    return _as_dict(point)
+    return model_to_dict(point)
 
 
 async def update_measurement_point(point_id: int, body: MeasurementPointUpdate) -> dict:
@@ -441,4 +442,4 @@ async def list_measurement_points(
 ) -> dict:
     async with SessionLocal() as session:
         rows = await MeasurementPointRepository(session).list_filtered(building_id, utility_type, role)
-    return {"points": [_as_dict(row) for row in rows]}
+    return {"points": [model_to_dict(row) for row in rows]}

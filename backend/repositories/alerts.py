@@ -1,4 +1,4 @@
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, or_, select, update
 
 from models.entities import Alert, AlertNotification, AlertRule
 from repositories.base import BaseRepository
@@ -18,8 +18,48 @@ class AlertRepository(BaseRepository[Alert]):
         if device_id:
             stmt = stmt.where(Alert.device_id == device_id)
         if kind:
-            stmt = stmt.where(Alert.kind == kind)
+            stmt = stmt.where(Alert.kind.like(f"{kind}%"))
         return list((await self.session.scalars(stmt)).all())
+
+    async def has_recent_duplicate(self, alert: Alert, since_ts: int) -> bool:
+        existing = await self.session.scalar(
+            select(Alert.id).where(
+                and_(
+                    Alert.device_id == alert.device_id,
+                    Alert.kind == alert.kind,
+                    Alert.cleared.is_(False),
+                    Alert.ts > since_ts,
+                )
+            )
+        )
+        return existing is not None
+
+    async def open_critical_due_for_escalation(self, cutoff: int, limit: int = 100) -> list[Alert]:
+        return list(
+            (
+                await self.session.scalars(
+                    select(Alert)
+                    .where(and_(Alert.cleared.is_(False), Alert.severity == "critical", Alert.ts <= cutoff))
+                    .order_by(Alert.ts)
+                    .limit(limit)
+                )
+            ).all()
+        )
+
+    async def clear_all(self, ts: int, device_id: str | None = None) -> int:
+        stmt = update(Alert).values(cleared=True, cleared_at=ts)
+        if device_id:
+            stmt = stmt.where(Alert.device_id == device_id)
+        result = await self.session.execute(stmt)
+        return result.rowcount or 0
+
+    async def clear_offline_for_device(self, device_id: str, ts: int) -> int:
+        result = await self.session.execute(
+            update(Alert)
+            .where(and_(Alert.device_id == device_id, Alert.kind == "offline", Alert.cleared.is_(False)))
+            .values(cleared=True, cleared_at=ts)
+        )
+        return result.rowcount or 0
 
 
 class AlertNotificationRepository(BaseRepository[AlertNotification]):
@@ -70,4 +110,23 @@ class AlertRuleRepository(BaseRepository[AlertRule]):
             stmt = stmt.where(AlertRule.building_id == building_id)
         if enabled is not None:
             stmt = stmt.where(AlertRule.enabled.is_(enabled))
+        return list((await self.session.scalars(stmt)).all())
+
+    async def matching_for_reading(
+        self,
+        utility_type: str,
+        building_id: int | None,
+        allowed_kinds: set[str],
+    ) -> list[AlertRule]:
+        stmt = select(AlertRule).where(
+            and_(
+                AlertRule.enabled.is_(True),
+                AlertRule.kind.in_(allowed_kinds),
+                or_(AlertRule.utility_type.is_(None), AlertRule.utility_type == utility_type),
+            )
+        )
+        if building_id is not None:
+            stmt = stmt.where(or_(AlertRule.building_id.is_(None), AlertRule.building_id == building_id))
+        else:
+            stmt = stmt.where(AlertRule.building_id.is_(None))
         return list((await self.session.scalars(stmt)).all())

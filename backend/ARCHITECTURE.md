@@ -663,7 +663,7 @@ Command lifecycle:
 - ESP32 ack yuborsa `status=acked`
 - `COMMAND_TTL_SEC` tugagan command `expired` bo'ladi
 - `COMMAND_MAX_PENDING_PER_DEVICE` bitta qurilmaga osilib qolgan commandlar limitini himoya qiladi
-- Celery `maintenance.expire_commands` har 60 sekundda expired commandlarni yopadi
+- inline `command_cleanup_worker` muddati o'tgan commandlarni `expired` holatiga o'tkazadi
 
 ### OTA
 
@@ -933,34 +933,27 @@ backend/
     commands.py
     ota.py
     health.py
-  workers/
-    celery_app.py
-    maintenance_tasks.py
-    alert_processor.py
-  tasks/
-    maintenance.py
+  services/
+    background.py
   tests/
 ```
 
 ## Worker Architecture
 
-Production rejimda backend ichidagi og'ir va periodik ishlar Celery orqali yuradi:
-
-- `Redis`: Celery broker va result backend
-- `celery-worker`: tasklarni bajaradi
-- `celery-beat`: periodik tasklarni reja bo'yicha queue'ga qo'yadi
-- `Flower`: Celery task monitoring UI
+Backend Celery/Redis broker ishlatmaydi. Periodik ishlar FastAPI process ichida `RUN_INLINE_WORKERS=true`
+bo'lganda `services/background.py` orqali asyncio task sifatida yuradi.
 
 Joriy periodik tasklar:
 
-- `maintenance.detect_offline_devices`: har 60 sekundda offline device alertlarini yaratadi
-- `maintenance.cleanup_old_data`: har kuni eski reading va tozalangan alertlarni o'chiradi
-- `backup.create`: admin trigger qiladigan JSON gzip backup export
-- `backup.cleanup_old`: `BACKUP_KEEP_DAYS` bo'yicha eski backup fayllarni o'chiradi
-- `maintenance.cleanup_old_audit_logs`: `AUDIT_KEEP_DAYS` bo'yicha eski audit loglarni o'chiradi
-- `maintenance.aggregate_hourly_stats`: har soatda oxirgi 48 soat readinglardan `hourly_utility_stats` aggregate table yaratadi
+- `offline_detector`: offline device alertlarini yaratadi
+- `data_cleanup`: eski reading va tozalangan alertlarni o'chiradi
+- `alert_notification_worker`: alert notification/escalation qayta ishlaydi
+- `command_cleanup_worker`: muddati o'tgan commandlarni expire qiladi
+- `audit_cleanup_worker`: `AUDIT_KEEP_DAYS` bo'yicha eski audit loglarni o'chiradi
+- `analytics_worker`: readinglardan `hourly_utility_stats` aggregate table yaratadi
+- `ota_batch_worker`: due OTA batchlarni process qiladi
 
-FastAPI ichida `RUN_INLINE_WORKERS=true` bo'lsa eski inline background loop ishlaydi. Docker production stackda `RUN_INLINE_WORKERS=false`, shuning uchun offline detector va cleanup faqat Celery orqali yuradi.
+Docker stackda ham `RUN_INLINE_WORKERS=true` ishlatiladi. Alohida worker service yo'q.
 
 ## Reading Processing Flow
 
@@ -1013,7 +1006,7 @@ Critical alert escalation:
 
 - `severity=critical` alert yaratilganda backend `alert_notifications` outbox jadvaliga `pending` notification yozadi.
 - Admin `GET /api/alert-notifications?status=pending` orqali yuborilishi kerak bo'lgan critical holatlarni ko'radi.
-- Keyingi bosqichda Celery worker shu outboxdan Telegram/SMS/email integratsiyalarga yuborishi mumkin.
+- Keyingi bosqichda inline notification worker shu outboxdan Telegram/SMS/email integratsiyalarga yuborishi mumkin.
 
 ### Elektr
 
@@ -1059,10 +1052,9 @@ Production uchun:
 Docker production stack:
 
 - `postgres:16-alpine`
-- `redis:7-alpine`
 - backend image `backend/Dockerfile` orqali build qilinadi
 - production sozlamalari uchun `backend/.env.example` template sifatida ishlatiladi
-- FastAPI, Celery worker, Celery Beat va Flower bir xil backend image'dan ishlaydi
+- FastAPI backend bitta service sifatida ishlaydi
 - backend `DATABASE_URL=postgresql+asyncpg://...` orqali ulanadi
 - backend start vaqtida `alembic upgrade head` ishlaydi
 - dependency install runtime startda emas, image build vaqtida bajariladi
@@ -1100,12 +1092,12 @@ Local development:
 - multi-server fallback
 - admin-triggered JSON gzip backup export
 - duplicate reading protection
-- Celery offline detector
-- Celery Beat data cleanup
-- Flower worker monitoring
+- inline offline detector
+- inline data cleanup
+- inline OTA batch worker
 - health endpoint
 - readiness endpoint: `/ready`
-- `READY_CHECK_REDIS=true` bo'lsa `/ready` Redis/Celery broker pingni ham tekshiradi
+- `/ready` database connectivity tekshiradi
 - metrics endpoint: `/metrics` Prometheus text format
 - HTTP metrics: `meter_monitor_http_requests_total`, `meter_monitor_http_request_duration_seconds`
 - request id: har response'da `X-Request-ID`
