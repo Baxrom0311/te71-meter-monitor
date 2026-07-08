@@ -46,7 +46,7 @@ async def energy_by_building(
     from_ts: int = Query(..., description="Boshlang'ich unix timestamp"),
     to_ts: int = Query(..., description="Tugash unix timestamp"),
     building_id: Optional[int] = None,
-    granularity: str = Query("day", pattern="^(hour|day)$"),
+    granularity: str = Query("day", pattern="^(hour|day|month)$"),
     _: dict = Depends(current_token_payload),
 ):
     return await analytics_service.energy_by_building(from_ts, to_ts, building_id, granularity)

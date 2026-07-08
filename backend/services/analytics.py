@@ -64,10 +64,12 @@ async def energy_by_building(
 ) -> dict:
     """
     Kunlik/soatlik energiya sarfi — har bir bino bo'yicha.
-    granularity: 'hour' | 'day'
+    granularity: 'hour' | 'day' | 'month'
     """
     if granularity == "hour":
         bucket_sec = 3600
+    elif granularity == "month":
+        bucket_sec = 30 * 86400
     else:
         bucket_sec = 86400
 
