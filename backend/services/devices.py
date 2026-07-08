@@ -253,8 +253,11 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
             building_id = fields.get("building_id") or device.building_id
             if building_id and point.building_id and point.building_id != building_id:
                 raise HTTPException(422, "Measurement point boshqa buildingga tegishli")
+        # DeviceUpdate schema uses 'building'/'floor' as API names, but the entity
+        # uses 'building_text'/'floor_text' (since 'building' is the FK relationship)
+        _remap = {"building": "building_text", "floor": "floor_text"}
         for key, value in fields.items():
-            setattr(device, key, value)
+            setattr(device, _remap.get(key, key), value)
         device.updated_at = now_ts()
         await session.commit()
     return {"ok": True}

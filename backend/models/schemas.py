@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class UtilityType(StrEnum):
@@ -389,8 +389,9 @@ class DeviceResponse(BaseModel):
     rssi: Optional[int] = None
     ip: Optional[str] = None
     fw_version: Optional[str] = None
-    building: Optional[str] = None
-    floor: Optional[str] = None
+    # Entity uses building_text/floor_text (Python attrs) mapped to "building"/"floor" DB columns
+    building: Optional[str] = Field(None, validation_alias=AliasChoices("building", "building_text"))
+    floor: Optional[str] = Field(None, validation_alias=AliasChoices("floor", "floor_text"))
     room: Optional[str] = None
     group_name: Optional[str] = None
     is_active: bool
