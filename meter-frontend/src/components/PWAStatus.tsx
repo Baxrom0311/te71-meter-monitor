@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, WifiOff } from 'lucide-react'
+import { RefreshCw, ServerCrash, WifiOff } from 'lucide-react'
+import { useWebSocketStatus } from '@/lib/websocket'
 
 interface PWAStatusProps {
   onUpdate?: () => void
@@ -9,6 +10,8 @@ interface PWAStatusProps {
 export function PWAStatus({ onUpdate, updateAvailable = false }: PWAStatusProps) {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [lastSyncedAt, setLastSyncedAt] = useState(() => new Date())
+  const wsStatus = useWebSocketStatus()
+  const realtimeProblem = isOnline && (wsStatus === 'reconnecting' || wsStatus === 'failed')
 
   useEffect(() => {
     const handleOnline = () => {
@@ -26,26 +29,31 @@ export function PWAStatus({ onUpdate, updateAvailable = false }: PWAStatusProps)
     }
   }, [])
 
-  if (isOnline && !updateAvailable) return null
+  if (isOnline && !updateAvailable && !realtimeProblem) return null
+
+  const title = !isOnline ? 'Offline rejim' : updateAvailable ? 'Yangi versiya tayyor' : 'Real-time kanal uzildi'
+  const message = !isOnline
+    ? `Internet uzildi. Oxirgi sinxron: ${lastSyncedAt.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}`
+    : updateAvailable
+      ? 'Ilovani yangilash uchun sahifani qayta yuklang.'
+      : wsStatus === 'failed'
+        ? 'Server WebSocket kanaliga ulanib bo‘lmadi. Maʼlumotlar fallback refresh orqali yangilanadi.'
+        : 'Server bilan real-time kanal qayta ulanmoqda.'
 
   return (
     <div className="fixed inset-x-3 top-3 z-[70] mx-auto max-w-3xl">
       <div className="glass-card rounded-xl px-4 py-3 shadow-2xl border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          {isOnline ? (
-            <RefreshCw className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-          ) : (
+          {!isOnline ? (
             <WifiOff className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+          ) : realtimeProblem ? (
+            <ServerCrash className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+          ) : (
+            <RefreshCw className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
           )}
           <div>
-            <p className="text-sm font-bold text-gray-950 dark:text-gray-100">
-              {isOnline ? 'Yangi versiya tayyor' : 'Offline rejim'}
-            </p>
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              {isOnline
-                ? 'Ilovani yangilash uchun sahifani qayta yuklang.'
-                : `Internet uzildi. Oxirgi sinxron: ${lastSyncedAt.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}`}
-            </p>
+            <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{title}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">{message}</p>
           </div>
         </div>
         {updateAvailable && onUpdate && (

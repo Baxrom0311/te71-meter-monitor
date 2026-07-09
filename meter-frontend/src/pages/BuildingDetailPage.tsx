@@ -12,6 +12,7 @@ import { getApiErrorMessage } from '@/lib/errors'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { UtilityChartsPanel } from '@/components/UtilityChartsPanel'
+import { MapPanel } from '@/components/MapPanel'
 
 export default function BuildingDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -266,6 +267,16 @@ export default function BuildingDetailPage() {
               buildingId={buildingIdInt}
               title={`${building.name} bo‘yicha sarf grafiklari`}
               subtitle="Ushbu binoga biriktirilgan elektr, suv va gaz qurilmalari bo‘yicha oxirgi 24 soat"
+            />
+
+            <MapPanel
+              title={`${building.name} — xarita`}
+              name={building.name}
+              address={building.address}
+              mapsUrl={building.maps_url}
+              latitude={building.latitude}
+              longitude={building.longitude}
+              heightClassName="h-[340px]"
             />
 
             {/* Connected Devices List */}

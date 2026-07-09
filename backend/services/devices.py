@@ -5,7 +5,7 @@ from core.database import SessionLocal
 from core.security import generate_secret_token, hash_password, verify_password
 from core.time import now_ts
 from models.entities import Device, DeviceProvisioningToken
-from models.schemas import DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
+from models.schemas import DeviceCreate, DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
 from repositories.base import model_to_dict
 from repositories.buildings import BuildingRepository, MeasurementPointRepository
 from repositories.devices import DeviceProvisioningTokenRepository, DeviceRepository
@@ -210,18 +210,44 @@ async def list_devices(
     group: str | None = None,
     building: str | None = None,
     utility_type: str | None = None,
+    q: str | None = None,
+    sort_by: str = "last_seen",
+    sort_order: str = "desc",
+    limit: int = 500,
+    offset: int = 0,
 ) -> dict:
     cutoff = now_ts() - settings.offline_sec
     async with SessionLocal() as session:
         rows = await DeviceRepository(session).list_filtered(meter_type, group, building, utility_type)
 
     devices = []
+    query = (q or "").strip().lower()
     for device in rows:
         is_online = (device.last_seen or 0) > cutoff
         if online is not None and is_online != online:
             continue
-        devices.append(model_to_dict(device) | {"online": is_online})
-    return {"devices": devices, "total": len(devices)}
+        payload = model_to_dict(device) | {"online": is_online}
+        if query:
+            haystack = " ".join(
+                str(payload.get(key) or "")
+                for key in ("id", "name", "ip", "meter_serial", "meter_type", "utility_type", "building_text")
+            ).lower()
+            if query not in haystack:
+                continue
+        devices.append(payload)
+
+    reverse = sort_order != "asc"
+    if sort_by == "name":
+        devices.sort(key=lambda item: (item.get("name") or item.get("id") or ""), reverse=reverse)
+    elif sort_by == "type":
+        devices.sort(key=lambda item: (item.get("utility_type") or "", item.get("name") or item.get("id") or ""), reverse=reverse)
+    elif sort_by == "status":
+        devices.sort(key=lambda item: (bool(item.get("online")), item.get("last_seen") or 0), reverse=reverse)
+    else:
+        devices.sort(key=lambda item: item.get("last_seen") or 0, reverse=reverse)
+
+    total = len(devices)
+    return {"devices": devices[offset : offset + limit], "total": total, "limit": limit, "offset": offset}
 
 
 async def get_device(device_id: str) -> dict:
@@ -230,6 +256,62 @@ async def get_device(device_id: str) -> dict:
     if not device:
         raise HTTPException(404, "Qurilma topilmadi")
     return model_to_dict(device) | {"online": _online(device.last_seen)}
+
+
+async def create_device(body: DeviceCreate) -> dict:
+    ts = now_ts()
+    async with SessionLocal() as session:
+        building_repo = BuildingRepository(session)
+        point_repo = MeasurementPointRepository(session)
+        device_repo = DeviceRepository(session)
+
+        if body.building_id is not None and not await building_repo.get(body.building_id):
+            raise HTTPException(404, "Building topilmadi")
+        if body.point_id is not None:
+            point = await point_repo.get(body.point_id)
+            if not point:
+                raise HTTPException(404, "Measurement point topilmadi")
+            if body.building_id is not None and point.building_id and point.building_id != body.building_id:
+                raise HTTPException(422, "Measurement point boshqa buildingga tegishli")
+
+        existing = await device_repo.get(body.device_id)
+        if existing:
+            raise HTTPException(409, "Bu device_id allaqachon mavjud")
+
+        device = Device(
+            id=body.device_id,
+            name=body.name or body.device_id,
+            utility_type=body.utility_type,
+            device_role=body.device_role,
+            firmware_mode=body.firmware_mode,
+            meter_type=body.meter_type,
+            meter_serial=body.meter_serial,
+            serial_number=body.serial_number,
+            hardware_version=body.hardware_version,
+            software_version=body.software_version,
+            build_number=body.build_number,
+            building_id=body.building_id,
+            point_id=body.point_id,
+            is_active=body.is_active,
+            registered=ts,
+            created_at=ts,
+            updated_at=ts,
+        )
+        device_repo.add(device)
+        await session.commit()
+        await session.refresh(device)
+        response = model_to_dict(device) | {"online": _online(device.last_seen)}
+
+    await ws_manager.broadcast(
+        {
+            "type": "device_updated",
+            "event": "created",
+            "device_id": body.device_id,
+            "utility_type": str(body.utility_type),
+            "firmware_mode": str(body.firmware_mode),
+        }
+    )
+    return {"ok": True, "device": response}
 
 
 async def update_device(device_id: str, body: DeviceUpdate) -> dict:
@@ -260,6 +342,7 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
             setattr(device, _remap.get(key, key), value)
         device.updated_at = now_ts()
         await session.commit()
+    await ws_manager.broadcast({"type": "device_updated", "device_id": device_id})
     return {"ok": True}
 
 

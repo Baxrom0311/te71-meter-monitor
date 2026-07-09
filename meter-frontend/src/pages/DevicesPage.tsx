@@ -13,12 +13,23 @@ import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 import { TableSkeleton } from '@/components/Skeleton'
+import { TableColumnsMenu } from '@/components/TableColumnsMenu'
+import { downloadCsv, TableColumn, useColumnVisibility } from '@/lib/table'
 
 const utilityCards = [
   { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
   { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
   { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
 ] as const
+
+const deviceTableColumns: TableColumn[] = [
+  { key: 'status', label: 'Holat' },
+  { key: 'id', label: 'ID / nom' },
+  { key: 'type', label: 'Tur' },
+  { key: 'ip', label: 'IP manzil' },
+  { key: 'firmware', label: 'Firmware' },
+  { key: 'actions', label: 'Amallar' },
+]
 
 export default function DevicesPage() {
   const navigate = useNavigate()
@@ -62,6 +73,7 @@ export default function DevicesPage() {
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'status'>('name')
   const [page, setPage] = useState(1)
   const pageSize = 12
+  const { isColumnVisible, toggleColumn } = useColumnVisibility(deviceTableColumns, 'devices-table-columns')
 
   useEffect(() => {
     const utility = new URLSearchParams(location.search).get('utility')
@@ -90,24 +102,16 @@ export default function DevicesPage() {
     setError(null)
 
     try {
-      // 1. Register device
-      await apiClient.post('/api/register', {
+      await apiClient.post('/api/devices', {
         device_id: deviceId,
         name: name || null,
         utility_type: utilityType,
+        firmware_mode: utilityType,
         meter_type: meterType || 'unknown',
         meter_serial: meterSerial || null,
+        building_id: buildingId ? parseInt(buildingId) : null,
+        is_active: true,
       })
-
-      // 2. If building selected, update device using PUT /api/devices/{device_id}
-      if (buildingId) {
-        await apiClient.put(`/api/devices/${deviceId}`, {
-          building_id: parseInt(buildingId),
-          name: name || null,
-          utility_type: utilityType,
-          is_active: true,
-        })
-      }
 
       queryClient.invalidateQueries({ queryKey: ['devices'] })
       notifySuccess('Qurilma saqlandi', `${deviceId} ro‘yxatdan o‘tdi.`)
@@ -194,9 +198,10 @@ export default function DevicesPage() {
 
   const handleExportCSV = () => {
     if (filteredDevices.length === 0) return
-    const rows = [
-      ['ID', 'Name', 'Utility', 'Status', 'IP', 'Firmware', 'Building ID'].join(','),
-      ...filteredDevices.map((device) => [
+    downloadCsv(
+      `devices_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['ID', 'Name', 'Utility', 'Status', 'IP', 'Firmware', 'Building ID'],
+      filteredDevices.map((device) => [
         device.id,
         device.name ?? '',
         device.utility_type,
@@ -204,15 +209,8 @@ export default function DevicesPage() {
         device.ip ?? '',
         device.fw_version ?? '',
         device.building_id ?? '',
-      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
-    ]
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `devices_${new Date().toISOString().slice(0, 10)}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+      ]),
+    )
     notifySuccess('CSV eksport qilindi', `${filteredDevices.length} ta qurilma eksport qilindi.`)
   }
 
@@ -366,6 +364,11 @@ export default function DevicesPage() {
               <Download className="w-3.5 h-3.5" />
               CSV
             </button>
+            <TableColumnsMenu
+              columns={deviceTableColumns}
+              isColumnVisible={isColumnVisible}
+              toggleColumn={toggleColumn}
+            />
           </div>
         </div>
 
@@ -455,22 +458,32 @@ export default function DevicesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold w-24">
-                      {translations.devices.status}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.devices.id}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.devices.type}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.devices.ip}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.devices.firmware}
-                    </th>
-                    <th className="px-6 py-4 w-10" />
+                    {isColumnVisible('status') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold w-24">
+                        {translations.devices.status}
+                      </th>
+                    )}
+                    {isColumnVisible('id') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.devices.id}
+                      </th>
+                    )}
+                    {isColumnVisible('type') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.devices.type}
+                      </th>
+                    )}
+                    {isColumnVisible('ip') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.devices.ip}
+                      </th>
+                    )}
+                    {isColumnVisible('firmware') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.devices.firmware}
+                      </th>
+                    )}
+                    {isColumnVisible('actions') && <th className="px-6 py-4 w-10" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -485,65 +498,73 @@ export default function DevicesPage() {
                       )}
                       onClick={() => device.building_id !== null && navigate(`/devices/${device.id}`)}
                     >
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-block w-3 h-3 rounded-full shadow-sm ${
-                            device.online ? 'bg-green-400 animate-pulse' : 'bg-red-400'
-                          }`}
-                        />
-                      </td>
-                      <td className="px-6 py-4 font-semibold">
-                        <div className="flex items-center gap-2">
+                      {isColumnVisible('status') && (
+                        <td className="px-6 py-4">
                           <span
-                            className={clsx(
-                              device.building_id === null
-                                ? 'text-yellow-600 dark:text-yellow-350 cursor-pointer hover:text-yellow-700 dark:hover:text-yellow-200'
-                                : 'text-gray-950 dark:text-gray-100 hover:text-blue-500 transition font-bold'
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigate(`/devices/${device.id}`)
-                            }}
-                          >
-                            {device.name ?? device.id}
-                          </span>
-                          {device.building_id === null && (
-                            <span className="px-1.5 py-0.5 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded font-semibold border border-yellow-500/25">
-                              yangi
+                            className={`inline-block w-3 h-3 rounded-full shadow-sm ${
+                              device.online ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+                            }`}
+                          />
+                        </td>
+                      )}
+                      {isColumnVisible('id') && (
+                        <td className="px-6 py-4 font-semibold">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={clsx(
+                                device.building_id === null
+                                  ? 'text-yellow-600 dark:text-yellow-350 cursor-pointer hover:text-yellow-700 dark:hover:text-yellow-200'
+                                  : 'text-gray-950 dark:text-gray-100 hover:text-blue-500 transition font-bold'
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/devices/${device.id}`)
+                              }}
+                            >
+                              {device.name ?? device.id}
                             </span>
+                            {device.building_id === null && (
+                              <span className="px-1.5 py-0.5 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded font-semibold border border-yellow-500/25">
+                                yangi
+                              </span>
+                            )}
+                          </div>
+                          {device.meter_serial && (
+                            <p className="text-xs text-gray-500 mt-0.5">{device.meter_serial}</p>
                           )}
-                        </div>
-                        {device.meter_serial && (
-                          <p className="text-xs text-gray-500 mt-0.5">{device.meter_serial}</p>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
-                        <span className={clsx(
-                          'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold border',
-                          device.utility_type === 'electricity' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
-                          device.utility_type === 'water' && 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
-                          device.utility_type === 'gas' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-                        )}>
-                          {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.ip ?? '—'}</td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.fw_version ?? '—'}</td>
-                      <td className="px-6 py-4">
-                        {device.building_id === null && isAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeviceToAssign(device)
-                              setAssignName(device.meter_serial || device.name || device.id)
-                              setAssignBuildingId('')
-                            }}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap"
-                          >
-                            Biriktirish
-                          </button>
-                        )}
-                      </td>
+                        </td>
+                      )}
+                      {isColumnVisible('type') && (
+                        <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
+                          <span className={clsx(
+                            'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold border',
+                            device.utility_type === 'electricity' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
+                            device.utility_type === 'water' && 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+                            device.utility_type === 'gas' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+                          )}>
+                            {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                          </span>
+                        </td>
+                      )}
+                      {isColumnVisible('ip') && <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.ip ?? '—'}</td>}
+                      {isColumnVisible('firmware') && <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">{device.fw_version ?? '—'}</td>}
+                      {isColumnVisible('actions') && (
+                        <td className="px-6 py-4">
+                          {device.building_id === null && isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeviceToAssign(device)
+                                setAssignName(device.meter_serial || device.name || device.id)
+                                setAssignBuildingId('')
+                              }}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap"
+                            >
+                              Biriktirish
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

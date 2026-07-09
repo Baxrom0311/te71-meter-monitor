@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from core.security import current_token_payload, require_admin
 from schemas.auth import LoginRequest, TokenResponse, UserCreate, UserListResponse, UserResponse, UserUpdate
@@ -26,8 +26,17 @@ async def create_user(body: UserCreate, admin: dict = Depends(require_admin)):
 
 
 @router.get("/users", response_model=UserListResponse)
-async def list_users(_: dict = Depends(require_admin)):
-    return await auth.list_users()
+async def list_users(
+    q: str | None = None,
+    role: str | None = Query(None, pattern="^(admin|user)$"),
+    is_active: bool | None = None,
+    sort_by: str = Query("username", pattern="^(username|role|status)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    _: dict = Depends(require_admin),
+):
+    return await auth.list_users(q=q, role=role, is_active=is_active, sort_by=sort_by, sort_order=sort_order, limit=limit, offset=offset)
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)

@@ -10,6 +10,8 @@ import apiClient from '@/lib/api'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
+import { MapPanel } from '@/components/MapPanel'
+import { resolveCoordinates } from '@/lib/map'
 
 export default function BuildingsPage() {
   const { data: buildings, isLoading, isError, error: queryError, refetch } = useBuildings()
@@ -80,32 +82,11 @@ export default function BuildingsPage() {
   }, [buildings, searchQuery])
 
   const mappedBuildings = useMemo(
-    () => filteredBuildings.filter((b) => b.latitude != null && b.longitude != null),
+    () => filteredBuildings.filter((b) => resolveCoordinates(b.latitude, b.longitude, b.maps_url)),
     [filteredBuildings],
   )
 
   const selectedMapBuilding = mappedBuildings.find((b) => b.id === selectedMapBuildingId) ?? mappedBuildings[0]
-
-  const mapBounds = useMemo(() => {
-    if (mappedBuildings.length === 0) return null
-    const lats = mappedBuildings.map((b) => b.latitude as number)
-    const lngs = mappedBuildings.map((b) => b.longitude as number)
-    return {
-      minLat: Math.min(...lats),
-      maxLat: Math.max(...lats),
-      minLng: Math.min(...lngs),
-      maxLng: Math.max(...lngs),
-    }
-  }, [mappedBuildings])
-
-  const getMarkerPosition = (lat: number, lng: number) => {
-    if (!mapBounds) return { left: '50%', top: '50%' }
-    const latRange = mapBounds.maxLat - mapBounds.minLat || 0.01
-    const lngRange = mapBounds.maxLng - mapBounds.minLng || 0.01
-    const left = 10 + ((lng - mapBounds.minLng) / lngRange) * 80
-    const top = 90 - ((lat - mapBounds.minLat) / latRange) * 80
-    return { left: `${left}%`, top: `${top}%` }
-  }
 
   return (
     <RootLayout>
@@ -143,32 +124,18 @@ export default function BuildingsPage() {
 
         {mappedBuildings.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-5">
-            <div className="glass-card rounded-2xl overflow-hidden min-h-[320px] relative">
-              <div className="absolute inset-0 map-preview-grid" />
-              <div className="absolute inset-0 map-preview-roads" />
-              {mappedBuildings.map((building) => {
-                const active = selectedMapBuilding?.id === building.id
-                const position = getMarkerPosition(building.latitude as number, building.longitude as number)
-                return (
-                  <button
-                    key={building.id}
-                    onClick={() => setSelectedMapBuildingId(building.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 group ${active ? 'z-20' : 'z-10'}`}
-                    style={position}
-                    title={building.name}
-                  >
-                    <span className={`block rounded-full border-2 shadow-lg transition ${active ? 'h-5 w-5 bg-blue-500 border-white shadow-blue-500/40' : 'h-3.5 w-3.5 bg-emerald-500 border-white/80 hover:scale-125'}`} />
-                    <span className={`absolute left-1/2 top-6 -translate-x-1/2 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-bold shadow-lg transition ${active ? 'opacity-100 bg-blue-600 text-white' : 'opacity-0 group-hover:opacity-100 bg-gray-950 text-white'}`}>
-                      {building.name}
-                    </span>
-                  </button>
-                )
-              })}
-              <div className="absolute left-4 top-4 glass-card rounded-xl px-3 py-2">
-                <p className="text-xs font-bold text-gray-950 dark:text-gray-100">Binolar xaritasi</p>
-                <p className="text-[11px] text-gray-600 dark:text-gray-400">{mappedBuildings.length} ta koordinatali bino</p>
-              </div>
-            </div>
+            {selectedMapBuilding && (
+              <MapPanel
+                title="Binolar xaritasi"
+                subtitle={`${mappedBuildings.length} ta koordinatali bino`}
+                name={selectedMapBuilding.name}
+                address={selectedMapBuilding.address}
+                mapsUrl={selectedMapBuilding.maps_url}
+                latitude={selectedMapBuilding.latitude}
+                longitude={selectedMapBuilding.longitude}
+                heightClassName="h-[360px]"
+              />
+            )}
 
             <div className="glass-card rounded-2xl p-5 space-y-4">
               {selectedMapBuilding ? (
@@ -187,6 +154,22 @@ export default function BuildingsPage() {
                       <p className="text-[11px] uppercase font-bold text-gray-500">Longitude</p>
                       <p className="font-mono text-sm text-gray-950 dark:text-gray-100">{selectedMapBuilding.longitude}</p>
                     </div>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+                    {mappedBuildings.map((building) => (
+                      <button
+                        key={building.id}
+                        onClick={() => setSelectedMapBuildingId(building.id)}
+                        className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                          selectedMapBuilding.id === building.id
+                            ? 'border-blue-500/40 bg-blue-500/10'
+                            : 'border-gray-300/60 dark:border-gray-800/70 hover:border-blue-500/30'
+                        }`}
+                      >
+                        <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{building.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{building.address ?? building.maps_url ?? 'Manzil yo‘q'}</p>
+                      </button>
+                    ))}
                   </div>
                   {selectedMapBuilding.maps_url && (
                     <a

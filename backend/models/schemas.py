@@ -283,6 +283,23 @@ class DeviceRegister(BaseModel):
     point_id: Optional[int] = None
 
 
+class DeviceCreate(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    name: Optional[str] = None
+    utility_type: UtilityType = UtilityType.electricity
+    device_role: Optional[DeviceRole] = None
+    firmware_mode: FirmwareMode = FirmwareMode.auto
+    meter_type: Optional[str] = "unknown"
+    meter_serial: Optional[str] = None
+    serial_number: Optional[str] = None
+    hardware_version: Optional[str] = None
+    software_version: Optional[str] = None
+    build_number: Optional[str] = None
+    building_id: Optional[int] = None
+    point_id: Optional[int] = None
+    is_active: bool = True
+
+
 class DeviceProvisioningTokenCreate(BaseModel):
     device_id: Optional[str] = None
     building_id: Optional[int] = None
@@ -405,6 +422,13 @@ class DeviceResponse(BaseModel):
 class DeviceListResponse(BaseModel):
     devices: list[DeviceResponse]
     total: int
+    limit: Optional[int] = None
+    offset: int = 0
+
+
+class DeviceCreateResponse(BaseModel):
+    ok: bool
+    device: DeviceResponse
 
 
 class DeviceUpdateResponse(BaseModel):
@@ -675,6 +699,9 @@ class AlertResponse(BaseModel):
 
 class AlertListResponse(BaseModel):
     alerts: list[AlertResponse]
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
 
 
 class AlertNotificationResponse(BaseModel):

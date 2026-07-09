@@ -99,6 +99,7 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("TokenResponse", schemas)
         self.assertIn("UserListResponse", schemas)
         self.assertIn("DeviceListResponse", schemas)
+        self.assertIn("DeviceCreateResponse", schemas)
         self.assertIn("DeviceConfigResponse", schemas)
         self.assertIn("DeviceProvisioningTokenListResponse", schemas)
         self.assertIn("ChatRequest", schemas)
@@ -115,6 +116,8 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(login_schema["$ref"], "#/components/schemas/TokenResponse")
         devices_schema = openapi["paths"]["/api/devices"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(devices_schema["$ref"], "#/components/schemas/DeviceListResponse")
+        device_create_schema = openapi["paths"]["/api/devices"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(device_create_schema["$ref"], "#/components/schemas/DeviceCreateResponse")
         alerts_schema = openapi["paths"]["/api/alerts"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(alerts_schema["$ref"], "#/components/schemas/AlertListResponse")
         chat_request_schema = openapi["paths"]["/api/chat"]["post"]["requestBody"]["content"]["application/json"]["schema"]
@@ -307,6 +310,52 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(invalid_point_parent.status_code, 404)
 
+        active_viewer = await self.client.post(
+            "/api/auth/users",
+            headers=admin_headers,
+            json={"username": "api-active-viewer", "password": "Viewer1234", "role": "user"},
+        )
+        self.assertEqual(active_viewer.status_code, 200, active_viewer.text)
+        active_viewer_login = await self.client.post(
+            "/api/auth/login",
+            json={"username": "api-active-viewer", "password": "Viewer1234"},
+        )
+        self.assertEqual(active_viewer_login.status_code, 200, active_viewer_login.text)
+        active_viewer_headers = {"Authorization": f"Bearer {active_viewer_login.json()['access_token']}"}
+        viewer_device_create = await self.client.post(
+            "/api/devices",
+            headers=active_viewer_headers,
+            json={"device_id": "admin-created-denied", "utility_type": "water"},
+        )
+        self.assertEqual(viewer_device_create.status_code, 403, viewer_device_create.text)
+        admin_device_create = await self.client.post(
+            "/api/devices",
+            headers=admin_headers,
+            json={
+                "device_id": "admin-created-water-01",
+                "name": "Admin created water device",
+                "utility_type": "water",
+                "firmware_mode": "water",
+                "building_id": building_id,
+                "point_id": point_id,
+                "meter_type": "pressure_node",
+                "meter_serial": "ADM-W-001",
+            },
+        )
+        self.assertEqual(admin_device_create.status_code, 200, admin_device_create.text)
+        self.assertEqual(admin_device_create.json()["device"]["id"], "admin-created-water-01")
+        self.assertEqual(admin_device_create.json()["device"]["building_id"], building_id)
+        self.assertEqual(admin_device_create.json()["device"]["point_id"], point_id)
+        duplicate_admin_device = await self.client.post(
+            "/api/devices",
+            headers=admin_headers,
+            json={"device_id": "admin-created-water-01", "utility_type": "water"},
+        )
+        self.assertEqual(duplicate_admin_device.status_code, 409, duplicate_admin_device.text)
+        device_create_audit = await self.client.get("/api/audit-logs?action=device.create", headers=admin_headers)
+        self.assertEqual(device_create_audit.status_code, 200, device_create_audit.text)
+        self.assertGreaterEqual(device_create_audit.json()["total"], 1)
+
         provision = await self.client.post(
             "/api/devices/provisioning-tokens",
             headers=admin_headers,
@@ -488,6 +537,19 @@ class ApiIntegrationTest(unittest.IsolatedAsyncioTestCase):
         alerts = await self.client.get("/api/alerts?kind=water_low_pressure", headers=admin_headers)
         self.assertEqual(alerts.status_code, 200, alerts.text)
         self.assertEqual(alerts.json()["alerts"][0]["kind"], "water_low_pressure")
+
+        invalid_alert_rule = await self.client.post(
+            "/api/alert-rules",
+            headers=admin_headers,
+            json={
+                "building_id": building_id,
+                "utility_type": "water",
+                "kind": "voltage_high",
+                "min_value": 0.2,
+                "severity": "critical",
+            },
+        )
+        self.assertEqual(invalid_alert_rule.status_code, 422, invalid_alert_rule.text)
 
         alert_rule = await self.client.post(
             "/api/alert-rules",

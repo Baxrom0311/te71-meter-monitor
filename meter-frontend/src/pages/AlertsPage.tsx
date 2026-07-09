@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { AlertCircle, Trash2, Check, ShieldAlert, Plus, X, ToggleLeft, ToggleRight } from 'lucide-react'
+import { AlertCircle, Trash2, Check, ShieldAlert, Plus, X, ToggleLeft, ToggleRight, Search, Download } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useAlerts, useAlertRules, useBuildings } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,10 +14,49 @@ import { notifyError, notifySuccess } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { TableSkeleton } from '@/components/Skeleton'
 import { AlertRule } from '@/types/api'
+import { TableColumnsMenu } from '@/components/TableColumnsMenu'
+import { downloadCsv, TableColumn, useColumnVisibility } from '@/lib/table'
 
 type AlertConfirmAction =
   | { type: 'clear-all' }
   | { type: 'delete-rule'; id: number }
+
+const alertRuleOptions = {
+  electricity: [
+    { value: 'overvoltage', label: 'Yuqori kuchlanish' },
+    { value: 'undervoltage', label: 'Past kuchlanish' },
+    { value: 'frequency', label: 'Chastota normadan tashqari' },
+  ],
+  water: [
+    { value: 'water_low_pressure', label: 'Suv bosimi past' },
+    { value: 'water_not_reaching_top', label: 'Yuqori qavatga suv chiqmayapti' },
+  ],
+  gas: [
+    { value: 'gas_pressure', label: 'Gaz bosimi normadan tashqari' },
+    { value: 'gas_leak', label: 'Gaz sizishi' },
+  ],
+} as const
+
+const alertHistoryColumns: TableColumn[] = [
+  { key: 'severity', label: 'Daraja' },
+  { key: 'kind', label: 'Tur' },
+  { key: 'message', label: 'Xabar' },
+  { key: 'timestamp', label: 'Vaqt' },
+  { key: 'status', label: 'Holat' },
+  { key: 'actions', label: 'Amallar' },
+]
+
+const alertRuleColumns: TableColumn[] = [
+  { key: 'kind', label: 'Qoida turi' },
+  { key: 'utility', label: 'Datchik' },
+  { key: 'building', label: 'Bino' },
+  { key: 'thresholds', label: 'Chegaralar' },
+  { key: 'severity', label: 'Daraja' },
+  { key: 'status', label: 'Holat' },
+  { key: 'actions', label: 'Amallar' },
+]
+
+const ALERT_PAGE_SIZE = 12
 
 export default function AlertsPage() {
   const { data: alerts, isLoading: alertsLoading, isError: alertsError, error: alertsQueryError, refetch: refetchAlerts } = useAlerts()
@@ -28,13 +67,22 @@ export default function AlertsPage() {
 
   // Tab State: 'history' or 'rules'
   const [activeTab, setActiveTab] = useState<'history' | 'rules'>('history')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [severityFilter, setSeverityFilter] = useState<'all' | 'info' | 'warning' | 'critical'>('all')
+  const [alertStatusFilter, setAlertStatusFilter] = useState<'all' | 'open' | 'cleared'>('all')
+  const [ruleUtilityFilter, setRuleUtilityFilter] = useState<'all' | 'electricity' | 'water' | 'gas'>('all')
+  const [ruleStatusFilter, setRuleStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const [sortBy, setSortBy] = useState<'time' | 'severity' | 'kind'>('time')
+  const [page, setPage] = useState(1)
+  const { isColumnVisible: isAlertColumnVisible, toggleColumn: toggleAlertColumn } = useColumnVisibility(alertHistoryColumns, 'alerts-history-columns')
+  const { isColumnVisible: isRuleColumnVisible, toggleColumn: toggleRuleColumn } = useColumnVisibility(alertRuleColumns, 'alerts-rules-columns')
 
   const [clearing, setClearing] = useState(false)
   const [confirmAction, setConfirmAction] = useState<AlertConfirmAction | null>(null)
 
   // Rule Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [kind, setKind] = useState('voltage_high')
+  const [kind, setKind] = useState('overvoltage')
   const [utilityType, setUtilityType] = useState('electricity')
   const [buildingId, setBuildingId] = useState('')
   const [minValue, setMinValue] = useState('')
@@ -44,6 +92,14 @@ export default function AlertsPage() {
   const [dedupeSec, setDedupeSec] = useState('300')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const currentRuleOptions = alertRuleOptions[utilityType as keyof typeof alertRuleOptions] ?? alertRuleOptions.electricity
+
+  useEffect(() => {
+    if (!currentRuleOptions.some((option) => option.value === kind)) {
+      setKind(currentRuleOptions[0].value)
+    }
+  }, [currentRuleOptions, kind])
 
   const handleClearAlert = async (id: number) => {
     try {
@@ -91,7 +147,7 @@ export default function AlertsPage() {
       queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
       setIsModalOpen(false)
       // Reset form
-      setKind('voltage_high')
+      setKind('overvoltage')
       setUtilityType('electricity')
       setBuildingId('')
       setMinValue('')
@@ -136,6 +192,107 @@ export default function AlertsPage() {
   }
 
   const activeAlertsCount = alerts?.filter(a => !a.cleared).length ?? 0
+  const filteredAlerts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    return (alerts ?? [])
+      .filter((alert) => {
+        const matchesSearch =
+          !q ||
+          alert.kind.toLowerCase().includes(q) ||
+          (alert.message ?? '').toLowerCase().includes(q) ||
+          alert.device_id.toLowerCase().includes(q) ||
+          alert.utility_type.toLowerCase().includes(q)
+        const matchesSeverity = severityFilter === 'all' || alert.severity === severityFilter
+        const matchesStatus =
+          alertStatusFilter === 'all' ||
+          (alertStatusFilter === 'open' && !alert.cleared) ||
+          (alertStatusFilter === 'cleared' && alert.cleared)
+        return matchesSearch && matchesSeverity && matchesStatus
+      })
+      .sort((a, b) => {
+        if (sortBy === 'severity') return a.severity.localeCompare(b.severity) || b.ts - a.ts
+        if (sortBy === 'kind') return a.kind.localeCompare(b.kind) || b.ts - a.ts
+        return b.ts - a.ts
+      })
+  }, [alertStatusFilter, alerts, searchQuery, severityFilter, sortBy])
+
+  const filteredRules = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    return (alertRules ?? [])
+      .filter((rule) => {
+        const building = buildings?.find((item) => item.id === rule.building_id)
+        const matchesSearch =
+          !q ||
+          rule.kind.toLowerCase().includes(q) ||
+          (rule.message ?? '').toLowerCase().includes(q) ||
+          (building?.name ?? '').toLowerCase().includes(q)
+        const matchesUtility = ruleUtilityFilter === 'all' || rule.utility_type === ruleUtilityFilter
+        const matchesStatus =
+          ruleStatusFilter === 'all' ||
+          (ruleStatusFilter === 'enabled' && rule.enabled) ||
+          (ruleStatusFilter === 'disabled' && !rule.enabled)
+        return matchesSearch && matchesUtility && matchesStatus
+      })
+      .sort((a, b) => {
+        if (sortBy === 'severity') return String(a.severity).localeCompare(String(b.severity)) || a.kind.localeCompare(b.kind)
+        return a.kind.localeCompare(b.kind)
+      })
+  }, [alertRules, buildings, ruleStatusFilter, ruleUtilityFilter, searchQuery, sortBy])
+
+  const activeRows = activeTab === 'history' ? filteredAlerts : filteredRules
+  const totalPages = Math.max(1, Math.ceil(activeRows.length / ALERT_PAGE_SIZE))
+  const pagedAlerts = useMemo(
+    () => filteredAlerts.slice((page - 1) * ALERT_PAGE_SIZE, page * ALERT_PAGE_SIZE),
+    [filteredAlerts, page],
+  )
+  const pagedRules = useMemo(
+    () => filteredRules.slice((page - 1) * ALERT_PAGE_SIZE, page * ALERT_PAGE_SIZE),
+    [filteredRules, page],
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [activeTab, alertStatusFilter, ruleStatusFilter, ruleUtilityFilter, searchQuery, severityFilter, sortBy])
+
+  const handleExportCSV = () => {
+    if (activeTab === 'history') {
+      if (filteredAlerts.length === 0) return
+      downloadCsv(
+        `alerts_${new Date().toISOString().slice(0, 10)}.csv`,
+        ['ID', 'Device ID', 'Utility', 'Severity', 'Kind', 'Message', 'Status', 'Timestamp'],
+        filteredAlerts.map((alert) => [
+          alert.id,
+          alert.device_id,
+          alert.utility_type,
+          alert.severity,
+          alert.kind,
+          alert.message ?? '',
+          alert.cleared ? 'cleared' : 'open',
+          new Date(alert.ts * 1000).toISOString(),
+        ]),
+      )
+      notifySuccess('Ogohlantirishlar CSV eksport qilindi', `${filteredAlerts.length} ta yozuv eksport qilindi.`)
+      return
+    }
+
+    if (filteredRules.length === 0) return
+    downloadCsv(
+      `alert_rules_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['ID', 'Kind', 'Utility', 'Building ID', 'Min', 'Max', 'Severity', 'Status', 'Message'],
+      filteredRules.map((rule) => [
+        rule.id,
+        rule.kind,
+        rule.utility_type ?? 'all',
+        rule.building_id ?? '',
+        rule.min_value ?? '',
+        rule.max_value ?? '',
+        rule.severity,
+        rule.enabled ? 'enabled' : 'disabled',
+        rule.message ?? '',
+      ]),
+    )
+    notifySuccess('Qoidalar CSV eksport qilindi', `${filteredRules.length} ta yozuv eksport qilindi.`)
+  }
 
   return (
     <RootLayout>
@@ -195,6 +352,96 @@ export default function AlertsPage() {
           </button>
         </div>
 
+        <div className="flex flex-col xl:flex-row gap-4 justify-between items-stretch xl:items-center glass-card rounded-xl p-4 sm:p-5 shadow">
+          <div className="relative w-full md:max-w-md">
+            <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={activeTab === 'history' ? 'Alert, qurilma yoki xabar bo‘yicha qidirish...' : 'Qoida, bino yoki xabar bo‘yicha qidirish...'}
+              className="w-full pl-10 pr-4 py-2 rounded-lg glass-input focus:outline-none text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+            {activeTab === 'history' ? (
+              <>
+                <select
+                  value={severityFilter}
+                  onChange={(event) => setSeverityFilter(event.target.value as 'all' | 'info' | 'warning' | 'critical')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+                >
+                  <option value="all">Barcha darajalar</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                  <option value="info">Info</option>
+                </select>
+                <select
+                  value={alertStatusFilter}
+                  onChange={(event) => setAlertStatusFilter(event.target.value as 'all' | 'open' | 'cleared')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+                >
+                  <option value="all">Barcha holatlar</option>
+                  <option value="open">Ochiq</option>
+                  <option value="cleared">Tozalangan</option>
+                </select>
+              </>
+            ) : (
+              <>
+                <select
+                  value={ruleUtilityFilter}
+                  onChange={(event) => setRuleUtilityFilter(event.target.value as 'all' | 'electricity' | 'water' | 'gas')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+                >
+                  <option value="all">Barcha datchiklar</option>
+                  <option value="electricity">Elektr</option>
+                  <option value="water">Suv</option>
+                  <option value="gas">Gaz</option>
+                </select>
+                <select
+                  value={ruleStatusFilter}
+                  onChange={(event) => setRuleStatusFilter(event.target.value as 'all' | 'enabled' | 'disabled')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+                >
+                  <option value="all">Barcha qoidalar</option>
+                  <option value="enabled">Yoqilgan</option>
+                  <option value="disabled">O‘chirilgan</option>
+                </select>
+              </>
+            )}
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as 'time' | 'severity' | 'kind')}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
+            >
+              <option value="time">Saralash: vaqt</option>
+              <option value="severity">Saralash: daraja</option>
+              <option value="kind">Saralash: tur</option>
+            </select>
+            <button
+              onClick={handleExportCSV}
+              disabled={activeRows.length === 0}
+              className="surface-button gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold"
+            >
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </button>
+            {activeTab === 'history' ? (
+              <TableColumnsMenu
+                columns={alertHistoryColumns}
+                isColumnVisible={isAlertColumnVisible}
+                toggleColumn={toggleAlertColumn}
+              />
+            ) : (
+              <TableColumnsMenu
+                columns={alertRuleColumns}
+                isColumnVisible={isRuleColumnVisible}
+                toggleColumn={toggleRuleColumn}
+              />
+            )}
+          </div>
+        </div>
+
         {/* Content Tabs */}
         {activeTab === 'history' ? (
           /* Alerts History Log */
@@ -202,28 +449,59 @@ export default function AlertsPage() {
             <TableSkeleton rows={6} />
           ) : alertsError ? (
             <ErrorBlock message={getApiErrorMessage(alertsQueryError)} onRetry={() => refetchAlerts()} />
-          ) : alerts && alerts.length > 0 ? (
+          ) : filteredAlerts.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
+              <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  {filteredAlerts.length} ta alert · {page}/{totalPages} sahifa
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                    className="surface-button px-3 py-1.5 text-xs font-bold"
+                  >
+                    Oldingi
+                  </button>
+                  <button
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={page === totalPages}
+                    className="surface-button px-3 py-1.5 text-xs font-bold"
+                  >
+                    Keyingi
+                  </button>
+                </div>
+              </div>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
-                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                        {translations.alerts.severity}
-                      </th>
-                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                        {translations.alerts.kind}
-                      </th>
-                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                        {translations.alerts.message}
-                      </th>
-                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                        {translations.alerts.timestamp}
-                      </th>
-                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                        {translations.alerts.status}
-                      </th>
-                      {isAdmin && (
+                      {isAlertColumnVisible('severity') && (
+                        <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                          {translations.alerts.severity}
+                        </th>
+                      )}
+                      {isAlertColumnVisible('kind') && (
+                        <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                          {translations.alerts.kind}
+                        </th>
+                      )}
+                      {isAlertColumnVisible('message') && (
+                        <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                          {translations.alerts.message}
+                        </th>
+                      )}
+                      {isAlertColumnVisible('timestamp') && (
+                        <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                          {translations.alerts.timestamp}
+                        </th>
+                      )}
+                      {isAlertColumnVisible('status') && (
+                        <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                          {translations.alerts.status}
+                        </th>
+                      )}
+                      {isAdmin && isAlertColumnVisible('actions') && (
                         <th className="text-right px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
                           Amallar
                         </th>
@@ -231,47 +509,53 @@ export default function AlertsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {alerts.map((alert) => (
+                    {pagedAlerts.map((alert) => (
                       <tr
                         key={alert.id}
                         className="border-b border-gray-300 dark:border-gray-700 hover:bg-gray-100/30 dark:hover:bg-gray-850/30 transition"
                       >
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              alert.severity === 'critical'
-                                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                        {isAlertColumnVisible('severity') && (
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                alert.severity === 'critical'
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                  : alert.severity === 'warning'
+                                    ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
+                                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                              }`}
+                            >
+                              {alert.severity === 'critical'
+                                ? translations.alerts.critical
                                 : alert.severity === 'warning'
-                                  ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
-                                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                            }`}
-                          >
-                            {alert.severity === 'critical'
-                              ? translations.alerts.critical
-                              : alert.severity === 'warning'
-                                ? translations.alerts.warning
-                                : translations.alerts.info}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-900 dark:text-gray-100 font-semibold">{alert.kind}</td>
-                        <td className="px-6 py-4 text-gray-750 dark:text-gray-350 max-w-xs truncate">{alert.message ?? '—'}</td>
-                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
-                          {formatDistanceToNow(new Date(alert.ts * 1000), {
-                            addSuffix: true,
-                          })}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              alert.cleared
-                                ? 'bg-gray-200 dark:bg-gray-500/10 text-gray-700 dark:text-gray-400'
-                                : 'bg-orange-500/10 text-orange-600 dark:text-orange-450'
-                            }`}
-                          >
-                            {alert.cleared ? translations.alerts.cleared : translations.alerts.open}
-                          </span>
-                        </td>
-                        {isAdmin && (
+                                  ? translations.alerts.warning
+                                  : translations.alerts.info}
+                            </span>
+                          </td>
+                        )}
+                        {isAlertColumnVisible('kind') && <td className="px-6 py-4 text-gray-900 dark:text-gray-100 font-semibold">{alert.kind}</td>}
+                        {isAlertColumnVisible('message') && <td className="px-6 py-4 text-gray-750 dark:text-gray-350 max-w-xs truncate">{alert.message ?? '—'}</td>}
+                        {isAlertColumnVisible('timestamp') && (
+                          <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                            {formatDistanceToNow(new Date(alert.ts * 1000), {
+                              addSuffix: true,
+                            })}
+                          </td>
+                        )}
+                        {isAlertColumnVisible('status') && (
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                alert.cleared
+                                  ? 'bg-gray-200 dark:bg-gray-500/10 text-gray-700 dark:text-gray-400'
+                                  : 'bg-orange-500/10 text-orange-600 dark:text-orange-450'
+                              }`}
+                            >
+                              {alert.cleared ? translations.alerts.cleared : translations.alerts.open}
+                            </span>
+                          </td>
+                        )}
+                        {isAdmin && isAlertColumnVisible('actions') && (
                           <td className="px-6 py-4 text-right">
                             {!alert.cleared && (
                               <button
@@ -290,7 +574,7 @@ export default function AlertsPage() {
                 </table>
               </div>
               <div className="md:hidden mobile-card-list p-3">
-                {alerts.map((alert) => (
+                {pagedAlerts.map((alert) => (
                   <div key={alert.id} className="mobile-data-card">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -339,64 +623,93 @@ export default function AlertsPage() {
             <TableSkeleton rows={6} />
           ) : rulesError ? (
             <ErrorBlock message={getApiErrorMessage(rulesQueryError)} onRetry={() => refetchRules()} />
-          ) : alertRules && alertRules.length > 0 ? (
+          ) : filteredRules.length > 0 ? (
             <div className="glass-card rounded-xl overflow-hidden shadow-lg">
+              <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  {filteredRules.length} ta qoida · {page}/{totalPages} sahifa
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                    className="surface-button px-3 py-1.5 text-xs font-bold"
+                  >
+                    Oldingi
+                  </button>
+                  <button
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={page === totalPages}
+                    className="surface-button px-3 py-1.5 text-xs font-bold"
+                  >
+                    Keyingi
+                  </button>
+                </div>
+              </div>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Qoida turi</th>
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Datchik</th>
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Bino</th>
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Chegaralar</th>
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Daraja</th>
-                      <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Holat</th>
-                      {isAdmin && <th className="px-6 py-4 text-right text-gray-600 dark:text-gray-400 font-semibold">Amallar</th>}
+                      {isRuleColumnVisible('kind') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Qoida turi</th>}
+                      {isRuleColumnVisible('utility') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Datchik</th>}
+                      {isRuleColumnVisible('building') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Bino</th>}
+                      {isRuleColumnVisible('thresholds') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Chegaralar</th>}
+                      {isRuleColumnVisible('severity') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Daraja</th>}
+                      {isRuleColumnVisible('status') && <th className="px-6 py-4 font-semibold text-gray-600 dark:text-gray-400">Holat</th>}
+                      {isAdmin && isRuleColumnVisible('actions') && <th className="px-6 py-4 text-right text-gray-600 dark:text-gray-400 font-semibold">Amallar</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-700 dark:text-gray-300">
-                    {alertRules.map((rule) => {
+                    {pagedRules.map((rule) => {
                       const building = buildings?.find(b => b.id === rule.building_id)
                       return (
                         <tr key={rule.id} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/50 transition">
-                          <td className="px-6 py-3.5 font-bold text-gray-950 dark:text-gray-100">{rule.kind}</td>
-                          <td className="px-6 py-3.5">
-                            {rule.utility_type
-                              ? (translations.deviceTypes[rule.utility_type as keyof typeof translations.deviceTypes] || rule.utility_type)
-                              : 'Barchasi'}
-                          </td>
-                          <td className="px-6 py-3.5">{building ? building.name : 'Barcha binolar'}</td>
-                          <td className="px-6 py-3.5 font-mono text-gray-600 dark:text-gray-400">
-                            {rule.min_value !== null ? `>= ${rule.min_value}` : ''}
-                            {rule.min_value !== null && rule.max_value !== null ? ' va ' : ''}
-                            {rule.max_value !== null ? `<= ${rule.max_value}` : ''}
-                            {rule.min_value === null && rule.max_value === null ? '—' : ''}
-                          </td>
-                          <td className="px-6 py-3.5">
-                            <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
-                              rule.severity === 'critical'
-                                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                                : rule.severity === 'warning'
-                                  ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
-                                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                            }`}>
-                              {rule.severity}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3.5">
-                            <button
-                              onClick={() => isAdmin && handleToggleRule(rule)}
-                              disabled={!isAdmin}
-                              className="focus:outline-none"
-                            >
-                              {rule.enabled ? (
-                                <ToggleRight className="w-6 h-6 text-green-500" />
-                              ) : (
-                                <ToggleLeft className="w-6 h-6 text-gray-400 dark:text-gray-500" />
-                              )}
-                            </button>
-                          </td>
-                          {isAdmin && (
+                          {isRuleColumnVisible('kind') && <td className="px-6 py-3.5 font-bold text-gray-950 dark:text-gray-100">{rule.kind}</td>}
+                          {isRuleColumnVisible('utility') && (
+                            <td className="px-6 py-3.5">
+                              {rule.utility_type
+                                ? (translations.deviceTypes[rule.utility_type as keyof typeof translations.deviceTypes] || rule.utility_type)
+                                : 'Barchasi'}
+                            </td>
+                          )}
+                          {isRuleColumnVisible('building') && <td className="px-6 py-3.5">{building ? building.name : 'Barcha binolar'}</td>}
+                          {isRuleColumnVisible('thresholds') && (
+                            <td className="px-6 py-3.5 font-mono text-gray-600 dark:text-gray-400">
+                              {rule.min_value !== null ? `>= ${rule.min_value}` : ''}
+                              {rule.min_value !== null && rule.max_value !== null ? ' va ' : ''}
+                              {rule.max_value !== null ? `<= ${rule.max_value}` : ''}
+                              {rule.min_value === null && rule.max_value === null ? '—' : ''}
+                            </td>
+                          )}
+                          {isRuleColumnVisible('severity') && (
+                            <td className="px-6 py-3.5">
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
+                                rule.severity === 'critical'
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                  : rule.severity === 'warning'
+                                    ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
+                                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                              }`}>
+                                {rule.severity}
+                              </span>
+                            </td>
+                          )}
+                          {isRuleColumnVisible('status') && (
+                            <td className="px-6 py-3.5">
+                              <button
+                                onClick={() => isAdmin && handleToggleRule(rule)}
+                                disabled={!isAdmin}
+                                className="focus:outline-none"
+                              >
+                                {rule.enabled ? (
+                                  <ToggleRight className="w-6 h-6 text-green-500" />
+                                ) : (
+                                  <ToggleLeft className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                                )}
+                              </button>
+                            </td>
+                          )}
+                          {isAdmin && isRuleColumnVisible('actions') && (
                             <td className="px-6 py-3.5 text-right">
                               <button
                                 onClick={() => setConfirmAction({ type: 'delete-rule', id: rule.id })}
@@ -413,7 +726,7 @@ export default function AlertsPage() {
                 </table>
               </div>
               <div className="md:hidden mobile-card-list p-3">
-                {alertRules.map((rule) => {
+                {pagedRules.map((rule) => {
                   const building = buildings?.find(b => b.id === rule.building_id)
                   return (
                     <div key={rule.id} className="mobile-data-card">
@@ -505,11 +818,9 @@ export default function AlertsPage() {
                       onChange={(e) => setKind(e.target.value)}
                       className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
                     >
-                      <option value="voltage_high">Yuqori kuchlanish</option>
-                      <option value="voltage_low">Past kuchlanish</option>
-                      <option value="current_high">Yuqori tok kuchi</option>
-                      <option value="power_high">Yuqori quvvat</option>
-                      <option value="offline">Aloqa uzilishi</option>
+                      {currentRuleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

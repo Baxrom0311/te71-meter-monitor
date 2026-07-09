@@ -62,6 +62,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => (
           <div
             key={item.id}
+            role={item.type === 'error' ? 'alert' : 'status'}
+            aria-live={item.type === 'error' ? 'assertive' : 'polite'}
             className="toast-card pointer-events-auto rounded-xl border bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl shadow-2xl p-4 animate-toast-in"
           >
             <div className="flex gap-3">

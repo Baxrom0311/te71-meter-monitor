@@ -29,6 +29,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAlerts } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
+import { preloadRoute } from '@/lib/routePrefetch'
 import clsx from 'clsx'
 
 interface NavItem {
@@ -182,7 +183,13 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
         {/* User initials on the right */}
         <div className="flex items-center gap-2">
           {openAlertCount > 0 && (
-            <Link to="/alerts" className="relative p-2 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20">
+            <Link
+              to="/alerts"
+              onPointerEnter={() => preloadRoute('/alerts')}
+              onTouchStart={() => preloadRoute('/alerts')}
+              onFocus={() => preloadRoute('/alerts')}
+              className="relative p-2 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20"
+            >
               <Bell className="w-4 h-4" />
               <span className="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
                 {openAlertCount}
@@ -215,7 +222,13 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
         {/* Logo */}
         <div className={clsx('p-4', isCollapsed ? 'md:px-3' : 'md:p-5')} style={{ borderBottom: '1px solid var(--border-primary)' }}>
           <div className="flex items-center justify-between gap-3">
-            <Link to="/dashboard" className={clsx('flex items-center gap-3 min-w-0 group', isCollapsed && 'md:justify-center md:w-full')}>
+            <Link
+              to="/dashboard"
+              onPointerEnter={() => preloadRoute('/dashboard')}
+              onTouchStart={() => preloadRoute('/dashboard')}
+              onFocus={() => preloadRoute('/dashboard')}
+              className={clsx('flex items-center gap-3 min-w-0 group', isCollapsed && 'md:justify-center md:w-full')}
+            >
             <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-blue-500 shadow-lg shadow-blue-500/20 overflow-hidden">
               <span className="absolute inset-0 bg-white/20 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700" />
               <Zap className="w-6 h-6 text-white" />
@@ -265,6 +278,9 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
                       key={item.path}
                       to={item.path}
                       title={isCollapsed ? item.label : undefined}
+                      onPointerEnter={() => preloadRoute(item.path)}
+                      onTouchStart={() => preloadRoute(item.path)}
+                      onFocus={() => preloadRoute(item.path)}
                       onClick={() => setIsOpen(false)}
                       style={{ animationDelay: `${index * 35}ms` }}
                       className={clsx(
@@ -418,7 +434,13 @@ export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps)
     <header className="hidden md:block fixed left-0 right-0 top-0 z-40 px-5 pt-4">
       <div className="mx-auto w-full glass-card rounded-2xl px-4 py-3 shadow-2xl">
         <div className="flex items-center gap-4">
-          <Link to="/dashboard" className="flex items-center gap-3 shrink-0 group">
+          <Link
+            to="/dashboard"
+            onPointerEnter={() => preloadRoute('/dashboard')}
+            onTouchStart={() => preloadRoute('/dashboard')}
+            onFocus={() => preloadRoute('/dashboard')}
+            className="flex items-center gap-3 shrink-0 group"
+          >
             <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-blue-500 shadow-lg shadow-blue-500/20">
               <span className="absolute inset-0 bg-white/20 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700" />
               <Zap className="w-5 h-5 text-white" />
@@ -437,6 +459,9 @@ export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps)
                   <Link
                     key={item.path}
                     to={item.path}
+                    onPointerEnter={() => preloadRoute(item.path)}
+                    onTouchStart={() => preloadRoute(item.path)}
+                    onFocus={() => preloadRoute(item.path)}
                     className={clsx(
                       'nav-item relative inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition',
                       active

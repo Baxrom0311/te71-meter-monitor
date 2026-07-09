@@ -17,6 +17,9 @@ import {
   HourlyUtilityStatsResponse,
 } from '@/types/api'
 
+const REALTIME_FALLBACK_INTERVAL_MS = 5 * 60 * 1000
+const OPERATIONS_FALLBACK_INTERVAL_MS = 60 * 1000
+
 // Summary
 export function useSummary(): UseQueryResult<Summary> {
   return useQuery({
@@ -25,7 +28,8 @@ export function useSummary(): UseQueryResult<Summary> {
       const { data } = await apiClient.get('/api/summary')
       return data
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    // WebSocket updates this cache in real time; polling is only a safety fallback.
+    refetchInterval: REALTIME_FALLBACK_INTERVAL_MS,
   })
 }
 
@@ -114,7 +118,8 @@ export function useDevices(limit?: number, offset?: number): UseQueryResult<Devi
       const { data } = await apiClient.get(`/api/devices?${params}`)
       return data.devices
     },
-    refetchInterval: 20000, // Refetch every 20 seconds
+    // WebSocket status/snapshot events update this cache in real time.
+    refetchInterval: REALTIME_FALLBACK_INTERVAL_MS,
   })
 }
 
@@ -126,7 +131,7 @@ export function useDeviceById(id: string): UseQueryResult<Device> {
       return data
     },
     enabled: !!id,
-    refetchInterval: 20000,
+    refetchInterval: REALTIME_FALLBACK_INTERVAL_MS,
   })
 }
 
@@ -138,7 +143,7 @@ export function useDeviceLatest(id: string): UseQueryResult<Reading> {
       return data
     },
     enabled: !!id,
-    refetchInterval: 15000,
+    refetchInterval: REALTIME_FALLBACK_INTERVAL_MS,
   })
 }
 
@@ -164,7 +169,8 @@ export function useAlerts(cleared?: boolean, limit?: number): UseQueryResult<Ale
       const { data } = await apiClient.get(`/api/alerts?${params}`)
       return data.alerts
     },
-    refetchInterval: 10000, // Refetch every 10 seconds
+    // Alert WebSocket events invalidate this cache; polling is only a fallback.
+    refetchInterval: REALTIME_FALLBACK_INTERVAL_MS,
   })
 }
 
@@ -217,7 +223,8 @@ export function useOtaBatches(enabled = true): UseQueryResult<OtaBatch[]> {
       return data.batches ?? []
     },
     enabled,
-    refetchInterval: 10000,
+    // WebSocket OTA events invalidate this cache; interval is only a safety fallback.
+    refetchInterval: OPERATIONS_FALLBACK_INTERVAL_MS,
   })
 }
 

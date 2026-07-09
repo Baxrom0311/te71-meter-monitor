@@ -1,28 +1,32 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastProvider } from '@/components/ToastProvider'
 import { PWAStatus } from '@/components/PWAStatus'
 import { RealtimeSync } from '@/components/RealtimeSync'
+import { ChartSkeleton, KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { getApiErrorMessage, getApiErrorStatus } from '@/lib/errors'
 import { notify } from '@/lib/toast'
-import LoginPage from '@/pages/LoginPage'
-import DashboardPage from '@/pages/DashboardPage'
-import BuildingsPage from '@/pages/BuildingsPage'
-import BuildingDetailPage from '@/pages/BuildingDetailPage'
-import DevicesPage from '@/pages/DevicesPage'
-import DeviceDetailPage from '@/pages/DeviceDetailPage'
-import AlertsPage from '@/pages/AlertsPage'
-import FirmwarePage from '@/pages/FirmwarePage'
-import UsersPage from '@/pages/UsersPage'
-import AuditPage from '@/pages/AuditPage'
-import SettingsPage from '@/pages/SettingsPage'
-import ChatPage from '@/pages/ChatPage'
-import InstallGuidePage from '@/pages/InstallGuidePage'
-import AnalyticsPage from '@/pages/AnalyticsPage'
+import { loadPage } from '@/lib/routePrefetch'
+
+const LoginPage = lazy(() => loadPage('login'))
+const DashboardPage = lazy(() => loadPage('dashboard'))
+const BuildingsPage = lazy(() => loadPage('buildings'))
+const BuildingDetailPage = lazy(() => loadPage('buildingDetail'))
+const DevicesPage = lazy(() => loadPage('devices'))
+const DeviceDetailPage = lazy(() => loadPage('deviceDetail'))
+const AlertsPage = lazy(() => loadPage('alerts'))
+const FirmwarePage = lazy(() => loadPage('firmware'))
+const UsersPage = lazy(() => loadPage('users'))
+const AuditPage = lazy(() => loadPage('audit'))
+const SettingsPage = lazy(() => loadPage('settings'))
+const ChatPage = lazy(() => loadPage('chat'))
+const InstallGuidePage = lazy(() => loadPage('guide'))
+const AnalyticsPage = lazy(() => loadPage('analytics'))
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -39,6 +43,30 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-[1600px] space-y-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-3">
+            <div className="skeleton h-5 w-32" />
+            <div className="skeleton h-8 w-56 max-w-[70vw]" />
+          </div>
+          <div className="skeleton h-10 w-28 rounded-xl" />
+        </div>
+        <KPISkeletonGrid />
+        <ChartSkeleton />
+        <TableSkeleton rows={5} />
+      </div>
+    </div>
+  )
+}
+
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>
+}
 
 export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -60,24 +88,28 @@ export default function App() {
           <AuthProvider>
             <RealtimeSync />
             <BrowserRouter>
-              <Routes>
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                <Route path="/buildings" element={<ProtectedRoute><BuildingsPage /></ProtectedRoute>} />
-                <Route path="/buildings/:id" element={<ProtectedRoute><BuildingDetailPage /></ProtectedRoute>} />
-                <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
-                <Route path="/devices/:id" element={<ProtectedRoute><DeviceDetailPage /></ProtectedRoute>} />
-                <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
-                <Route path="/firmware" element={<ProtectedRoute><FirmwarePage /></ProtectedRoute>} />
-                <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
-                <Route path="/audit" element={<ProtectedRoute requireAdmin><AuditPage /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
-                <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-                <Route path="/guide" element={<ProtectedRoute><InstallGuidePage /></ProtectedRoute>} />
-                <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
+              <RouteBoundary>
+                <Suspense fallback={<PageFallback />}>
+                  <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/buildings" element={<ProtectedRoute><BuildingsPage /></ProtectedRoute>} />
+                    <Route path="/buildings/:id" element={<ProtectedRoute><BuildingDetailPage /></ProtectedRoute>} />
+                    <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
+                    <Route path="/devices/:id" element={<ProtectedRoute><DeviceDetailPage /></ProtectedRoute>} />
+                    <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
+                    <Route path="/firmware" element={<ProtectedRoute><FirmwarePage /></ProtectedRoute>} />
+                    <Route path="/users" element={<ProtectedRoute requireAdmin><UsersPage /></ProtectedRoute>} />
+                    <Route path="/audit" element={<ProtectedRoute requireAdmin><AuditPage /></ProtectedRoute>} />
+                    <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
+                    <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+                    <Route path="/guide" element={<ProtectedRoute><InstallGuidePage /></ProtectedRoute>} />
+                    <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </Suspense>
+              </RouteBoundary>
             </BrowserRouter>
           </AuthProvider>
         </QueryClientProvider>

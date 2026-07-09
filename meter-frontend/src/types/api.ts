@@ -276,10 +276,29 @@ export interface OtaBatchDetail extends OtaBatch {
 
 // WebSocket messages
 export interface WebSocketMessage {
-  type: 'reading' | 'device_online' | 'device_offline' | 'status' | 'alert' | 'snapshot' | 'readings_batch'
+  type:
+    | 'reading'
+    | 'device_online'
+    | 'device_offline'
+    | 'device_updated'
+    | 'status'
+    | 'alert'
+    | 'alert_notification'
+    | 'snapshot'
+    | 'readings_batch'
+    | 'firmware'
+    | 'ota_batch'
+    | 'ota_report'
+  event?: string
+  event_id?: number
+  batch_id?: number | null
   device_id?: string
+  firmware_id?: number | null
   online?: boolean
+  status?: string
+  target_version?: string | null
   ts?: number
+  notification?: Record<string, unknown>
   data?: Record<string, unknown>
   result?: Record<string, unknown>
 }

@@ -103,10 +103,39 @@ async def create_user(body: UserCreate) -> dict:
     return _public_user(user)
 
 
-async def list_users() -> dict:
+async def list_users(
+    q: str | None = None,
+    role: str | None = None,
+    is_active: bool | None = None,
+    sort_by: str = "username",
+    sort_order: str = "asc",
+    limit: int = 500,
+    offset: int = 0,
+) -> dict:
     async with SessionLocal() as session:
         users = await UserRepository(session).list_ordered()
-    return {"users": [_public_user(user) for user in users]}
+    rows = [_public_user(user) for user in users]
+    query = (q or "").strip().lower()
+    if query:
+        rows = [
+            row for row in rows
+            if query in row["username"].lower() or query in row["role"].lower() or query in str(row["id"])
+        ]
+    if role:
+        rows = [row for row in rows if row["role"] == role]
+    if is_active is not None:
+        rows = [row for row in rows if row["is_active"] is is_active]
+
+    reverse = sort_order == "desc"
+    if sort_by == "role":
+        rows.sort(key=lambda row: (row["role"], row["username"]), reverse=reverse)
+    elif sort_by == "status":
+        rows.sort(key=lambda row: (row["is_active"], row["username"]), reverse=reverse)
+    else:
+        rows.sort(key=lambda row: row["username"], reverse=reverse)
+
+    total = len(rows)
+    return {"users": rows[offset : offset + limit], "total": total, "limit": limit, "offset": offset}
 
 
 async def get_user(user_id: int) -> dict:

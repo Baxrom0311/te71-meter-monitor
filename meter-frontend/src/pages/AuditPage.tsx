@@ -9,13 +9,25 @@ import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { TableSkeleton } from '@/components/Skeleton'
 import { notifySuccess } from '@/lib/toast'
+import { TableColumnsMenu } from '@/components/TableColumnsMenu'
+import { downloadCsv, TableColumn, useColumnVisibility } from '@/lib/table'
 
 const PAGE_SIZE = 50
+
+const auditTableColumns: TableColumn[] = [
+  { key: 'timestamp', label: 'Vaqt' },
+  { key: 'user', label: 'Foydalanuvchi' },
+  { key: 'action', label: 'Amal' },
+  { key: 'entity_type', label: 'Resurs turi' },
+  { key: 'entity_id', label: 'Resurs ID' },
+  { key: 'detail', label: 'Tafsilot', defaultVisible: false },
+]
 
 export default function AuditPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedEntity, setSelectedEntity] = useState<string>('all')
   const [page, setPage] = useState(1)
+  const { isColumnVisible, toggleColumn } = useColumnVisibility(auditTableColumns, 'audit-table-columns')
 
   const entityFilter = selectedEntity === 'all' ? undefined : selectedEntity
   const { data, isLoading, isError, error: queryError, refetch } = useAuditLogs(
@@ -35,7 +47,6 @@ export default function AuditPage() {
     { label: 'Binolar', value: 'building', icon: <Key className="w-3.5 h-3.5" /> },
   ]
 
-  // Client-side search on current page
   const displayedLogs = useMemo(() => {
     if (!searchQuery.trim()) return auditLogs
     const q = searchQuery.toLowerCase().trim()
@@ -55,30 +66,20 @@ export default function AuditPage() {
   }
 
   const handleExportCSV = () => {
-    if (auditLogs.length === 0) return
-    const rows = [
-      ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Detail'].join(','),
-      ...auditLogs.map((log) =>
-        [
-          new Date(log.ts * 1000).toISOString(),
-          log.username ?? log.user_id ?? '',
-          log.action,
-          log.entity_type ?? '',
-          log.entity_id ?? '',
-          log.detail ?? '',
-        ]
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-          .join(','),
-      ),
-    ]
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `audit_${new Date().toISOString().slice(0, 10)}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-    notifySuccess('Audit CSV eksport qilindi', `${auditLogs.length} ta yozuv eksport qilindi.`)
+    if (displayedLogs.length === 0) return
+    downloadCsv(
+      `audit_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Detail'],
+      displayedLogs.map((log) => [
+        new Date(log.ts * 1000).toISOString(),
+        log.username ?? log.user_id ?? '',
+        log.action,
+        log.entity_type ?? '',
+        log.entity_id ?? '',
+        log.detail ?? '',
+      ]),
+    )
+    notifySuccess('Audit CSV eksport qilindi', `${displayedLogs.length} ta yozuv eksport qilindi.`)
   }
 
   return (
@@ -119,12 +120,17 @@ export default function AuditPage() {
             ))}
             <button
               onClick={handleExportCSV}
-              disabled={auditLogs.length === 0}
+              disabled={displayedLogs.length === 0}
               className="surface-button gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold"
             >
               <Download className="w-3.5 h-3.5" />
               CSV
             </button>
+            <TableColumnsMenu
+              columns={auditTableColumns}
+              isColumnVisible={isColumnVisible}
+              toggleColumn={toggleColumn}
+            />
           </div>
         </div>
 
@@ -160,18 +166,36 @@ export default function AuditPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.audit.timestamp}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.audit.user}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      {translations.audit.action}
-                    </th>
-                    <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
-                      Resurs turi
-                    </th>
+                    {isColumnVisible('timestamp') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.audit.timestamp}
+                      </th>
+                    )}
+                    {isColumnVisible('user') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.audit.user}
+                      </th>
+                    )}
+                    {isColumnVisible('action') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        {translations.audit.action}
+                      </th>
+                    )}
+                    {isColumnVisible('entity_type') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        Resurs turi
+                      </th>
+                    )}
+                    {isColumnVisible('entity_id') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        Resurs ID
+                      </th>
+                    )}
+                    {isColumnVisible('detail') && (
+                      <th className="text-left px-6 py-4 text-gray-600 dark:text-gray-400 font-semibold">
+                        Tafsilot
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
@@ -180,20 +204,38 @@ export default function AuditPage() {
                       key={log.id}
                       className="border-b border-gray-300 dark:border-gray-700 hover:bg-gray-100/30 dark:hover:bg-gray-850/30 transition"
                     >
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
-                        {formatDistanceToNow(new Date(log.ts * 1000), { addSuffix: true })}
-                      </td>
-                      <td className="px-6 py-4 text-gray-950 dark:text-gray-100 font-bold">
-                        {log.username ?? log.user_id ?? '—'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400 capitalize">
-                        {log.entity_type ?? '—'}
-                      </td>
+                      {isColumnVisible('timestamp') && (
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                          {formatDistanceToNow(new Date(log.ts * 1000), { addSuffix: true })}
+                        </td>
+                      )}
+                      {isColumnVisible('user') && (
+                        <td className="px-6 py-4 text-gray-950 dark:text-gray-100 font-bold">
+                          {log.username ?? log.user_id ?? '—'}
+                        </td>
+                      )}
+                      {isColumnVisible('action') && (
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            {log.action}
+                          </span>
+                        </td>
+                      )}
+                      {isColumnVisible('entity_type') && (
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 capitalize">
+                          {log.entity_type ?? '—'}
+                        </td>
+                      )}
+                      {isColumnVisible('entity_id') && (
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-mono">
+                          {log.entity_id ?? '—'}
+                        </td>
+                      )}
+                      {isColumnVisible('detail') && (
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 max-w-sm truncate">
+                          {log.detail ?? '—'}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

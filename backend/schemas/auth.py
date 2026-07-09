@@ -33,3 +33,6 @@ class TokenResponse(BaseModel):
 
 class UserListResponse(BaseModel):
     users: list[UserResponse]
+    total: int = 0
+    limit: int | None = None
+    offset: int = 0

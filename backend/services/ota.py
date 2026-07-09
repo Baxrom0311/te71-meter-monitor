@@ -21,7 +21,7 @@ from repositories.buildings import MeasurementPointRepository
 from repositories.devices import CommandRepository, DeviceRepository
 from repositories.firmware import FirmwareRepository
 from repositories.ota import FirmwareInstallEventRepository, OTABatchDeviceRepository, OTABatchRepository
-
+from services.websocket import ws_manager
 
 
 
@@ -173,6 +173,18 @@ def _batch_detail_response(batch: OTABatch) -> dict:
     }
 
 
+async def _broadcast_ota_batch_event(event: str, payload: dict) -> None:
+    await ws_manager.broadcast({"type": "ota_batch", "event": event, **payload})
+
+
+async def _broadcast_ota_report(payload: dict) -> None:
+    await ws_manager.broadcast({"type": "ota_report", **payload})
+
+
+async def _broadcast_firmware_event(event: str, payload: dict) -> None:
+    await ws_manager.broadcast({"type": "firmware", "event": event, **payload})
+
+
 async def ota_upload(
     version: str,
     notes: str,
@@ -245,6 +257,7 @@ async def ota_upload(
         await session.flush()
         response = {"ok": True, **_firmware_response(firmware)}
         await session.commit()
+    await _broadcast_firmware_event("uploaded", {"firmware_id": response["id"], "firmware": response})
     return response
 
 
@@ -266,6 +279,7 @@ async def ota_delete(firmware_id: int) -> dict:
             path.unlink()
         await FirmwareRepository(session).delete(firmware)
         await session.commit()
+    await _broadcast_firmware_event("deleted", {"firmware_id": firmware_id})
     return {"ok": True}
 
 
@@ -300,6 +314,7 @@ async def ota_check(device_id: str, current_version: str) -> dict:
 
 async def ota_report(body: OtaInstallReport) -> dict:
     ts = now_ts()
+    batch_id = None
     async with SessionLocal() as session:
         device = await DeviceRepository(session).get(body.device_id)
         if not device:
@@ -323,6 +338,7 @@ async def ota_report(body: OtaInstallReport) -> dict:
                 body.device_id,
             )
             if batch_device:
+                batch_id = batch_device.batch_id
                 batch_device.updated_at = ts
                 if body.status == "started":
                     batch_device.status = "downloading"
@@ -344,7 +360,29 @@ async def ota_report(body: OtaInstallReport) -> dict:
             await _refresh_batch_counts(session, body.firmware_id)
         await session.commit()
         await session.refresh(event)
-    return {"ok": True, "id": event.id, "ts": ts}
+    response = {"ok": True, "id": event.id, "ts": ts}
+    await _broadcast_ota_report(
+        {
+            "event_id": event.id,
+            "batch_id": batch_id,
+            "device_id": body.device_id,
+            "firmware_id": body.firmware_id,
+            "status": body.status,
+            "target_version": body.target_version,
+            "ts": ts,
+        }
+    )
+    if batch_id:
+        await _broadcast_ota_batch_event(
+            "reported",
+            {
+                "batch_id": batch_id,
+                "device_id": body.device_id,
+                "firmware_id": body.firmware_id,
+                "status": body.status,
+            },
+        )
+    return response
 
 
 async def ota_events(device_id: str | None = None, status: str | None = None, limit: int = 100) -> dict:
@@ -454,7 +492,9 @@ async def create_ota_batch(body: OTABatchCreate, admin: dict) -> dict:
             )
         await session.commit()
         batch = await OTABatchRepository(session).get_detail(batch.id)
-    return {"ok": True, "batch": _batch_detail_response(batch)}
+    response = {"ok": True, "batch": _batch_detail_response(batch)}
+    await _broadcast_ota_batch_event("created", {"batch_id": batch.id, "batch": response["batch"]})
+    return response
 
 
 async def list_ota_batches(status: str | None = None, limit: int = 100) -> dict:
@@ -540,7 +580,19 @@ async def process_ota_batch(batch_id: int, limit: int | None = None) -> dict:
         await _refresh_batch_counts(session, batch_id=batch.id)
         remaining = await OTABatchDeviceRepository(session).pending_count(batch.id)
         await session.commit()
-    return {"ok": True, "batch_id": batch_id, "queued": queued, "skipped": skipped, "remaining": remaining}
+    response = {"ok": True, "batch_id": batch_id, "queued": queued, "skipped": skipped, "remaining": remaining}
+    await _broadcast_ota_batch_event(
+        "processed",
+        {
+            "batch_id": batch_id,
+            "queued": queued,
+            "skipped": skipped,
+            "remaining": remaining,
+            "retry_reset": retry_result["retry_reset"],
+            "retry_skipped": retry_result["retry_skipped"],
+        },
+    )
+    return response
 
 
 async def process_due_ota_batches_once(limit_per_batch: int | None = None) -> dict:
@@ -577,4 +629,6 @@ async def cancel_ota_batch(batch_id: int) -> dict:
             row.error_message = "Batch cancelled"
             row.updated_at = ts
         await session.commit()
-    return {"ok": True, "batch_id": batch_id, "status": "cancelled"}
+    response = {"ok": True, "batch_id": batch_id, "status": "cancelled"}
+    await _broadcast_ota_batch_event("cancelled", response)
+    return response

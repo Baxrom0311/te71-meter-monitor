@@ -6,6 +6,8 @@ from fastapi.responses import Response
 from core.security import current_token_payload, require_admin
 from models.schemas import (
     DeviceConfigResponse,
+    DeviceCreate,
+    DeviceCreateResponse,
     DeviceListResponse,
     DeviceProvisioningTokenCreate,
     DeviceProvisioningTokenCreateResponse,
@@ -58,9 +60,32 @@ async def list_devices(
     group: Optional[str] = None,
     building: Optional[str] = None,
     utility_type: Optional[str] = None,
+    q: Optional[str] = None,
+    sort_by: str = Query("last_seen", pattern="^(last_seen|name|type|status)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(current_token_payload),
 ):
-    return await device_service.list_devices(online, meter_type, group, building, utility_type)
+    return await device_service.list_devices(
+        online=online,
+        meter_type=meter_type,
+        group=group,
+        building=building,
+        utility_type=utility_type,
+        q=q,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post("/devices", response_model=DeviceCreateResponse)
+async def create_device(body: DeviceCreate, admin: dict = Depends(require_admin)):
+    result = await device_service.create_device(body)
+    await audit.record(admin, "device.create", "device", result["device"]["id"], result["device"])
+    return result
 
 
 @router.post("/devices/provisioning-tokens", response_model=DeviceProvisioningTokenCreateResponse)

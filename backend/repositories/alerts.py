@@ -1,4 +1,4 @@
-from sqlalchemy import and_, desc, or_, select, update
+from sqlalchemy import and_, desc, func, or_, select, update
 
 from models.entities import Alert, AlertNotification, AlertRule
 from repositories.base import BaseRepository
@@ -21,6 +21,19 @@ class AlertRepository(BaseRepository[Alert]):
         if kind:
             stmt = stmt.where(Alert.kind.startswith(kind))
         return list((await self.session.scalars(stmt)).all())
+
+    async def count_filtered(
+        self,
+        device_id: str | None = None,
+        kind: str | None = None,
+        cleared: bool = False,
+    ) -> int:
+        stmt = select(func.count()).select_from(Alert).where(Alert.cleared.is_(cleared))
+        if device_id:
+            stmt = stmt.where(Alert.device_id == device_id)
+        if kind:
+            stmt = stmt.where(Alert.kind.startswith(kind))
+        return await self.session.scalar(stmt) or 0
 
     async def has_recent_duplicate(self, alert: Alert, since_ts: int) -> bool:
         existing = await self.session.scalar(

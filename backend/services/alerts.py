@@ -9,6 +9,7 @@ from repositories.alerts import AlertNotificationRepository, AlertRepository, Al
 from repositories.base import model_to_dict
 from repositories.buildings import BuildingRepository
 from services.notifications import send_alert_notification
+from services.websocket import ws_manager
 
 ALERT_RULE_KINDS = {
     "undervoltage",
@@ -94,6 +95,10 @@ def _notification_for_alert(alert: Alert, ts: int) -> AlertNotification:
         message=alert.message,
         created_at=ts,
     )
+
+
+async def _broadcast_alert_event(event: str, payload: dict) -> None:
+    await ws_manager.broadcast({"type": "alert", "event": event, **payload})
 
 
 async def check_alerts(session, reading: MeterReading) -> list[dict]:
@@ -250,8 +255,10 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
 
 async def get_alerts(device_id: str | None, kind: str | None, cleared: bool, limit: int, offset: int = 0) -> dict:
     async with SessionLocal() as session:
-        rows = await AlertRepository(session).list_filtered(device_id, kind, cleared, limit, offset)
-    return {"alerts": [model_to_dict(row) for row in rows]}
+        repo = AlertRepository(session)
+        rows = await repo.list_filtered(device_id, kind, cleared, limit, offset)
+        total = await repo.count_filtered(device_id, kind, cleared)
+    return {"alerts": [model_to_dict(row) for row in rows], "total": total, "limit": limit, "offset": offset}
 
 
 async def list_alert_notifications(status: str | None = None, limit: int = 100) -> dict:
@@ -399,12 +406,16 @@ async def disable_alert_rule(rule_id: int) -> dict:
 
 
 async def clear_alert(alert_id: int) -> dict:
+    cleared = False
     async with SessionLocal() as session:
         alert = await AlertRepository(session).get(alert_id)
         if alert:
             alert.cleared = True
             alert.cleared_at = now_ts()
             await session.commit()
+            cleared = True
+    if cleared:
+        await _broadcast_alert_event("cleared", {"alert_id": alert_id})
     return {"ok": True}
 
 
@@ -412,6 +423,7 @@ async def clear_all_alerts(device_id: str | None) -> dict:
     async with SessionLocal() as session:
         await AlertRepository(session).clear_all(now_ts(), device_id)
         await session.commit()
+    await _broadcast_alert_event("cleared_all", {"device_id": device_id})
     return {"ok": True}
 
 
