@@ -120,7 +120,7 @@ export default function AuditPage() {
             <button
               onClick={handleExportCSV}
               disabled={auditLogs.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition shadow-sm bg-white/40 dark:bg-gray-950/40 border-gray-300 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-950 dark:hover:text-gray-200 disabled:opacity-40"
+              className="surface-button gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold"
             >
               <Download className="w-3.5 h-3.5" />
               CSV
@@ -143,14 +143,14 @@ export default function AuditPage() {
                 <button
                   onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                  className="surface-button px-3 py-1.5 text-xs font-bold"
                 >
                   Oldingi
                 </button>
                 <button
                   onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                  className="surface-button px-3 py-1.5 text-xs font-bold"
                 >
                   Keyingi
                 </button>

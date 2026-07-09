@@ -147,7 +147,11 @@
   }
 
   .container-custom {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply w-full max-w-none px-4 sm:px-6 lg:px-8 2xl:px-10;
+  }
+
+  .surface-button {
+    @apply inline-flex items-center justify-center rounded-lg border border-gray-300 bg-gray-100 text-gray-700 shadow-sm transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-100 dark:hover:bg-gray-800;
   }
 
   .primary {

@@ -361,7 +361,7 @@ export default function DevicesPage() {
             <button
               onClick={handleExportCSV}
               disabled={filteredDevices.length === 0}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 disabled:opacity-45 dark:bg-gray-850 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-800 transition"
+              className="surface-button gap-2 px-3.5 py-1.5 text-xs font-semibold"
             >
               <Download className="w-3.5 h-3.5" />
               CSV
@@ -438,14 +438,14 @@ export default function DevicesPage() {
                 <button
                   onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                  className="surface-button px-3 py-1.5 text-xs font-bold"
                 >
                   Oldingi
                 </button>
                 <button
                   onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-850 disabled:opacity-40 hover:bg-gray-200 dark:hover:bg-gray-750 transition"
+                  className="surface-button px-3 py-1.5 text-xs font-bold"
                 >
                   Keyingi
                 </button>

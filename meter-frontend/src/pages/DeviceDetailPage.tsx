@@ -254,7 +254,7 @@ export default function DeviceDetailPage() {
                     <button
                       onClick={() => setPendingCommand({ type: 'status' })}
                       disabled={loadingAction !== null}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-850 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-200 rounded-lg transition text-sm font-semibold border border-gray-300 dark:border-gray-700 mt-1 shadow-sm"
+                      className="surface-button gap-2 px-4 py-2.5 text-sm font-semibold mt-1"
                     >
                       {device.is_active ? (
                         <>

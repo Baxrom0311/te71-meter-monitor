@@ -416,7 +416,7 @@ export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps)
 
   return (
     <header className="hidden md:block fixed left-0 right-0 top-0 z-40 px-5 pt-4">
-      <div className="mx-auto max-w-[1500px] glass-card rounded-2xl px-4 py-3 shadow-2xl">
+      <div className="mx-auto w-full glass-card rounded-2xl px-4 py-3 shadow-2xl">
         <div className="flex items-center gap-4">
           <Link to="/dashboard" className="flex items-center gap-3 shrink-0 group">
             <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-blue-500 shadow-lg shadow-blue-500/20">

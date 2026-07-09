@@ -4,6 +4,7 @@ import { RootLayout } from '@/components/layout/RootLayout'
 import { translations } from '@/i18n/translations'
 import { useSummary } from '@/hooks/queries'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { API_BASE_URL } from '@/lib/env'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 
@@ -16,7 +17,7 @@ export default function SettingsPage() {
   const [tgEnabled, setTgEnabled] = useState(true)
 
   // API Config State
-  const [apiBase, setApiBase] = useState(import.meta.env.VITE_API_URL || 'http://localhost:8001')
+  const [apiBase, setApiBase] = useState(API_BASE_URL)
   const [saving, setSaving] = useState(false)
 
   const handleSave = (e: React.FormEvent) => {
@@ -30,14 +31,14 @@ export default function SettingsPage() {
 
   return (
     <RootLayout>
-      <div className="space-y-6 max-w-4xl">
+      <div className="space-y-6 w-full">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Settings className="w-8 h-8 text-blue-500" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{translations.settings.title}</h1>
         </div>
 
-        <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+        <form onSubmit={handleSave} className="grid grid-cols-1 xl:grid-cols-2 gap-6 text-sm">
           {/* System Settings & API */}
           <div className="glass-card rounded-xl p-6 space-y-4 shadow">
             <h2 className="text-lg font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2 border-b border-gray-300 dark:border-gray-800 pb-2">
@@ -119,7 +120,7 @@ export default function SettingsPage() {
           </div>
 
           {/* System Health / Status info */}
-          <div className="glass-card rounded-xl p-6 space-y-4 shadow md:col-span-2">
+          <div className="glass-card rounded-xl p-6 space-y-4 shadow xl:col-span-2">
             <h2 className="text-lg font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2 border-b border-gray-300 dark:border-gray-800 pb-2">
               <Radio className="w-5 h-5 text-blue-450 animate-pulse" />
               Tizim holati (System Health)
@@ -165,7 +166,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-3 md:col-span-2 pt-2">
+          <div className="flex justify-end gap-3 xl:col-span-2 pt-2">
             <button
               type="submit"
               disabled={saving}

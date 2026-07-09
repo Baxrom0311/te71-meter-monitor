@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { WebSocketMessage } from '@/types/api'
 import { getTokenFromStorage } from './auth'
+import { API_BASE_URL } from './env'
 
 let ws: WebSocket | null = null
 let listeners: ((message: WebSocketMessage) => void)[] = []
@@ -9,10 +10,9 @@ const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_INTERVAL = 3000
 
 function getWebSocketURL(): string {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001'
   const token = getTokenFromStorage()
-  const protocol = apiUrl.startsWith('https') ? 'wss' : 'ws'
-  const host = new URL(apiUrl).host
+  const protocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws'
+  const host = new URL(API_BASE_URL).host
   return `${protocol}://${host}/ws?token=${token}`
 }
 

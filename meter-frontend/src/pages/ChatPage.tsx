@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { MessageSquare, Trash, Send, Sparkles, Bot } from 'lucide-react'
 import { getTokenFromStorage, removeTokenFromStorage } from '@/lib/auth'
+import { API_BASE_URL } from '@/lib/env'
 import { notify } from '@/lib/toast'
 import clsx from 'clsx'
 
@@ -80,8 +81,7 @@ export default function ChatPage() {
 
     try {
       const token = getTokenFromStorage()
-      const apiBase = import.meta.env.VITE_API_URL || ''
-      const response = await fetch(`${apiBase}/api/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

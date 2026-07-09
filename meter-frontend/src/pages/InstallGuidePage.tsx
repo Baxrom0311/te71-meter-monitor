@@ -4,7 +4,7 @@ import { Book, Cpu, Wifi, Info } from 'lucide-react'
 export default function InstallGuidePage() {
   return (
     <RootLayout>
-      <div className="space-y-8 max-w-4xl">
+      <div className="space-y-8 w-full">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Book className="w-8 h-8 text-blue-500" />
@@ -84,7 +84,7 @@ export default function InstallGuidePage() {
           </p>
           <ol className="list-decimal pl-5 text-sm text-gray-700 dark:text-gray-300 space-y-2">
             <li>Uyingiz yoki ofisingizning faol WiFi nuqtasini tanlang va parolini yozing.</li>
-            <li><strong>Server URL:</strong> Monitoring serverining HTTP IP manzilini kiriting (masalan: <code className="bg-gray-150 dark:bg-gray-950 px-1.5 py-0.5 rounded text-blue-650 dark:text-blue-400 font-mono border border-gray-250 dark:border-gray-900">http://67.205.171.93</code>).</li>
+            <li><strong>Server URL:</strong> Monitoring serverining HTTPS IP manzilini kiriting (masalan: <code className="bg-gray-150 dark:bg-gray-950 px-1.5 py-0.5 rounded text-blue-650 dark:text-blue-400 font-mono border border-gray-250 dark:border-gray-900">https://67.205.171.93</code>).</li>
             <li>Sozlamalarni saqlang. ESP32 qayta yuklanib, serverga bog'lanadi.</li>
           </ol>
         </div>

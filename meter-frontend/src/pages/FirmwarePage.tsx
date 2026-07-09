@@ -324,7 +324,7 @@ export default function FirmwarePage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Devices/hour</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Soatiga qurilmalar soni</label>
                     <input
                       type="number"
                       min={1}
@@ -335,13 +335,16 @@ export default function FirmwarePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Schedule</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Boshlash vaqti</label>
                     <input
                       type="datetime-local"
                       value={scheduledAt}
                       onChange={(event) => setScheduledAt(event.target.value)}
                       className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
                     />
+                    <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-450">
+                      Bo‘sh qoldirilsa OTA batch darhol boshlanadi.
+                    </p>
                   </div>
                 </div>
 
@@ -423,10 +426,10 @@ export default function FirmwarePage() {
                 <thead className="bg-gray-100/50 dark:bg-gray-800/30 border-b border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400">
                   <tr>
                     <th className="text-left px-5 py-3 font-semibold">Nomi</th>
-                    <th className="text-left px-5 py-3 font-semibold">Status</th>
+                    <th className="text-left px-5 py-3 font-semibold">Holat</th>
                     <th className="text-left px-5 py-3 font-semibold">Progress</th>
                     <th className="text-left px-5 py-3 font-semibold">Qurilmalar</th>
-                    <th className="text-left px-5 py-3 font-semibold">Schedule</th>
+                    <th className="text-left px-5 py-3 font-semibold">Boshlash vaqti</th>
                     <th className="text-right px-5 py-3 font-semibold">Action</th>
                   </tr>
                 </thead>

@@ -1,12 +1,11 @@
 import axios, { AxiosInstance } from 'axios'
 import { getTokenFromStorage, removeTokenFromStorage } from './auth'
+import { API_BASE_URL } from './env'
 import { getApiErrorMessage } from './errors'
 import { notify } from './toast'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
-
 const apiClient: AxiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

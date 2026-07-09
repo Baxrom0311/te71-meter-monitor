@@ -2,19 +2,17 @@ import { useMemo, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { KPICard } from '@/components/KPICard'
-import { useTheme } from '@/contexts/ThemeContext'
-import { useSummary, useEnergyAnalytics, useDevices, useAlerts, useWebSocket, useEnergySummary, useBuildings } from '@/hooks/queries'
+import { useSummary, useDevices, useAlerts, useWebSocket, useBuildings } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import { Device, WebSocketMessage } from '@/types/api'
 import apiClient from '@/lib/api'
-import { chartTheme } from '@/lib/chartTheme'
 import { EmptyBlock } from '@/components/StateBlock'
 import { notifySuccess } from '@/lib/toast'
-import { ChartSkeleton, KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
+import { KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
+import { UtilityChartsPanel } from '@/components/UtilityChartsPanel'
 
 const utilityOverview = [
   { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
@@ -25,17 +23,10 @@ const utilityOverview = [
 export default function DashboardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isDark } = useTheme()
-  const chart = chartTheme(isDark)
   const { data: summary, isLoading: summaryLoading } = useSummary()
   const { data: devices, isLoading: devicesLoading } = useDevices()
   const { data: buildings } = useBuildings()
-  const { data: energyData, isLoading: energyLoading } = useEnergyAnalytics('hour',
-    Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000),
-    Math.floor(Date.now() / 1000)
-  )
   const { data: alerts } = useAlerts(false, 5)
-  const { data: energySummary, isLoading: energySummaryLoading } = useEnergySummary(30)
   const wsMessage = useWebSocket()
   const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({})
   const [deviceToAssign, setDeviceToAssign] = useState<Device | null>(null)
@@ -102,15 +93,6 @@ export default function DashboardPage() {
   const onlinePercent = summary?.devices_total
     ? Math.round(((summary.devices_online || 0) / summary.devices_total) * 100)
     : 0
-
-  // Chart data: convert EnergyPoints to recharts format
-  const chartData = useMemo(() => {
-    if (!energyData?.data) return []
-    return energyData.data.map((p) => ({
-      timestamp: p.bucket_ts * 1000,
-      value: p.energy_kwh_delta ?? p.energy_kwh_max ?? 0,
-    }))
-  }, [energyData])
 
   return (
     <RootLayout>
@@ -343,107 +325,10 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Energy Chart */}
-          {energyLoading ? (
-            <ChartSkeleton titleWidth="w-36" />
-          ) : (
-          <div className="glass-card chart-panel rounded-xl p-4 sm:p-6 shadow">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100">{translations.dashboard.energy}</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Oxirgi 24 soatlik energiya dinamikasi</p>
-              </div>
-              <span className="chart-chip">kWh</span>
-            </div>
-            {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.34} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
-                <XAxis
-                  dataKey="timestamp"
-                  stroke={chart.axis}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={11}
-                  tickFormatter={(value) => {
-                    try {
-                      return new Date(value).toLocaleTimeString('uz-UZ', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    } catch {
-                      return value
-                    }
-                  }}
-                />
-                <YAxis stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} width={42} />
-                <Tooltip
-                  contentStyle={chart.tooltip}
-                  labelStyle={{ color: chart.label, fontWeight: 800 }}
-                  cursor={chart.cursor}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#3B82F6"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
-                  fillOpacity={1}
-                  fill="url(#colorValue)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            ) : (
-              <EmptyBlock title="Grafik maʼlumoti yo‘q" message="Oxirgi 24 soat uchun energiya ko‘rsatkichlari topilmadi." />
-            )}
-          </div>
-          )}
-
-          {/* Building Wise Energy Summary Chart */}
-          {energySummaryLoading ? (
-            <ChartSkeleton titleWidth="w-44" />
-          ) : (
-          <div className="glass-card chart-panel rounded-xl p-4 sm:p-6 shadow">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100">Binolar bo'yicha sarf</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Oxirgi 30 kunlik taqqoslash</p>
-              </div>
-              <span className="chart-chip">30 kun</span>
-            </div>
-            {energySummary?.summary && energySummary.summary.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={energySummary.summary} barCategoryGap="26%">
-                  <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
-                  <XAxis dataKey="building_name" stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} width={42} />
-                  <Tooltip
-                    contentStyle={chart.tooltip}
-                    labelStyle={{ color: chart.label, fontWeight: 800 }}
-                    cursor={{ fill: isDark ? 'rgba(59,130,246,0.08)' : 'rgba(37,99,235,0.08)' }}
-                  />
-                  <Bar dataKey="total_energy_kwh" name="Sarf (kWh)" fill="#10B981" radius={[8, 8, 3, 3]}>
-                    {energySummary.summary.map((_, idx) => (
-                      <Cell key={`cell-${idx}`} fill={idx % 2 === 0 ? '#10B981' : '#3B82F6'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyBlock title="Taqqoslash maʼlumoti yo‘q" message="Tahliliy taqqoslash uchun maʼlumot yetarli emas." />
-            )}
-          </div>
-          )}
-        </div>
+        <UtilityChartsPanel
+          title="Kommunal monitoring grafiklari"
+          subtitle="Hamma binolar yig‘indisi: elektr jami quvvat, suv/gaz flow yig‘indisi va bosim o‘rtachasi"
+        />
 
         {/* Devices Table & Alerts Sidebar */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

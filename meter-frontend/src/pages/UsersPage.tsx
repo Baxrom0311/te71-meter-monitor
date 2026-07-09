@@ -237,10 +237,10 @@ export default function UsersPage() {
                       <button
                         onClick={() => handleToggleActive(u)}
                         disabled={u.id === currentUser?.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-750 transition"
+                        className="surface-button gap-2 px-3 py-2 text-xs font-bold"
                       >
                         {u.is_active ? <ToggleRight className="w-4 h-4 text-green-500" /> : <ToggleLeft className="w-4 h-4 text-gray-500" />}
-                        Status
+                        Holat
                       </button>
                       <button
                         onClick={() => openEditModal(u)}
@@ -386,7 +386,7 @@ export default function UsersPage() {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Holat</label>
                     <select
                       value={editIsActive ? 'true' : 'false'}
                       disabled={editUserId === currentUser?.id}
