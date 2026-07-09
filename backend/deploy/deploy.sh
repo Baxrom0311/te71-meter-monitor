@@ -8,7 +8,7 @@ REMOTE="${REMOTE:-/root/meter_backend}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND="${BACKEND:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$BACKEND/.." && pwd)}"
-FRONTEND="${FRONTEND:-$PROJECT_ROOT/frontend}"
+FRONTEND="${FRONTEND:-$PROJECT_ROOT/meter-frontend/dist}"
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env.production}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -28,6 +28,12 @@ rsync -avz --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' \
   --exclude='venv' --exclude='data' --exclude='backups' --exclude='firmware' \
   --exclude='tests' --exclude='deploy' \
   "$BACKEND/" "$SERVER:$REMOTE/"
+
+if [[ ! -f "$FRONTEND/index.html" ]]; then
+  echo "Frontend build topilmadi: $FRONTEND/index.html"
+  echo "Avval: cd $PROJECT_ROOT/meter-frontend && pnpm build"
+  exit 1
+fi
 
 echo "=== 2. Frontend sync ==="
 rsync -avz \
