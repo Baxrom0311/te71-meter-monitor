@@ -68,11 +68,11 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_origins != ["*"],
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
