@@ -36,11 +36,16 @@ static AppConfig g_cfg;
 static Preferences g_prefs;
 
 static void cfg_load() {
-    // Default
-    strncpy(g_cfg.server_url,   "http://67.205.171.93", CFG_SERVER_LEN - 1);
+    // Compile-time default (platformio.ini BUILD_FLAGS orqali)
+    strncpy(g_cfg.server_url, DEFAULT_SERVER_URL, CFG_SERVER_LEN - 1);
+#ifdef DEFAULT_DEVICE_TOKEN
+    strncpy(g_cfg.device_token, DEFAULT_DEVICE_TOKEN, CFG_TOKEN_LEN - 1);
+#else
     g_cfg.device_token[0] = '\0';
+#endif
     g_cfg.meter_serial[0] = '\0';
 
+    // NVS dan yuklash (WiFiManager orqali saqlangan qiymatlar ustunlik qiladi)
     g_prefs.begin("app", true);
     g_prefs.getString("srv", g_cfg.server_url,    CFG_SERVER_LEN);
     g_prefs.getString("tok", g_cfg.device_token,  CFG_TOKEN_LEN);
