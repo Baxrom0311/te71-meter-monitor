@@ -58,7 +58,10 @@ static unsigned long last_health_ms = 0;
 
 // Relay faqat elektr sensori uchun
 #ifdef SENSOR_ELECTRICITY
-static int pending_relay = 0;  // 0=yo'q, 1=relay_off, 2=relay_on
+static int           pending_relay      = 0;    // 0=yo'q, 1=relay_off, 2=relay_on
+static int           meter_fail_count   = 0;    // Ketma-ket muvaffaqiyatsiz urinishlar
+static unsigned long meter_retry_ms     = 30000UL; // Joriy retry interval
+#define METER_RETRY_MAX_MS  300000UL            // Maksimal interval: 5 daqiqa
 #endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -212,9 +215,13 @@ void setup() {
 // ═══════════════════════════════════════════════════════════════════════════════
 void loop() {
     unsigned long now = millis();
-    bool meter_time = (now - last_read_ms >= READ_INTERVAL_MS || last_read_ms == 0);
 
     // WiFi yo'q bo'lsa qayta ulanish
+#ifdef SENSOR_ELECTRICITY
+    bool meter_time = (now - last_read_ms >= meter_retry_ms || last_read_ms == 0);
+#else
+    bool meter_time = (now - last_read_ms >= READ_INTERVAL_MS || last_read_ms == 0);
+#endif
     if (!meter_time && WiFi.status() != WL_CONNECTED) {
         WiFi.reconnect();
         delay(1000);
@@ -234,7 +241,7 @@ void loop() {
         }
     }
 
-    // ── Har 30s da sensor o'qish ─────────────────────────────────────────────
+    // ── Sensor o'qish ────────────────────────────────────────────────────────
     if (meter_time) {
         last_read_ms = now;
 
@@ -248,8 +255,16 @@ void loop() {
             if (!sensor_connect()) {
                 Serial.println(" XATO!");
                 wifi_resume();
+                // Backoff: har muvaffaqiyatsizlikda interval 2x oshadi (max 5 daqiqa)
+                meter_fail_count++;
+                if (meter_fail_count >= 3) {
+                    meter_retry_ms = min(meter_retry_ms * 2, METER_RETRY_MAX_MS);
+                    Serial.printf("Keyingi urinish %lu s dan keyin\n", meter_retry_ms / 1000);
+                }
                 return;
             }
+            meter_fail_count = 0;
+            meter_retry_ms   = READ_INTERVAL_MS;  // Ulanish bo'lsa intervalni tiklash
             Serial.println(" OK");
             if (!g_sensor_meta.meter_serial[0])
                 dlms_get_string(1, OBIS_SERIAL, 2,
@@ -314,7 +329,7 @@ void loop() {
         last_health_ms = millis();
     }
 
-    // ── Command poll + status (har 60s) ──────────────────────────────────────
+    // ── Command poll + status + OTA (har 60s) ────────────────────────────────
     if (server_ok && WiFi.status() == WL_CONNECTED &&
         now - last_cmd_ms >= CMD_POLL_MS) {
         last_cmd_ms = now;
@@ -324,5 +339,6 @@ void loop() {
         app_poll_commands(device_id, nullptr);
 #endif
         app_send_status(device_id, FW_VERSION);
+        ota_check(device_id, FW_VERSION);
     }
 }
