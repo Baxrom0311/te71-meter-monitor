@@ -1,8 +1,16 @@
-"""Register browser — clean table with filters."""
+"""Register browser page.
+
+Stillashtirish uchun theme.py konstantalari ishlatiladi.
+"""
+import csv
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                               QTableWidgetItem, QPushButton, QLineEdit, QLabel,
-                              QHeaderView, QComboBox, QFrame)
-from PyQt6.QtCore import Qt
+                              QHeaderView, QComboBox, QFrame, QFileDialog, QMessageBox)
+
+from ui.theme import Colors, Fonts, inline_style
 
 
 class RegistersPanel(QWidget):
@@ -37,7 +45,7 @@ class RegistersPanel(QWidget):
         # Filter
         tb_layout.addSpacing(8)
         filter_lbl = QLabel("Filtr:")
-        filter_lbl.setStyleSheet("color: #667085; font-weight: 700;")
+        filter_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
         tb_layout.addWidget(filter_lbl)
 
         self.filter_combo = QComboBox()
@@ -48,14 +56,27 @@ class RegistersPanel(QWidget):
             "Ma'lumot",
             "Rele",
         ])
-        self.filter_combo.currentIndexChanged.connect(self._apply_filter)
+        self.filter_combo.currentIndexChanged.connect(self._apply_filter_and_search)
         tb_layout.addWidget(self.filter_combo)
+
+        # Search Bar
+        tb_layout.addSpacing(12)
+        search_lbl = QLabel("Qidirish:")
+        search_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
+        tb_layout.addWidget(search_lbl)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Nomi yoki OBIS kodini yozing...")
+        self.search_input.setMinimumHeight(36)
+        self.search_input.setMinimumWidth(220)
+        self.search_input.textChanged.connect(self._apply_filter_and_search)
+        tb_layout.addWidget(self.search_input)
 
         tb_layout.addStretch()
 
         # Custom OBIS
         obis_lbl = QLabel("OBIS:")
-        obis_lbl.setStyleSheet("color: #667085; font-weight: 700;")
+        obis_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
         tb_layout.addWidget(obis_lbl)
 
         self.obis_input = QLineEdit()
@@ -99,7 +120,7 @@ class RegistersPanel(QWidget):
 
         # Status
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #667085; font-size: 12px; padding: 4px;")
+        self.lbl_status.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_size=Fonts.SIZE_BODY, padding="4px"))
         layout.addWidget(self.lbl_status)
 
     def populate(self, data: list[dict]):
@@ -114,8 +135,7 @@ class RegistersPanel(QWidget):
             if item["value"] == "N/A":
                 val_item.setForeground(Qt.GlobalColor.darkGray)
             else:
-                from PyQt6.QtGui import QColor
-                val_item.setForeground(QColor("#10b981"))
+                val_item.setForeground(QColor(Colors.STATUS_GREEN))
             self.table.setItem(row, 2, val_item)
 
             self.table.setItem(row, 3, QTableWidgetItem(item["unit"]))
@@ -142,23 +162,39 @@ class RegistersPanel(QWidget):
         self.table.setRowCount(row + 1)
         self.table.setItem(row, 0, QTableWidgetItem(obis))
         self.table.setItem(row, 1, QTableWidgetItem("Qo'lda kiritilgan"))
-        from PyQt6.QtGui import QColor
         val_item = QTableWidgetItem(value)
-        val_item.setForeground(QColor("#38bdf8"))
+        val_item.setForeground(QColor(Colors.ACCENT_BLUE))
         self.table.setItem(row, 2, val_item)
         self.table.setItem(row, 3, QTableWidgetItem(""))
         self.table.setItem(row, 4, QTableWidgetItem("Custom"))
         self.table.scrollToBottom()
         self.btn_export.setEnabled(True)
 
-    def _apply_filter(self, index):
+    def _apply_filter_and_search(self, *args):
+        # Get category filter
+        idx = self.filter_combo.currentIndex()
         cats = [None, "energy", "instant", "info", "relay"]
-        cat = cats[index] if index < len(cats) else None
+        cat = cats[idx] if idx < len(cats) else None
+
+        # Get search text
+        search_text = self.search_input.text().strip().lower()
+
         for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                row_cat = item.data(Qt.ItemDataRole.UserRole)
-                self.table.setRowHidden(row, cat is not None and row_cat != cat)
+            # Read OBIS code and Name columns for searching
+            obis_item = self.table.item(row, 0)
+            name_item = self.table.item(row, 1)
+
+            if obis_item and name_item:
+                row_cat = obis_item.data(Qt.ItemDataRole.UserRole)
+                obis = obis_item.text().lower()
+                name = name_item.text().lower()
+
+                # Checks
+                category_matches = (cat is None or row_cat == cat)
+                search_matches = (not search_text or search_text in obis or search_text in name)
+
+                # Row visibility
+                self.table.setRowHidden(row, not (category_matches and search_matches))
 
     def set_enabled(self, enabled: bool):
         self.btn_read_all.setEnabled(enabled)
@@ -170,9 +206,6 @@ class RegistersPanel(QWidget):
         self.btn_export.setEnabled(False)
 
     def _export_csv(self):
-        from PyQt6.QtWidgets import QFileDialog, QMessageBox
-        import csv
-
         path, _ = QFileDialog.getSaveFileName(
             self, "CSV formatida saqlash", "", "CSV fayllar (*.csv)"
         )

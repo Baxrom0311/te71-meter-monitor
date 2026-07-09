@@ -6,7 +6,7 @@ DIQQAT: 3 ta noto'g'ri parol = 24 SOAT BLOK!
 import sys, os, time
 import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dlms.hdlc import make_hdlc, send_recv, hex_str
 from dlms.connection import DLMSConnection, _client_to_hdlc

@@ -1,44 +1,13 @@
-"""Relay control panel."""
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPainter, QColor, QPen
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+"""Relay control page.
 
-class SpinnerWidget(QWidget):
-    """Modern circular Material-style flat spinner."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.angle = 0
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.rotate)
-        self.timer.start(16)  # ~60 FPS smooth animation
-        self.setMinimumSize(40, 40)
-        self.setMaximumSize(40, 40)
+Uses shared SpinnerWidget from ui.widgets.
+Stillashtirish uchun theme.py rang konstantalari ishlatiladi.
+"""
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget, QComboBox
 
-    def rotate(self):
-        self.angle = (self.angle + 6) % 360
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        width = self.width()
-        height = self.height()
-        side = min(width, height) - 4
-        
-        pen = QPen()
-        pen.setWidth(4)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        
-        # Track ring
-        pen.setColor(QColor("#1e293b"))
-        painter.setPen(pen)
-        painter.drawEllipse(2, 2, side, side)
-        
-        # Rotating neon blue segment
-        pen.setColor(QColor("#38bdf8"))
-        painter.setPen(pen)
-        painter.drawArc(2, 2, side, side, -self.angle * 16, 120 * 16)
+from ui.theme import Colors, Fonts, inline_style
+from ui.widgets import SpinnerWidget, RelayDiagramWidget, add_glow_effect
 
 
 class RelayPanel(QWidget):
@@ -55,20 +24,28 @@ class RelayPanel(QWidget):
 
         self.status_card = QFrame()
         self.status_card.setObjectName("card")
-        self.status_card.setMinimumHeight(170)
+        self.status_card.setMinimumHeight(280)
         status_layout = QVBoxLayout(self.status_card)
         status_layout.setContentsMargins(24, 20, 24, 20)
         status_layout.setSpacing(8)
 
         self.lbl_state = QLabel("Holat noma'lum")
         self.lbl_state.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #94a3b8;")
+        self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.TEXT_MUTED))
         status_layout.addWidget(self.lbl_state)
+
+        # Graphical Diagram Switch
+        self.diagram = RelayDiagramWidget()
+        diag_layout = QHBoxLayout()
+        diag_layout.addStretch()
+        diag_layout.addWidget(self.diagram)
+        diag_layout.addStretch()
+        status_layout.addLayout(diag_layout)
 
         self.lbl_desc = QLabel("Rele holatini o'qish uchun 'Holatni yangilash' tugmasini bosing.")
         self.lbl_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_desc.setWordWrap(True)
-        self.lbl_desc.setStyleSheet("font-size: 14px; color: #94a3b8;")
+        self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.TEXT_MUTED))
         status_layout.addWidget(self.lbl_desc)
 
         self.spinner = SpinnerWidget()
@@ -117,10 +94,9 @@ class RelayPanel(QWidget):
         mode_layout.setSpacing(12)
 
         mode_lbl = QLabel("Rele ish rejimini o'zgartirish:")
-        mode_lbl.setStyleSheet("font-weight: 700; color: #344054;")
+        mode_lbl.setStyleSheet(inline_style(font_weight=Fonts.WEIGHT_BOLD, color=Colors.TEXT_MUTED))
         mode_layout.addWidget(mode_lbl)
 
-        from PyQt6.QtWidgets import QComboBox
         self.combo_mode = QComboBox()
         self.combo_mode.setMinimumHeight(40)
         self.combo_mode.addItems([
@@ -146,7 +122,7 @@ class RelayPanel(QWidget):
             "Eslatma: rele buyrug'i Reader rejimida yuboriladi. Dastur kerak bo'lsa shu rejimga avtomatik o'tadi."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #667085;")
+        note.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED))
         layout.addWidget(note)
         layout.addStretch()
 
@@ -162,7 +138,7 @@ class RelayPanel(QWidget):
         layout.addWidget(lbl)
 
         value = QLabel("---")
-        value.setStyleSheet("font-size: 16px; font-weight: 700; color: #111827;")
+        value.setStyleSheet(inline_style(font_size=Fonts.SIZE_TITLE, font_weight=Fonts.WEIGHT_BOLD, color=Colors.TEXT_PRIMARY))
         value.setWordWrap(True)
         layout.addWidget(value)
 
@@ -170,22 +146,27 @@ class RelayPanel(QWidget):
         return value
 
     def update_status(self, output_state: bool, control_text: str, mode_text: str, control_mode: int = 5):
+        self.diagram.set_state(output_state)
         if output_state:
             self.lbl_state.setText("YOQILGAN")
-            self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #10b981;")
+            self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.STATUS_GREEN))
             self.lbl_desc.setText("Elektr uzatilmoqda. Hisoblagich relesi ulangan.")
-            self.lbl_desc.setStyleSheet("font-size: 14px; color: #a7f3d0;")
+            self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.STATUS_GREEN_LIGHT))
             self.status_card.setStyleSheet(
-                "QFrame#card { background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 12px; }"
+                f"QFrame#card {{ background: rgba(16, 185, 129, 0.1); border: 2px solid {Colors.STATUS_GREEN}; border-radius: 12px; }}"
             )
+            # Apply green neon glow
+            add_glow_effect(self.status_card, color_hex=Colors.STATUS_GREEN, alpha=70, blur=22)
         else:
             self.lbl_state.setText("O'CHIRILGAN")
-            self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #f87171;")
+            self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.STATUS_ERROR))
             self.lbl_desc.setText("Elektr uzatilmayapti. Kerak bo'lsa releni yoqing.")
-            self.lbl_desc.setStyleSheet("font-size: 14px; color: #fca5a5;")
+            self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.STATUS_ERROR_LIGHT))
             self.status_card.setStyleSheet(
-                "QFrame#card { background: rgba(239, 68, 68, 0.1); border: 2px solid #f87171; border-radius: 12px; }"
+                f"QFrame#card {{ background: rgba(239, 68, 68, 0.1); border: 2px solid {Colors.STATUS_ERROR}; border-radius: 12px; }}"
             )
+            # Apply red neon glow
+            add_glow_effect(self.status_card, color_hex=Colors.STATUS_ERROR, alpha=70, blur=22)
 
         self.lbl_control_state.setText(control_text)
         self.lbl_control_mode.setText(mode_text)
@@ -210,25 +191,28 @@ class RelayPanel(QWidget):
     def show_loading(self, action: str):
         self.set_enabled(False)
         self.spinner.setVisible(True)
+        self.diagram.set_state(None)  # unknown state during loading
         self.status_card.setStyleSheet(
-            "QFrame#card { background: rgba(56, 189, 248, 0.05); border: 2px dashed #1e293b; border-radius: 12px; }"
+            f"QFrame#card {{ background: rgba(56, 189, 248, 0.05); border: 2px dashed {Colors.BORDER_MID}; border-radius: 12px; }}"
         )
+        # Apply cyan loading glow
+        add_glow_effect(self.status_card, color_hex=Colors.ACCENT_BLUE, alpha=50, blur=22)
 
         if action == "relay_reconnect":
             self.lbl_state.setText("YOQILMOQDA...")
-            self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #38bdf8;")
+            self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.ACCENT_BLUE))
             self.lbl_desc.setText("Rele yoqilmoqda. Jismoniy kontaktlar ulanishini kuting (1.5 soniya)...")
-            self.lbl_desc.setStyleSheet("font-size: 14px; color: #94a3b8;")
+            self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.TEXT_MUTED))
         elif action == "relay_disconnect":
             self.lbl_state.setText("O'CHIRILMOQDA...")
-            self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #38bdf8;")
+            self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.ACCENT_BLUE))
             self.lbl_desc.setText("Rele o'chirilmoqda. Jismoniy kontaktlar uzilishini kuting (1.5 soniya)...")
-            self.lbl_desc.setStyleSheet("font-size: 14px; color: #94a3b8;")
+            self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.TEXT_MUTED))
         else:
             self.lbl_state.setText("YANGILANMOQDA...")
-            self.lbl_state.setStyleSheet("font-size: 30px; font-weight: 800; color: #38bdf8;")
+            self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.ACCENT_BLUE))
             self.lbl_desc.setText("Rele holati o'qilmoqda, kuting...")
-            self.lbl_desc.setStyleSheet("font-size: 14px; color: #94a3b8;")
+            self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.TEXT_MUTED))
 
     def hide_loading(self):
         self.spinner.setVisible(False)

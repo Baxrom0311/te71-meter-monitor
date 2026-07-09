@@ -1,4 +1,7 @@
-"""Render quick UI previews without opening a real serial connection."""
+"""Render quick UI previews without opening a real serial connection.
+
+Updated to use the new Controller-based architecture.
+"""
 import os
 import sys
 
@@ -11,9 +14,14 @@ from PyQt6.QtWidgets import QApplication
 from ui.connect_dialog import ConnectDialog
 from ui.main_window import MainWindow
 from ui.styles import APP_STYLE
+from services.meter_service import MeterService, MeterInfo, RelayStatus
 
 
 class DummyConn:
+    """Mock DLMSConnection that does nothing."""
+    def __init__(self, *args, **kwargs):
+        pass
+
     connected = True
     client_addr = 1
 
@@ -29,20 +37,31 @@ class DummyConn:
     def connect_reader(self):
         return True
 
+    def get_attribute(self, *_args):
+        return None
 
-class DummyMeter:
-    def set_log_callback(self, _callback):
-        pass
+    def reconnect(self):
+        return True
+
+
+class DummyService(MeterService):
+    """Mock MeterService that returns fake data without serial communication."""
+
+    def __init__(self):
+        # Don't call super().__init__ with real conn
+        self.conn = DummyConn()
+        self.info = MeterInfo(
+            serial="12345678",
+            manufacturer="TEA",
+            device_name="TE71",
+            firmware="1.0",
+            meter_type="TE71",
+        )
+        self._scalers = {}
+        self._on_log = None
 
     def read_info(self):
-        class Info:
-            serial = "12345678"
-            manufacturer = "TEA"
-            device_name = "TE71"
-            firmware = "1.0"
-            meter_type = "TE71"
-
-        return Info()
+        return self.info
 
     def read_scalers(self):
         pass
@@ -60,12 +79,7 @@ class DummyMeter:
         }
 
     def read_relay_status(self):
-        class Status:
-            output_state = True
-            control_text = "connected"
-            mode_text = "remote disconnect/reconnect"
-
-        return Status()
+        return RelayStatus(output_state=True, control_state=1, control_mode=5)
 
 
 def main():
@@ -76,12 +90,21 @@ def main():
     dialog = ConnectDialog()
     dialog.grab().save("preview_connect.png")
 
-    window = MainWindow(DummyConn(), DummyMeter(), {"port": "COM18"})
+    # Create the controller with mock objects
+    from controllers.meter_controller import MeterController
+    dummy_conn = DummyConn()
+    dummy_service = DummyService()
+    controller = MeterController(dummy_conn, dummy_service)
+
+    window = MainWindow(controller, {"port": "COM18"})
     window.lbl_meter_type.setText("TE71  |  S/N: 12345678")
     window.lbl_serial.setText("S/N: 12345678")
     window.header_serial_value.setText("12345678")
-    window.dashboard.update_values(DummyMeter().read_dashboard())
-    window.relay_panel.update_status(True, "connected", "remote disconnect/reconnect")
+    window.dashboard.update_values(dummy_service.read_dashboard())
+    status = dummy_service.read_relay_status()
+    window.relay_panel.update_status(
+        status.output_state, status.control_text, status.mode_text, status.control_mode
+    )
     window.grab().save("preview_main.png")
     window._nav_to(1)
     window.grab().save("preview_relay.png")

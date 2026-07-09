@@ -1,8 +1,14 @@
-"""Communication log panel."""
+"""Communication log page.
+
+Stillashtirish uchun theme.py rang konstantalari ishlatiladi.
+"""
+from datetime import datetime
+
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
                               QPushButton, QLabel, QCheckBox, QFrame)
-from PyQt6.QtCore import Qt
-from datetime import datetime
+
+from ui.theme import Colors, Fonts, inline_style
 
 
 class LogPanel(QWidget):
@@ -74,7 +80,7 @@ class LogPanel(QWidget):
         ts = datetime.now().strftime("%H:%M:%S")
         self.log_area.append(
             f'<span style="color:#7a8aaa;">[{ts}]</span> '
-            f'<span style="color:#e8eaed;">{msg}</span>'
+            f'<span style="color:{Colors.TEXT_PRIMARY};">{msg}</span>'
         )
         self._trim()
 

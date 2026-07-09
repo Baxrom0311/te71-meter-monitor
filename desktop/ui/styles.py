@@ -212,9 +212,19 @@ QFrame#metricCard {
     border-radius: 12px;
 }
 
+QFrame#metricCard:hover {
+    border-color: #1e293b;
+    background: #0f1626;
+}
+
 QFrame#metricCard[accent="true"] {
     border: 1px solid rgba(56, 189, 248, 0.4);
     background: #0e1626;
+}
+
+QFrame#metricCard[accent="true"]:hover {
+    border-color: #38bdf8;
+    background: #111e36;
 }
 
 QFrame#metricStripeBlue {

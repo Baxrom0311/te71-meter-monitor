@@ -1,4 +1,11 @@
-"""High-level meter abstraction for TE71/TE73."""
+"""Meter service — TE71/TE73 hisoblagich bilan ishlash.
+
+Bu modul DLMS/COSEM protokoli orqali hisoblagichdan ma'lumotlarni o'qish,
+relay boshqaruvi, vaqt sinxronizatsiya va parol o'zgartirish amallarini bajaradi.
+
+Protocol Layer (dlms/) ustida qurilgan yuqori darajadagi abstraksiya.
+UI yoki Qt haqida hech narsa bilmaydi.
+"""
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
@@ -46,8 +53,12 @@ class RelayStatus:
         return modes.get(self.control_mode, f"Mode {self.control_mode}")
 
 
-class Meter:
-    """High-level interface for TE71/TE73 meter communication."""
+class MeterService:
+    """TE71/TE73 hisoblagich bilan barcha amallar uchun service.
+
+    Bu klass transport qatlami (DLMSConnection) ustida ishlaydi va
+    UI haqida hech narsa bilmaydi.
+    """
 
     def __init__(self, conn: DLMSConnection):
         self.conn = conn
@@ -61,6 +72,8 @@ class Meter:
     def _log(self, msg: str):
         if self._on_log:
             self._on_log(msg)
+
+    # ── Info ──────────────────────────────────────────────────────────────
 
     def read_info(self) -> MeterInfo:
         """Read meter identification info."""
@@ -108,6 +121,8 @@ class Meter:
                     if unit:
                         reg.unit = unit
 
+    # ── Register Reading ─────────────────────────────────────────────────
+
     def read_register(self, key: str) -> tuple:
         """Read a single register by key. Returns (formatted_value, raw_value, register)."""
         reg = REGISTERS.get(key)
@@ -153,6 +168,8 @@ class Meter:
             })
         return results
 
+    # ── Date/Time ────────────────────────────────────────────────────────
+
     def read_datetime(self) -> datetime | None:
         """Read meter date/time."""
         reg = REGISTERS["datetime"]
@@ -176,6 +193,8 @@ class Meter:
             self._log("Vaqt o'rnatish xatosi")
         return result
 
+    # ── Password ─────────────────────────────────────────────────────────
+
     def change_password(self, new_password: str) -> bool:
         """Change the password for the current client association."""
         pwd_bytes = new_password.encode("ascii")
@@ -189,6 +208,7 @@ class Meter:
             self._log("Parol o'rnatish xatosi")
         return result
 
+    # ── Relay ────────────────────────────────────────────────────────────
 
     def read_relay_status(self) -> RelayStatus:
         """Read relay/disconnect control status."""
@@ -243,4 +263,3 @@ class Meter:
         else:
             self._log("Rele boshqaruv rejimini o'zgartirish xatosi")
         return result
-

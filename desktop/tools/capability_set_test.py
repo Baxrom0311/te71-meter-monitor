@@ -1,4 +1,7 @@
 """Safe SET capability test: write the current meter datetime back unchanged."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dlms.connection import DLMSConnection
 from dlms.obis import REGISTERS
 from dlms.parser import parse_dlms_data, encode_datetime

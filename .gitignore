@@ -18,23 +18,26 @@ backend/data/*.db-shm
 backend/data/*.db-wal
 backend/firmware/*.bin
 
-# Desktop app - compiled/binary
+# Desktop app - build artifacts
 desktop/MeterToolSetup.exe
 desktop/dist/
 desktop/build/
 desktop/*.spec
+build/
+dist/
+*.dmg
 
 # Sneat full template (41MB, not needed - assets are in frontend/assets/)
 sneat-bootstrap-html-admin-template/
 
 # IDE
-# .vscode/ (only machine-specific files excluded below)
 .idea/
 *.swp
 
 # OS
 .DS_Store
 Thumbs.db
+*.textClipping
 
 # PlatformIO build cache
 .pio/

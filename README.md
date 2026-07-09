@@ -160,6 +160,12 @@ To‘liq ESP32 HTTP contract:
 backend/ESP32_API_CONTRACT.md
 ```
 
+WebSocket real-time event contract:
+
+```text
+WEBSOCKET_CONTRACT.md
+```
+
 ## OTA Firmware
 
 OTA printer driver katalogiga o‘xshash ishlaydi:

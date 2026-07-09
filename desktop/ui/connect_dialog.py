@@ -1,6 +1,6 @@
 """Connection dialog shown before the main application."""
 import serial.tools.list_ports
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -32,6 +32,8 @@ class ConnectDialog(QDialog):
         self.setWindowTitle("Hisoblagichga ulanish")
         self.setFixedSize(520, 520)
         self.setStyleSheet(CONNECT_DIALOG_STYLE)
+
+        self.settings_storage = QSettings("Toshelectroapparat", "MeterTool")
 
         self.result_port = ""
         self.result_baud = 9600
@@ -99,6 +101,32 @@ class ConnectDialog(QDialog):
 
         card_layout.addLayout(port_row)
 
+        # Parity & Stop bits row (Manual mode only)
+        extra_row = QHBoxLayout()
+        extra_row.setSpacing(10)
+
+        v_parity = QVBoxLayout()
+        v_parity.setSpacing(4)
+        self.lbl_parity = self._field_label("Paritet (Parity)")
+        self.combo_parity = QComboBox()
+        self.combo_parity.setMinimumHeight(42)
+        self.combo_parity.addItems(["N (None)", "E (Even)", "O (Odd)"])
+        v_parity.addWidget(self.lbl_parity)
+        v_parity.addWidget(self.combo_parity)
+        extra_row.addLayout(v_parity, 1)
+
+        v_stopbits = QVBoxLayout()
+        v_stopbits.setSpacing(4)
+        self.lbl_stopbits = self._field_label("Stop bitlar")
+        self.combo_stopbits = QComboBox()
+        self.combo_stopbits.setMinimumHeight(42)
+        self.combo_stopbits.addItems(["1", "1.5", "2"])
+        v_stopbits.addWidget(self.lbl_stopbits)
+        v_stopbits.addWidget(self.combo_stopbits)
+        extra_row.addLayout(v_stopbits, 1)
+
+        card_layout.addLayout(extra_row)
+
         # Auth mode
         card_layout.addWidget(self._field_label("Ulanish rejimi"))
         self.combo_auth = QComboBox()
@@ -137,7 +165,7 @@ class ConnectDialog(QDialog):
         div_layout = QHBoxLayout()
         line1 = QFrame(); line1.setFixedHeight(1); line1.setStyleSheet("background:#24364f;")
         lbl_or = QLabel("yoki"); lbl_or.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_or.setStyleSheet("color:#475467; font-size:12px; padding: 0 8px;")
+        lbl_or.setStyleSheet("color:#64748b; font-size:12px; padding: 0 8px;")
         line2 = QFrame(); line2.setFixedHeight(1); line2.setStyleSheet("background:#24364f;")
         div_layout.addWidget(line1, 1)
         div_layout.addWidget(lbl_or)
@@ -164,11 +192,24 @@ class ConnectDialog(QDialog):
         root.addWidget(hint)
 
         # Initial state
-        self._on_meter_changed(0)
+        last_meter = int(self.settings_storage.value("last_meter_index", 0))
+        last_auth = int(self.settings_storage.value("last_auth_index", 0))
+        last_baud = self.settings_storage.value("last_baud", "9600")
+        last_parity = self.settings_storage.value("last_parity", "N (None)")
+        last_stopbits = self.settings_storage.value("last_stopbits", "1")
+
+        self.combo_meter.setCurrentIndex(last_meter)
+        self.combo_auth.setCurrentIndex(last_auth)
+        self.combo_baud.setCurrentText(last_baud)
+        self.combo_parity.setCurrentText(last_parity)
+        self.combo_stopbits.setCurrentText(last_stopbits)
+
+        self._on_meter_changed(last_meter)
+        self._on_auth_changed(last_auth)
 
     def _field_label(self, text: str) -> QLabel:
         label = QLabel(text)
-        label.setStyleSheet("color: #475467; font-weight: 700;")
+        label.setStyleSheet("color: #94a3b8; font-weight: 700;")
         return label
 
     def _refresh_ports(self):
@@ -179,26 +220,62 @@ class ConnectDialog(QDialog):
             self.combo_port.addItem(f"{port.device}{desc}", port.device)
         if not ports:
             self.combo_port.addItem("Port topilmadi", "")
+        else:
+            last_port = self.settings_storage.value("last_port", "")
+            if last_port:
+                idx = self.combo_port.findData(last_port)
+                if idx != -1:
+                    self.combo_port.setCurrentIndex(idx)
+
+    def _adjust_height(self):
+        show_pwd = self.combo_auth.currentIndex() == 1
+        manual = self.combo_meter.currentIndex() == 2
+        h = 520
+        if show_pwd:
+            h += 55
+        if manual:
+            h += 75
+        self.setFixedSize(520, h)
 
     def _on_meter_changed(self, index: int):
         _, baud, _ = METER_TYPES[index]
         manual = baud is None
         self.combo_baud.setVisible(manual)
         self.lbl_baud_header.setVisible(manual)
+        
+        self.lbl_parity.setVisible(manual)
+        self.combo_parity.setVisible(manual)
+        self.lbl_stopbits.setVisible(manual)
+        self.combo_stopbits.setVisible(manual)
+
         if baud:
             self.combo_baud.setCurrentText(str(baud))
+            self.combo_parity.setCurrentIndex(0)  # N
+            self.combo_stopbits.setCurrentText("1")  # 1
+
+        self._adjust_height()
 
     def _on_auth_changed(self, index: int):
         show_pwd = index == 1
         self.lbl_pwd.setVisible(show_pwd)
         self.txt_password.setVisible(show_pwd)
-        self.setFixedSize(520, 575 if show_pwd else 520)
+        self._adjust_height()
 
     def _on_open_flash(self):
         """ESP32 Flash oynasini ochadi (hisoblagich ulanishi shart emas)."""
         from .flash_window import FlashWindow
-        self._flash_win = FlashWindow()
-        self._flash_win.show()
+        from PyQt6.QtCore import Qt
+        win = FlashWindow()
+        self._flash_win = win
+        win.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        def _on_flash_closed():
+            try:
+                self.show()
+            except RuntimeError:
+                pass  # ConnectDialog allaqachon o'chirilgan (app yopilayapti)
+        win.destroyed.connect(_on_flash_closed)
+        self.hide()
+        win.show()
 
     def _on_connect(self):
         port = self.combo_port.currentData()
@@ -210,6 +287,18 @@ class ConnectDialog(QDialog):
         self.result_baud = int(self.combo_baud.currentText())
         self.result_auth = self.combo_auth.currentIndex()
         self.result_password = self.txt_password.text().strip() or "00000000"
+
+        parity_map = {"N (None)": "N", "E (Even)": "E", "O (Odd)": "O"}
+        self.result_parity = parity_map.get(self.combo_parity.currentText(), "N")
+        self.result_stopbits = float(self.combo_stopbits.currentText())
+
+        # Save to storage
+        self.settings_storage.setValue("last_port", port)
+        self.settings_storage.setValue("last_meter_index", self.combo_meter.currentIndex())
+        self.settings_storage.setValue("last_auth_index", self.combo_auth.currentIndex())
+        self.settings_storage.setValue("last_baud", self.combo_baud.currentText())
+        self.settings_storage.setValue("last_parity", self.combo_parity.currentText())
+        self.settings_storage.setValue("last_stopbits", self.combo_stopbits.currentText())
 
         # Store fallback baud for auto-retry
         idx = self.combo_meter.currentIndex()
@@ -225,4 +314,6 @@ class ConnectDialog(QDialog):
             "fallback_baud": getattr(self, "result_fallback_baud", None),
             "auth": self.result_auth,
             "password": self.result_password,
+            "parity": getattr(self, "result_parity", "N"),
+            "stopbits": getattr(self, "result_stopbits", 1.0),
         }

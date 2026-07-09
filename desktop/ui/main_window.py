@@ -1,92 +1,20 @@
-"""Main window — sidebar navigation + content panels."""
+"""Main window — sidebar navigation + content panels.
+
+Bu modul faqat UI layout va navigatsiyani boshqaradi.
+Barcha serial aloqa va biznes logikasi MeterController orqali amalga oshiriladi.
+"""
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QStackedWidget, QFrame,
-                              QMessageBox, QScrollArea)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+                              QMessageBox, QScrollArea, QCheckBox, QComboBox)
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 
-from .dashboard import DashboardPanel
-from .relay_panel import RelayPanel
-from .registers_panel import RegistersPanel
-from .settings_panel import SettingsPanel
-from .log_panel import LogPanel
-
-
-class MeterWorker(QThread):
-    """Background thread for serial communication."""
-    finished = pyqtSignal(str, object)
-    error = pyqtSignal(str, str)
-
-    def __init__(self):
-        super().__init__()
-        self.meter = None
-        self._action = None
-        self._args = ()
-
-    def run_action(self, action: str, *args):
-        self._action = action
-        self._args = args
-        self.start()
-
-    def run(self):
-        if not self.meter:
-            self.error.emit(self._action, "Meter not initialized")
-            return
-        try:
-            if self._action == "read_info":
-                info = self.meter.read_info()
-                self.meter.read_scalers()
-                self.finished.emit("read_info", info)
-            elif self._action == "read_dashboard":
-                data = self.meter.read_dashboard()
-                self.finished.emit("read_dashboard", data)
-            elif self._action == "read_all_registers":
-                data = self.meter.read_all_registers()
-                self.finished.emit("read_all_registers", data)
-            elif self._action == "read_relay":
-                status = self.meter.read_relay_status()
-                self.finished.emit("read_relay", status)
-            elif self._action == "relay_reconnect":
-                ok = self.meter.relay_reconnect()
-                if ok:
-                    self.msleep(1500)
-                status = self.meter.read_relay_status()
-                self.finished.emit("relay_reconnect", (ok, status))
-            elif self._action == "relay_disconnect":
-                ok = self.meter.relay_disconnect()
-                if ok:
-                    self.msleep(1500)
-                status = self.meter.read_relay_status()
-                self.finished.emit("relay_disconnect", (ok, status))
-            elif self._action == "read_time":
-                dt = self.meter.read_datetime()
-                self.finished.emit("read_time", dt)
-            elif self._action == "sync_time":
-                ok = self.meter.set_datetime()
-                dt = self.meter.read_datetime() if ok else None
-                self.finished.emit("sync_time", (ok, dt))
-            elif self._action == "change_password":
-                new_pwd = self._args[0]
-                ok = self.meter.change_password(new_pwd)
-                self.finished.emit("change_password", ok)
-            elif self._action == "set_relay_mode":
-                mode = self._args[0]
-                ok = self.meter.set_relay_mode(mode)
-                if ok:
-                    self.msleep(1000)
-                status = self.meter.read_relay_status()
-                self.finished.emit("set_relay_mode", (ok, status))
-            elif self._action == "read_custom":
-                class_id, obis_tuple = self._args
-                from dlms.parser import parse_dlms_data, format_value
-                raw = self.meter.conn.get_attribute(class_id, obis_tuple, 2)
-                if raw:
-                    val, _, _ = parse_dlms_data(raw)
-                    self.finished.emit("read_custom", format_value(val))
-                else:
-                    self.finished.emit("read_custom", "N/A")
-        except Exception as e:
-            self.error.emit(self._action, str(e))
+from controllers.meter_controller import MeterController
+from ui.pages.dashboard_page import DashboardPanel
+from ui.pages.relay_page import RelayPanel
+from ui.pages.registers_page import RegistersPanel
+from ui.pages.settings_page import SettingsPanel
+from ui.pages.log_page import LogPanel
 
 
 class NavButton(QPushButton):
@@ -102,33 +30,33 @@ class NavButton(QPushButton):
 
 
 class MainWindow(QMainWindow):
-    """Main application window with sidebar navigation."""
+    """Main application window with sidebar navigation.
 
-    def __init__(self, conn, meter, settings: dict):
+    UI fayllarini boshqaradi va MeterController signallariga ulanadi.
+    Serial aloqa haqida hech narsa bilmaydi.
+    """
+
+    def __init__(self, controller: MeterController, settings: dict):
         super().__init__()
-        self.conn = conn
-        self.meter = meter
+        self.controller = controller
         self.settings = settings
 
         self.setWindowTitle("Elektr nazorat — TE71/TE73")
-        self.setMinimumSize(1040, 680)
+        self.setMinimumSize(800, 560)
         self.resize(1180, 760)
-
-        self.worker = MeterWorker()
-        self.worker.meter = meter
-        self.worker.finished.connect(self._on_worker_finished)
-        self.worker.error.connect(self._on_worker_error)
 
         self.auto_refresh_timer = QTimer()
         self.auto_refresh_timer.timeout.connect(self._auto_refresh)
 
         self.nav_buttons: list[NavButton] = []
-        self._pending_actions: list[tuple[str, tuple]] = []
 
         self._setup_ui()
+        self._connect_controller_signals()
 
         # Auto-read info on start
-        QTimer.singleShot(200, lambda: self._run_worker("read_info"))
+        QTimer.singleShot(200, self.controller.read_info)
+
+    # ── UI Setup ──────────────────────────────────────────────────────────
 
     def _setup_ui(self):
         central = QWidget()
@@ -137,7 +65,16 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ===== SIDEBAR =====
+        self._build_sidebar(main_layout)
+        self._build_content(main_layout)
+
+        # Set initial nav
+        self._nav_to(0)
+
+        # Connect panel buttons to controller
+        self._connect_panel_actions()
+
+    def _build_sidebar(self, parent_layout: QHBoxLayout):
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(235)
@@ -206,6 +143,17 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("font-size: 12px; color: #86efac; font-weight: 700;")
         conn_layout.addWidget(self.lbl_status)
 
+        self.btn_reconnect = QPushButton("🔄 Qayta ulanish")
+        self.btn_reconnect.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reconnect.setStyleSheet(
+            "QPushButton{background:#0b1329;color:#38bdf8;border:1px solid #1e3a5f;"
+            "border-radius:6px;font-weight:700;padding:6px;font-size:11px;margin-top:6px;}"
+            "QPushButton:hover{background:#11224d;border-color:#38bdf8;color:#ffffff;}"
+        )
+        self.btn_reconnect.setVisible(False)
+        self.btn_reconnect.clicked.connect(self._on_reconnect_clicked)
+        conn_layout.addWidget(self.btn_reconnect)
+
         sb_layout.addWidget(conn_frame)
 
         # ESP32 Flash button
@@ -230,9 +178,9 @@ class MainWindow(QMainWindow):
         btn_wrap_layout.addWidget(btn_disc)
         sb_layout.addWidget(btn_wrap)
 
-        main_layout.addWidget(sidebar)
+        parent_layout.addWidget(sidebar)
 
-        # ===== CONTENT AREA =====
+    def _build_content(self, parent_layout: QHBoxLayout):
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(26, 22, 26, 14)
@@ -268,7 +216,6 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self.btn_header_refresh)
 
         # Auto-refresh controls
-        from PyQt6.QtWidgets import QCheckBox, QComboBox
         self.chk_auto_refresh = QCheckBox("Avtomatik")
         self.chk_auto_refresh.setChecked(True)
         self.chk_auto_refresh.toggled.connect(self._on_auto_refresh_toggled)
@@ -307,20 +254,49 @@ class MainWindow(QMainWindow):
         self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #667085; padding-top: 4px;")
         content_layout.addWidget(self.lbl_bottom_status)
 
-        main_layout.addWidget(content, 1)
+        parent_layout.addWidget(content, 1)
 
-        # Set initial nav
-        self._nav_to(0)
+    # ── Controller Signal Connections ─────────────────────────────────────
 
-        # Connect signals
+    def _connect_controller_signals(self):
+        ctrl = self.controller
+
+        ctrl.info_updated.connect(self._on_info_updated)
+        ctrl.dashboard_updated.connect(self._on_dashboard_updated)
+        ctrl.relay_updated.connect(self._on_relay_updated)
+        ctrl.relay_action_done.connect(self._on_relay_action_done)
+        ctrl.registers_loaded.connect(self._on_registers_loaded)
+        ctrl.time_read.connect(self._on_time_read)
+        ctrl.time_synced.connect(self._on_time_synced)
+        ctrl.password_changed.connect(self._on_password_changed)
+        ctrl.custom_register_read.connect(self._on_custom_register_read)
+        ctrl.reconnect_result.connect(self._on_reconnect_result)
+        ctrl.connection_lost.connect(self._on_connection_lost)
+        ctrl.status_message.connect(self._on_status_message)
+        ctrl.error_occurred.connect(self._on_error_occurred)
+
+        # Set log callbacks
+        self.controller.conn.set_callbacks(
+            on_tx=self.log_panel.add_tx,
+            on_rx=self.log_panel.add_rx,
+            on_log=self.log_panel.add_app_log,
+        )
+        self.controller.service.set_log_callback(self.log_panel.add_app_log)
+
+    def _connect_panel_actions(self):
+        # Relay panel
         self.relay_panel.btn_reconnect.clicked.connect(self._relay_reconnect)
         self.relay_panel.btn_disconnect.clicked.connect(self._relay_disconnect)
         self.relay_panel.btn_refresh.clicked.connect(self._read_relay)
         self.relay_panel.btn_set_mode.clicked.connect(self._set_relay_mode)
-        self.registers_panel.btn_read_all.clicked.connect(self._read_all_registers)
+
+        # Registers panel
+        self.registers_panel.btn_read_all.clicked.connect(self.controller.read_all_registers)
         self.registers_panel.btn_read_custom.clicked.connect(self._read_custom)
-        self.settings_panel.btn_read_info.clicked.connect(self._read_info)
-        self.settings_panel.btn_read_time.clicked.connect(self._read_time)
+
+        # Settings panel
+        self.settings_panel.btn_read_info.clicked.connect(self.controller.read_info)
+        self.settings_panel.btn_read_time.clicked.connect(self.controller.read_time)
         self.settings_panel.btn_sync_time.clicked.connect(self._sync_time)
         self.settings_panel.btn_set_pwd.clicked.connect(self._change_password)
 
@@ -329,33 +305,126 @@ class MainWindow(QMainWindow):
         self.registers_panel.set_enabled(True)
         self.settings_panel.set_enabled(True)
 
-        # Set log callbacks
-        self.conn.set_callbacks(
-            on_tx=self.log_panel.add_tx,
-            on_rx=self.log_panel.add_rx,
-            on_log=self.log_panel.add_app_log,
+    # ── Controller Signal Handlers ────────────────────────────────────────
+
+    def _on_info_updated(self, info):
+        self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {info.serial}")
+        self.lbl_serial.setText(f"S/N: {info.serial}")
+        self.header_serial_value.setText(info.serial or "---")
+        self.settings_panel.update_info(
+            info.serial, info.manufacturer, info.device_name,
+            info.firmware, info.meter_type,
         )
-        self.meter.set_log_callback(self.log_panel.add_app_log)
+        self.dashboard.set_3phase(info.meter_type == "TE73")
+        # Queue follow-up reads
+        self.controller.read_dashboard()
+        self.controller.read_relay()
 
-    def _scroll_page(self, widget: QWidget) -> QScrollArea:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidget(widget)
-        return scroll
+    def _on_dashboard_updated(self, data: dict):
+        self.dashboard.update_values(data)
+        if self.chk_auto_refresh.isChecked() and self.pages.currentIndex() == 0:
+            self.auto_refresh_timer.start(self._get_refresh_interval_ms())
 
-    def _header_info(self, parent_layout: QHBoxLayout, label: str, value: str) -> QLabel:
-        box = QVBoxLayout()
-        box.setSpacing(2)
-        lbl = QLabel(label)
-        lbl.setObjectName("smallLabel")
-        box.addWidget(lbl)
-        val = QLabel(value or "---")
-        val.setObjectName("smallValue")
-        val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        box.addWidget(val)
-        parent_layout.addLayout(box)
-        return val
+    def _on_relay_updated(self, status):
+        self.relay_panel.hide_loading()
+        self.relay_panel.update_status(
+            status.output_state, status.control_text, status.mode_text,
+            getattr(status, "control_mode", 5)
+        )
+
+    def _on_relay_action_done(self, action: str, ok: bool, status):
+        self.relay_panel.hide_loading()
+        self.relay_panel.update_status(
+            status.output_state, status.control_text, status.mode_text,
+            getattr(status, "control_mode", 5)
+        )
+        if action == "set_relay_mode":
+            if ok:
+                self.log_panel.add_app_log("Rele ish rejimi muvaffaqiyatli o'zgartirildi!")
+                QMessageBox.information(self, "Muvaffaqiyat", "Rele rejimi o'zgartirildi!")
+            else:
+                QMessageBox.warning(self, "Xato", "Rele rejimini o'zgartirish rad etildi!")
+        else:
+            if ok:
+                msg = "yoqildi" if action == "relay_reconnect" else "o'chirildi"
+                self.log_panel.add_app_log(f"Rele {msg}!")
+            else:
+                QMessageBox.warning(self, "Xato", "Rele buyrug'i rad etildi!")
+
+    def _on_registers_loaded(self, data: list):
+        self.registers_panel.populate(data)
+
+    def _on_time_read(self, dt):
+        self.settings_panel.update_time(dt)
+
+    def _on_time_synced(self, ok: bool, dt):
+        if ok:
+            self.settings_panel.update_time(dt)
+        else:
+            QMessageBox.warning(self, "Xato", "Vaqt sinxronlash xatosi!")
+
+    def _on_password_changed(self, ok: bool):
+        if ok:
+            QMessageBox.information(self, "Muvaffaqiyat", "Parol muvaffaqiyatli o'zgartirildi!")
+            self.settings_panel.pwd_input.clear()
+        else:
+            QMessageBox.warning(self, "Xato", "Parolni o'zgartirib bo'lmadi! Huquqlar yetarli ekanligini tekshiring.")
+
+    def _on_custom_register_read(self, value: str):
+        obis_str = self.registers_panel.obis_input.text()
+        class_id = int(self.registers_panel.class_input.text() or "3")
+        self.registers_panel.add_custom_row(obis_str, class_id, value)
+
+    def _on_reconnect_result(self, ok: bool):
+        if ok:
+            self.lbl_status.setText("Status: ulangan")
+            self.lbl_status.setStyleSheet("font-size: 12px; color: #86efac; font-weight: 700;")
+            self.btn_reconnect.setVisible(False)
+            self.log_panel.add_app_log("Hisoblagichga qayta ulanish muvaffaqiyatli!")
+
+            info = self.controller.service.info
+            self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {info.serial}")
+            self.lbl_serial.setText(f"S/N: {info.serial}")
+            self.header_serial_value.setText(info.serial or "---")
+            self.settings_panel.update_info(
+                info.serial, info.manufacturer, info.device_name,
+                info.firmware, info.meter_type,
+            )
+            self.dashboard.set_3phase(info.meter_type == "TE73")
+
+            if self.chk_auto_refresh.isChecked() and self.pages.currentIndex() == 0:
+                self.controller.read_dashboard()
+        else:
+            self.lbl_status.setText("Status: ulanish xatosi")
+            self.lbl_status.setStyleSheet("font-size: 12px; color: #f87171; font-weight: 700;")
+            self.btn_reconnect.setVisible(True)
+            self.log_panel.add_app_log("Hisoblagichga qayta ulanib bo'lmadi!")
+
+    def _on_connection_lost(self):
+        self.lbl_status.setText("Status: aloqa uzildi")
+        self.lbl_status.setStyleSheet("font-size: 12px; color: #f87171; font-weight: 700;")
+        self.btn_reconnect.setVisible(True)
+        self.auto_refresh_timer.stop()
+        self.log_panel.add_app_log("Aloqa butunlay uzildi (3 marta ketma-ket xato). Iltimos, ulanishni va portni tekshiring!")
+
+    def _on_status_message(self, message: str, color: str):
+        self.lbl_bottom_status.setText(message)
+        self.lbl_bottom_status.setStyleSheet(f"font-size: 12px; color: {color}; padding-top: 4px;")
+
+    def _on_error_occurred(self, action: str, error: str):
+        self.lbl_bottom_status.setText(f"Xato: {error}")
+        self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #cf2e2e; padding-top: 4px;")
+        self.log_panel.add_app_log(f"XATO [{action}]: {error}")
+        if action in ("read_relay", "relay_reconnect", "relay_disconnect", "set_relay_mode"):
+            self.relay_panel.hide_loading()
+
+        # Auto-retry dashboard on non-critical errors
+        if (action == "read_dashboard" and self.controller.consecutive_failures < 3
+                and self.chk_auto_refresh.isChecked() and self.pages.currentIndex() == 0):
+            self.log_panel.add_app_log(f"Qayta urinish ({self.controller.consecutive_failures}/3)...")
+            QTimer.singleShot(2000, self.controller.read_dashboard)
+
+    # ── Navigation ────────────────────────────────────────────────────────
 
     def _nav_to(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -382,193 +451,42 @@ class MainWindow(QMainWindow):
         self.chk_auto_refresh.setVisible(index == 0)
         self.combo_refresh_interval.setVisible(index == 0)
 
-    def _run_worker(self, action: str, *args):
-        if self.worker.isRunning():
-            if not any(item[0] == action for item in self._pending_actions):
-                self._pending_actions.append((action, args))
-                self.lbl_bottom_status.setText(f"Navbatda: {action}")
-                self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #667085; padding-top: 4px;")
-            return
-        self.lbl_bottom_status.setText(f"Ishlayapti: {action}...")
-        self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #1663d8; padding-top: 4px;")
-        self.worker.run_action(action, *args)
+        # Auto-refresh page content on tab change
+        if self.controller.conn and self.controller.conn.connected:
+            if index == 0:
+                if self.chk_auto_refresh.isChecked():
+                    self.controller.read_dashboard()
+            elif index == 1:
+                self._read_relay()
+            elif index == 3:
+                self.controller.read_time()
 
-    def _drain_worker_queue(self):
-        if self.worker.isRunning() or not self._pending_actions:
-            return
-        action, args = self._pending_actions.pop(0)
-        self._run_worker(action, *args)
+    # ── User Actions ──────────────────────────────────────────────────────
 
-    def _on_worker_finished(self, action: str, result):
-        self.lbl_bottom_status.setText("Tayyor")
-        self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #667085; padding-top: 4px;")
-
-        if action == "read_info":
-            info = result
-            self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {info.serial}")
-            self.lbl_serial.setText(f"S/N: {info.serial}")
-            self.header_serial_value.setText(info.serial or "---")
-            self.settings_panel.update_info(
-                info.serial, info.manufacturer, info.device_name,
-                info.firmware, info.meter_type,
-            )
-            self.dashboard.set_3phase(info.meter_type == "TE73")
-            self._pending_actions.append(("read_dashboard", ()))
-            self._pending_actions.append(("read_relay", ()))
-
-        elif action == "read_dashboard":
-            self.dashboard.update_values(result)
-            if self.conn and self.conn.connected and self.chk_auto_refresh.isChecked():
-                self.auto_refresh_timer.start(self._get_refresh_interval_ms())
-
-        elif action == "read_all_registers":
-            self.registers_panel.populate(result)
-
-        elif action == "read_relay":
-            self.relay_panel.hide_loading()
-            self.relay_panel.update_status(
-                result.output_state, result.control_text, result.mode_text, result.control_mode
-            )
-
-        elif action in ("relay_reconnect", "relay_disconnect"):
-            ok, status = result
-            self.relay_panel.hide_loading()
-            self.relay_panel.update_status(
-                status.output_state, status.control_text, status.mode_text, status.control_mode
-            )
-            if ok:
-                msg = "yoqildi" if action == "relay_reconnect" else "o'chirildi"
-                self.log_panel.add_app_log(f"Rele {msg}!")
-            else:
-                QMessageBox.warning(self, "Xato", "Rele buyrug'i rad etildi!")
-
-        elif action == "set_relay_mode":
-            ok, status = result
-            self.relay_panel.hide_loading()
-            self.relay_panel.update_status(
-                status.output_state, status.control_text, status.mode_text, status.control_mode
-            )
-            if ok:
-                self.log_panel.add_app_log("Rele ish rejimi muvaffaqiyatli o'zgartirildi!")
-                QMessageBox.information(self, "Muvaffaqiyat", "Rele rejimi o'zgartirildi!")
-            else:
-                QMessageBox.warning(self, "Xato", "Rele rejimini o'zgartirish rad etildi!")
-
-        elif action == "read_time":
-            self.settings_panel.update_time(result)
-
-        elif action == "sync_time":
-            ok, dt = result
-            if ok:
-                self.settings_panel.update_time(dt)
-            else:
-                QMessageBox.warning(self, "Xato", "Vaqt sinxronlash xatosi!")
-
-        elif action == "change_password":
-            if result:
-                QMessageBox.information(self, "Muvaffaqiyat", "Parol muvaffaqiyatli o'zgartirildi!")
-                self.settings_panel.pwd_input.clear()
-            else:
-                QMessageBox.warning(self, "Xato", "Parolni o'zgartirib bo'lmadi! Huquqlar yetarli ekanligini tekshiring.")
-
-        elif action == "read_custom":
-            obis_str = self.registers_panel.obis_input.text()
-            class_id = int(self.registers_panel.class_input.text() or "3")
-            self.registers_panel.add_custom_row(obis_str, class_id, str(result))
-
-        QTimer.singleShot(80, self._drain_worker_queue)
-
-    def _on_worker_error(self, action: str, error: str):
-        self.lbl_bottom_status.setText(f"Xato: {error}")
-        self.lbl_bottom_status.setStyleSheet("font-size: 12px; color: #cf2e2e; padding-top: 4px;")
-        self.log_panel.add_app_log(f"XATO [{action}]: {error}")
-        if action in ("read_relay", "relay_reconnect", "relay_disconnect", "set_relay_mode"):
-            self.relay_panel.hide_loading()
-        QTimer.singleShot(80, self._drain_worker_queue)
-
-    def _auto_refresh(self):
-        self.auto_refresh_timer.stop()
-        if self.conn and self.conn.connected and not self.worker.isRunning():
-            if self.pages.currentIndex() == 0 and self.chk_auto_refresh.isChecked():
-                self._read_dashboard()
-
-    def _get_refresh_interval_ms(self) -> int:
-        txt = self.combo_refresh_interval.currentText()
-        try:
-            return int(txt.replace("s", "")) * 1000
-        except ValueError:
-            return 3000
-
-    def _on_auto_refresh_toggled(self, checked: bool):
-        if checked:
-            if self.conn and self.conn.connected and not self.worker.isRunning() and self.pages.currentIndex() == 0:
-                self._read_dashboard()
-        else:
-            self.auto_refresh_timer.stop()
-
-    def _on_refresh_interval_changed(self):
-        if self.chk_auto_refresh.isChecked() and self.auto_refresh_timer.isActive():
-            self.auto_refresh_timer.stop()
-            self.auto_refresh_timer.start(self._get_refresh_interval_ms())
-
-    def _read_dashboard(self):
-        self._run_worker("read_dashboard")
-
-    def _read_info(self):
-        self._run_worker("read_info")
-
-    def _read_all_registers(self):
-        self._run_worker("read_all_registers")
+    def _refresh_current_page(self):
+        index = self.pages.currentIndex()
+        if index == 0:
+            self.controller.read_dashboard()
+        elif index == 1:
+            self._read_relay()
+        elif index == 2:
+            self.controller.read_all_registers()
+        elif index == 3:
+            self.controller.read_info()
 
     def _read_relay(self):
         self.relay_panel.show_loading("read_relay")
-        self._run_worker("read_relay")
+        self.controller.read_relay()
 
     def _relay_reconnect(self):
         if self.relay_panel.confirm_action("YOQISH"):
-            if self.conn and self.conn.client_addr != 1:
-                self.log_panel.add_app_log("Rele uchun Client 1 ga o'tilmoqda...")
-                self.conn.disconnect()
-                if not self.conn.connect_reader():
-                    QMessageBox.warning(self, "Xato", "Client 1 ga ulanish xatosi!")
-                    return
             self.relay_panel.show_loading("relay_reconnect")
-            self._run_worker("relay_reconnect")
+            self.controller.relay_reconnect()
 
     def _relay_disconnect(self):
         if self.relay_panel.confirm_action("O'CHIRISH"):
-            if self.conn and self.conn.client_addr != 1:
-                self.conn.disconnect()
-                if not self.conn.connect_reader():
-                    QMessageBox.warning(self, "Xato", "Client 1 ga ulanish xatosi!")
-                    return
             self.relay_panel.show_loading("relay_disconnect")
-            self._run_worker("relay_disconnect")
-
-    def _read_time(self):
-        self._run_worker("read_time")
-
-    def _sync_time(self):
-        if self.settings_panel.confirm_sync():
-            self._run_worker("sync_time")
-
-    def _change_password(self):
-        new_pwd = self.settings_panel.pwd_input.text().strip()
-        if not new_pwd:
-            QMessageBox.warning(self, "Xato", "Parol bo'sh bo'lishi mumkin emas!")
-            return
-        if len(new_pwd) < 4 or len(new_pwd) > 16:
-            QMessageBox.warning(self, "Xato", "Parol uzunligi 4-16 ta belgidan iborat bo'lishi kerak!")
-            return
-        
-        reply = QMessageBox.question(
-            self, "Tasdiqlash",
-            f"Hisoblagich parolini '{new_pwd}' ga o'zgartirishni tasdiqlaysizmi?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._run_worker("change_password", new_pwd)
+            self.controller.relay_disconnect()
 
     def _set_relay_mode(self):
         idx = self.relay_panel.combo_mode.currentIndex()
@@ -579,14 +497,30 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            if self.conn and self.conn.client_addr != 1:
-                self.log_panel.add_app_log("Rele rejimi uchun Client 1 ga o'tilmoqda...")
-                self.conn.disconnect()
-                if not self.conn.connect_reader():
-                    QMessageBox.warning(self, "Xato", "Client 1 ga ulanish xatosi!")
-                    return
             self.relay_panel.show_loading("set_relay_mode")
-            self._run_worker("set_relay_mode", idx)
+            self.controller.set_relay_mode(idx)
+
+    def _sync_time(self):
+        if self.settings_panel.confirm_sync():
+            self.controller.sync_time()
+
+    def _change_password(self):
+        new_pwd = self.settings_panel.pwd_input.text().strip()
+        if not new_pwd:
+            QMessageBox.warning(self, "Xato", "Parol bo'sh bo'lishi mumkin emas!")
+            return
+        if len(new_pwd) < 4 or len(new_pwd) > 16:
+            QMessageBox.warning(self, "Xato", "Parol uzunligi 4-16 ta belgidan iborat bo'lishi kerak!")
+            return
+
+        reply = QMessageBox.question(
+            self, "Tasdiqlash",
+            f"Hisoblagich parolini '{new_pwd}' ga o'zgartirishni tasdiqlaysizmi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.controller.change_password(new_pwd)
 
     def _read_custom(self):
         obis_str = self.registers_panel.obis_input.text().strip()
@@ -601,18 +535,64 @@ class MainWindow(QMainWindow):
             class_id = int(self.registers_panel.class_input.text() or "3")
         except ValueError:
             return
-        self._run_worker("read_custom", class_id, obis_tuple)
+        self.controller.read_custom_register(class_id, obis_tuple)
 
-    def _refresh_current_page(self):
-        index = self.pages.currentIndex()
-        if index == 0:
-            self._read_dashboard()
-        elif index == 1:
-            self._read_relay()
-        elif index == 2:
-            self._read_all_registers()
-        elif index == 3:
-            self._read_info()
+    def _on_reconnect_clicked(self):
+        self.lbl_status.setText("Status: ulanmoqda...")
+        self.lbl_status.setStyleSheet("font-size: 12px; color: #f59e0b; font-weight: 700;")
+        self.btn_reconnect.setVisible(False)
+        self.log_panel.add_app_log("Hisoblagichga qayta ulanish boshlandi...")
+        self.controller.reconnect()
+
+    # ── Auto-refresh ──────────────────────────────────────────────────────
+
+    def _auto_refresh(self):
+        self.auto_refresh_timer.stop()
+        if self.controller.conn and self.controller.conn.connected and not self.controller.is_busy:
+            if self.pages.currentIndex() == 0 and self.chk_auto_refresh.isChecked():
+                self.controller.read_dashboard()
+
+    def _get_refresh_interval_ms(self) -> int:
+        txt = self.combo_refresh_interval.currentText()
+        try:
+            return int(txt.replace("s", "")) * 1000
+        except ValueError:
+            return 3000
+
+    def _on_auto_refresh_toggled(self, checked: bool):
+        if checked:
+            if (self.controller.conn and self.controller.conn.connected
+                    and not self.controller.is_busy and self.pages.currentIndex() == 0):
+                self.controller.read_dashboard()
+        else:
+            self.auto_refresh_timer.stop()
+
+    def _on_refresh_interval_changed(self):
+        if self.chk_auto_refresh.isChecked() and self.auto_refresh_timer.isActive():
+            self.auto_refresh_timer.stop()
+            self.auto_refresh_timer.start(self._get_refresh_interval_ms())
+
+    # ── Helpers ───────────────────────────────────────────────────────────
+
+    def _scroll_page(self, widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(widget)
+        return scroll
+
+    def _header_info(self, parent_layout: QHBoxLayout, label: str, value: str) -> QLabel:
+        box = QVBoxLayout()
+        box.setSpacing(2)
+        lbl = QLabel(label)
+        lbl.setObjectName("smallLabel")
+        box.addWidget(lbl)
+        val = QLabel(value or "---")
+        val.setObjectName("smallValue")
+        val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        box.addWidget(val)
+        parent_layout.addLayout(box)
+        return val
 
     def _open_flash_window(self):
         from .flash_window import FlashWindow
@@ -623,22 +603,20 @@ class MainWindow(QMainWindow):
 
     def _disconnect(self):
         self.auto_refresh_timer.stop()
-        if self.worker.isRunning():
-            self.worker.wait(3000)
-        if self.conn:
+        self.controller.stop()
+        if self.controller.conn:
             try:
-                self.conn.close()
+                self.controller.conn.close()
             except Exception:
                 pass
         self.close()
 
     def closeEvent(self, event):
         self.auto_refresh_timer.stop()
-        if self.worker.isRunning():
-            self.worker.wait(3000)
-        if self.conn:
+        self.controller.stop()
+        if self.controller.conn:
             try:
-                self.conn.close()
+                self.controller.conn.close()
             except Exception:
                 pass
         event.accept()

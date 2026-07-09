@@ -1,8 +1,9 @@
 ; Inno Setup Script for TE71/TE73 Meter Tool
 ; Defines the installation wizard, shortcuts, and uninstaller.
+; Resolves dev path hardcoding and packages all binaries recursively.
 
 #define MyAppName "Meter Tool"
-#define MyAppVersion "1.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Toshelectroapparat"
 #define MyAppExeName "MeterTool.exe"
 
@@ -16,12 +17,15 @@ DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 ; PrivilegesRequired=lowest means it installs per-user by default (no admin required unless installing for all users)
 PrivilegesRequired=lowest
-OutputDir=C:\bakhromdev\meter_tool\dist
+OutputDir=dist
 OutputBaseFilename=MeterToolSetup
-SetupIconFile=C:\bakhromdev\meter_tool\app_icon.ico
+SetupIconFile=app_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+
+; Enable clean upgrades by overwriting files during install
+AlwaysOverwrite=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -30,11 +34,18 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\bakhromdev\meter_tool\dist\MeterTool.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Source paths are relative to the location of this .iss file
+Source: "dist\MeterTool\MeterTool.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\MeterTool\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Registry]
+; Clean up app settings from Windows Registry on uninstall (deletes HKEY_CURRENT_USER\Software\Toshelectroapparat\MeterTool)
+Root: HKCU; Subkey: "Software\Toshelectroapparat\MeterTool"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Toshelectroapparat"; Flags: uninsdeletekeyifempty
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

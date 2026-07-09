@@ -3,6 +3,9 @@
 This script only performs safe reads and a safe relay reconnect action. It does
 not change tariffs, passwords, or disconnect the load.
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dlms.connection import DLMSConnection
 from dlms.parser import parse_dlms_data, format_value, parse_scaler_unit
 from dlms.obis import REGISTERS, RELAY_CLASS, RELAY_OBIS

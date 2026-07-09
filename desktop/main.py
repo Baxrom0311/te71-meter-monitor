@@ -48,10 +48,16 @@ def main():
         # Step 2: Try to connect
         try:
             from dlms.connection import DLMSConnection
-            from meter import Meter
+            from services.meter_service import MeterService
+            from controllers.meter_controller import MeterController
 
             def _try_connect(baud: int):
-                c = DLMSConnection(settings["port"], baud)
+                c = DLMSConnection(
+                    settings["port"],
+                    baud,
+                    parity=settings.get("parity", "N"),
+                    stopbits=settings.get("stopbits", 1.0)
+                )
                 c.open()
                 auth = settings["auth"]
                 if auth == 0:
@@ -83,11 +89,13 @@ def main():
                 )
                 continue
 
-            meter = Meter(conn)
+            # Build the new architecture: Connection → Service → Controller
+            service = MeterService(conn)
+            controller = MeterController(conn, service)
 
             # Step 3: Open main window
             from ui.main_window import MainWindow
-            window = MainWindow(conn, meter, settings)
+            window = MainWindow(controller, settings)
             window.show()
             dialog.close()
 

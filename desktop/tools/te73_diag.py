@@ -7,7 +7,7 @@ XAVFSIZ: lockout yo'q.
 import sys, os, time, struct
 import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import serial
 from dlms.hdlc import fcs16, make_hdlc

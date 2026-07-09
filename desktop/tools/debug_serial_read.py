@@ -1,4 +1,7 @@
 """Temporary helper: read possible serial/info registers from the meter."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dlms.connection import DLMSConnection
 from dlms.parser import parse_dlms_data, format_value
 

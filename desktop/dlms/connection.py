@@ -21,10 +21,12 @@ def _client_to_hdlc(client_addr: int) -> int:
 class DLMSConnection:
     """Manages DLMS/COSEM connection to a TE71/TE73 meter."""
 
-    def __init__(self, port: str, baud: int = 9600, server_addr: int = 0x03):
+    def __init__(self, port: str, baud: int = 9600, server_addr: int = 0x03, parity: str = 'N', stopbits: float = 1.0):
         self.port = port
         self.baud = baud
         self.server_addr = server_addr  # HDLC dest (server logical addr 1 = 0x03)
+        self.parity = parity
+        self.stopbits = stopbits
         self.ser: serial.Serial | None = None
         self.client_addr = CLIENT_PUBLIC
         self.client_src = _client_to_hdlc(CLIENT_PUBLIC)
@@ -48,7 +50,7 @@ class DLMSConnection:
 
     def open(self):
         self.ser = serial.Serial(
-            self.port, self.baud, bytesize=8, parity='N', stopbits=1, timeout=3
+            self.port, self.baud, bytesize=8, parity=self.parity, stopbits=self.stopbits, timeout=3
         )
         time.sleep(0.3)
         self._log(f"Port ochildi: {self.port} @ {self.baud}")
