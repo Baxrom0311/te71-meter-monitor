@@ -208,6 +208,17 @@ class MainWindow(QMainWindow):
 
         sb_layout.addWidget(conn_frame)
 
+        # ESP32 Flash button
+        btn_flash = QPushButton("⚡  ESP32 Flash")
+        btn_flash.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_flash.setStyleSheet(
+            "QPushButton{background:#0f2d4a;color:#60a5fa;border:1.5px solid #1e4976;"
+            "border-radius:8px;font-weight:700;margin:4px 16px;padding:8px;}"
+            "QPushButton:hover{background:#1e3a5f;}"
+        )
+        btn_flash.clicked.connect(self._open_flash_window)
+        sb_layout.addWidget(btn_flash)
+
         # Disconnect button
         btn_disc = QPushButton("Uzish")
         btn_disc.setObjectName("sidebarDanger")
@@ -215,7 +226,7 @@ class MainWindow(QMainWindow):
         btn_disc.clicked.connect(self._disconnect)
         btn_wrap = QWidget()
         btn_wrap_layout = QVBoxLayout(btn_wrap)
-        btn_wrap_layout.setContentsMargins(16, 8, 16, 16)
+        btn_wrap_layout.setContentsMargins(16, 4, 16, 16)
         btn_wrap_layout.addWidget(btn_disc)
         sb_layout.addWidget(btn_wrap)
 
@@ -602,6 +613,13 @@ class MainWindow(QMainWindow):
             self._read_all_registers()
         elif index == 3:
             self._read_info()
+
+    def _open_flash_window(self):
+        from .flash_window import FlashWindow
+        if not hasattr(self, "_flash_win") or not self._flash_win.isVisible():
+            self._flash_win = FlashWindow(self)
+        self._flash_win.show()
+        self._flash_win.raise_()
 
     def _disconnect(self):
         self.auto_refresh_timer.stop()

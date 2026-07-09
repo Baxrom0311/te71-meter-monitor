@@ -147,7 +147,13 @@ void setup() {
     }
 
     // WiFi: tez ulanish, keyin WiFiManager
-    wifi_quick("12", "12345678");
+#ifndef DEFAULT_WIFI_SSID
+  #define DEFAULT_WIFI_SSID "12"
+#endif
+#ifndef DEFAULT_WIFI_PASS
+  #define DEFAULT_WIFI_PASS "12345678"
+#endif
+    wifi_quick(DEFAULT_WIFI_SSID, DEFAULT_WIFI_PASS);
     wifi_setup(WIFI_AP_NAME, WIFI_AP_PASS, device_id, g_cfg.meter_serial);
 
     // Server tekshirish + OTA

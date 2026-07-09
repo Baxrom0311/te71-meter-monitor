@@ -133,6 +133,28 @@ class ConnectDialog(QDialog):
         self.lbl_status.setStyleSheet("color: #f87171; font-weight: 600;")
         card_layout.addWidget(self.lbl_status)
 
+        # Divider
+        div_layout = QHBoxLayout()
+        line1 = QFrame(); line1.setFixedHeight(1); line1.setStyleSheet("background:#24364f;")
+        lbl_or = QLabel("yoki"); lbl_or.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_or.setStyleSheet("color:#475467; font-size:12px; padding: 0 8px;")
+        line2 = QFrame(); line2.setFixedHeight(1); line2.setStyleSheet("background:#24364f;")
+        div_layout.addWidget(line1, 1)
+        div_layout.addWidget(lbl_or)
+        div_layout.addWidget(line2, 1)
+        card_layout.addLayout(div_layout)
+
+        # ESP32 Flash button
+        self.btn_flash = QPushButton("⚡  ESP32 ga firmware yuklash")
+        self.btn_flash.setMinimumHeight(42)
+        self.btn_flash.setStyleSheet(
+            "QPushButton{background:#0f2d4a;color:#60a5fa;border:1.5px solid #1e4976;"
+            "border-radius:8px;font-weight:700;}"
+            "QPushButton:hover{background:#1e3a5f;color:#93c5fd;}"
+        )
+        self.btn_flash.clicked.connect(self._on_open_flash)
+        card_layout.addWidget(self.btn_flash)
+
         hint = QLabel(
             "Tavsiya: oddiy tekshiruv va rele boshqarish uchun Reader rejimidan foydalaning."
         )
@@ -171,6 +193,12 @@ class ConnectDialog(QDialog):
         self.lbl_pwd.setVisible(show_pwd)
         self.txt_password.setVisible(show_pwd)
         self.setFixedSize(520, 575 if show_pwd else 520)
+
+    def _on_open_flash(self):
+        """ESP32 Flash oynasini ochadi (hisoblagich ulanishi shart emas)."""
+        from .flash_window import FlashWindow
+        self._flash_win = FlashWindow()
+        self._flash_win.show()
 
     def _on_connect(self):
         port = self.combo_port.currentData()
