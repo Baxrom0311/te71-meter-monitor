@@ -1,13 +1,13 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { KPICard } from '@/components/KPICard'
-import { useSummary, useDevices, useAlerts, useWebSocket, useBuildings } from '@/hooks/queries'
+import { useSummary, useDevices, useAlerts, useBuildings } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
-import { Device, WebSocketMessage } from '@/types/api'
+import { Device } from '@/types/api'
 import apiClient from '@/lib/api'
 import { EmptyBlock } from '@/components/StateBlock'
 import { notifySuccess } from '@/lib/toast'
@@ -27,8 +27,6 @@ export default function DashboardPage() {
   const { data: devices, isLoading: devicesLoading } = useDevices()
   const { data: buildings } = useBuildings()
   const { data: alerts } = useAlerts(false, 5)
-  const wsMessage = useWebSocket()
-  const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({})
   const [deviceToAssign, setDeviceToAssign] = useState<Device | null>(null)
   const [assignName, setAssignName] = useState('')
   const [assignBuildingId, setAssignBuildingId] = useState<number | ''>('')
@@ -45,28 +43,10 @@ export default function DashboardPage() {
     },
   })
 
-  // Handle WebSocket updates
-  useEffect(() => {
-    if (!wsMessage) return
-
-    if (wsMessage.type === 'device_online' || wsMessage.type === 'device_offline') {
-      const deviceId = wsMessage.device_id
-      if (deviceId) {
-        setDeviceStates((prev) => ({
-          ...prev,
-          [deviceId]: wsMessage.type === 'device_online',
-        }))
-      }
-    }
-  }, [wsMessage])
-
   const updatedDevices = useMemo(() => {
     if (!devices) return []
-    return devices.map((device) => ({
-      ...device,
-      online: device.id in deviceStates ? deviceStates[device.id] : device.online,
-    }))
-  }, [devices, deviceStates])
+    return devices
+  }, [devices])
 
   const unassignedDevices = useMemo(
     () => updatedDevices.filter((d) => d.building_id === null),

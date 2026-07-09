@@ -29,10 +29,12 @@ export default function ChatPage() {
 
   // Quick Prompts list
   const quickPrompts = [
-    { text: '📊 Oxirgi 2 oylik sarf taqqoslovi', prompt: 'Oxirgi 2 oylik elektr sarfini solishtir' },
-    { text: '🚨 Faol ogohlantirishlar (Alerts)', prompt: 'Hozirgi tizimdagi faol ogohlantirishlarni ko\'rsat' },
-    { text: '🏢 Binolar sarfi tahlili', prompt: 'Qaysi binolar eng ko\'p energiya sarflamoqda?' },
-    { text: '🔌 Oflayn qurilmalar', prompt: 'Qaysi datchiklar hozirda oflayn holatda?' },
+    { text: '📊 Tizim holati', prompt: 'Tizimning umumiy holatini ko\'rsat: nechta qurilma online, ogohlantirishlar bormi?' },
+    { text: '🚨 Faol ogohlantirishlar', prompt: 'Hozirgi tizimdagi barcha faol ogohlantirishlarni ro\'yxatini chiqar' },
+    { text: '🏢 Binolar va qurilmalar', prompt: 'Barcha binolar va ularga ulangan qurilmalar ro\'yxatini chiqar' },
+    { text: '💡 Elektr sarfi tahlili', prompt: 'Qaysi binolar eng ko\'p elektr sarflamoqda? So\'nggi 30 kunlik ma\'lumot' },
+    { text: '💧 Suv bosimi holati', prompt: 'Suv bosim qurilmalari holatini ko\'rsat, anomaliyalar bormi?' },
+    { text: '🔌 Oflayn qurilmalar', prompt: 'Qaysi qurilmalar hozirda oflayn? Ro\'yxat va oxirgi ko\'ringan vaqtlari' },
   ]
 
   // Detect user scroll to prevent force scroll-down during streaming
@@ -258,7 +260,7 @@ export default function ChatPage() {
               <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-fade-in">
                 <Sparkles className="w-12 h-12 text-blue-500/40 mb-3 animate-pulse" />
                 <p className="text-gray-400 font-medium max-w-sm">
-                  Salom! Men loyihadagi ko'rsatkichlar va sarflarni tahlil qilishda yordam beruvchi aqlli AI yordamchiman. Savol yoki buyruq yozing.
+                  Salom! Men elektr, suv va gaz monitoringi tizimingizning AI yordamchisiman. Qurilmalar holati, ogohlantirishlar, sarflar tahlili va boshqaruv bo'yicha savol yozing.
                 </p>
               </div>
             )}
@@ -348,7 +350,7 @@ export default function ChatPage() {
                     submitMessage(message)
                   }
                 }}
-                placeholder="Savol yoki buyruq yozing (masalan: 'Oxirgi 30 kundagi o'rtacha tok sarfi qancha?')..."
+                placeholder="Savol yozing (masalan: 'Qaysi qurilmalar offline?', '3-bino suv bosimi qanday?', 'Relay o\'chir')..."
                 rows={1}
                 className="flex-1 bg-white/80 dark:bg-gray-950/60 border border-gray-200 dark:border-gray-700/50 rounded-lg px-4 py-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 transition max-h-[120px] min-h-[48px] resize-none backdrop-blur-sm"
               />

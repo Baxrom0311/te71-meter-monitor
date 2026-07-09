@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastProvider } from '@/components/ToastProvider'
 import { PWAStatus } from '@/components/PWAStatus'
+import { RealtimeSync } from '@/components/RealtimeSync'
 import { getApiErrorMessage, getApiErrorStatus } from '@/lib/errors'
 import { notify } from '@/lib/toast'
 import LoginPage from '@/pages/LoginPage'
@@ -57,6 +58,7 @@ export default function App() {
         />
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
+            <RealtimeSync />
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<LoginPage />} />

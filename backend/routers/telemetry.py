@@ -82,5 +82,5 @@ async def post_readings_batch(body: MeterReadingBatch, x_device_token: Optional[
     device_id = body.device_id or (body.readings[0].device_id if body.readings else None)
     await device_service.verify_device_access(device_id, x_device_token)
     result = await reading_service.save_reading_batch(body)
-    await ws_manager.broadcast({"type": "readings_batch", "device_id": body.device_id, "result": result})
+    await ws_manager.broadcast({"type": "readings_batch", "device_id": device_id, "result": result})
     return result
