@@ -732,7 +732,8 @@ async def chat_endpoint(body: ChatRequest, user: dict = Depends(current_token_pa
         await _audit_chat_event(user, "chat.blocked", {"provider": provider, "reason": "sensitive_or_sql_prompt"})
 
         async def blocked_generator():
-            yield f"data: {_json({'type': 'FINAL_RESPONSE', 'content': 'Bu so'rov xavfsizlik sababli rad etildi. SQL, token, parol yoki yashirin jadval ma'lumotlarini chat orqali olish mumkin emas.'})}\n\n"
+            msg = "Bu sorov xavfsizlik sababli rad etildi. SQL, token, parol yoki yashirin jadval malumotlarini chat orqali olish mumkin emas."
+            yield f"data: {_json({'type': 'FINAL_RESPONSE', 'content': msg})}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(blocked_generator(), media_type="text/event-stream")
@@ -768,7 +769,8 @@ async def chat_endpoint(body: ChatRequest, user: dict = Depends(current_token_pa
             fallback_provider = "deepseek" if provider != "deepseek" else "gemini"
             fallback_key = settings.deepseek_api_key if fallback_provider == "deepseek" else settings.gemini_api_key
             if is_balance_error and fallback_key:
-                yield f"data: {_json({'type': 'THOUGHT', 'content': f'{provider} limit/billing xatosi. {fallback_provider} ga o'tilmoqda...'})}\n\n"
+                switch_msg = f"{provider} limit/billing xatosi. {fallback_provider} ga otilmoqda..."
+                yield f"data: {_json({'type': 'THOUGHT', 'content': switch_msg})}\n\n"
                 try:
                     if fallback_provider == "deepseek":
                         async for chunk in execute_deepseek_flow(body, user):
