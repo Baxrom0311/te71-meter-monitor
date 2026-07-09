@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meter Monitor — Dokumentatsiya</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0d14;
+      --bg2:       #111520;
+      --bg3:       #171c2b;
+      --border:    #1e2640;
+      --accent:    #3b82f6;
+      --accent2:   #60a5fa;
+      --green:     #22c55e;
+      --yellow:    #eab308;
+      --red:       #ef4444;
+      --purple:    #a78bfa;
+      --text:      #e2e8f0;
+      --text2:     #94a3b8;
+      --text3:     #64748b;
+      --sidebar-w: 260px;
+      --header-h:  56px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--header-h);
+      background: rgba(10,13,20,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 20px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .logo-name { font-weight: 700; font-size: 16px; color: var(--text); }
+    .logo-ver  { font-size: 11px; color: var(--text3); margin-left: 4px; }
+
+    .header-search {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 12px;
+      color: var(--text3); font-size: 13px; cursor: text;
+    }
+    .header-search input {
+      background: none; border: none; outline: none;
+      color: var(--text); font-size: 13px; width: 220px;
+      font-family: inherit;
+    }
+    .header-search input::placeholder { color: var(--text3); }
+    kbd {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      padding-top: var(--header-h);
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    aside {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: fixed;
+      top: var(--header-h); bottom: 0;
+      overflow-y: auto;
+      padding: 24px 0 40px;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+    aside::-webkit-scrollbar { width: 4px; }
+    aside::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .nav-section { margin-bottom: 24px; padding: 0 12px; }
+    .nav-section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text3);
+      padding: 0 8px; margin-bottom: 6px;
+    }
+    .nav-item {
+      display: block; padding: 7px 10px;
+      border-radius: 6px; color: var(--text2);
+      text-decoration: none; font-size: 13.5px;
+      transition: all .15s; cursor: pointer;
+    }
+    .nav-item:hover { background: var(--bg3); color: var(--text); }
+    .nav-item.active { background: rgba(59,130,246,.12); color: var(--accent2); font-weight: 500; }
+    .nav-badge {
+      display: inline-block; margin-left: 6px;
+      background: rgba(59,130,246,.2); color: var(--accent2);
+      font-size: 10px; font-weight: 700; padding: 1px 5px;
+      border-radius: 4px; vertical-align: middle;
+    }
+
+    /* ── MAIN ── */
+    main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 48px 56px 80px;
+      max-width: 900px;
+    }
+
+    /* ── ON-PAGE TOC ── */
+    .toc {
+      position: fixed;
+      top: calc(var(--header-h) + 32px);
+      right: 0; width: 220px;
+      padding: 0 20px;
+      font-size: 12.5px;
+    }
+    .toc-label { font-weight: 700; color: var(--text3); margin-bottom: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .toc-item { display: block; color: var(--text3); text-decoration: none; padding: 3px 0; border-left: 2px solid var(--border); padding-left: 10px; transition: .15s; }
+    .toc-item:hover, .toc-item.active { color: var(--accent2); border-color: var(--accent2); }
+
+    @media (max-width: 1280px) { .toc { display: none; } main { max-width: 100%; } }
+    @media (max-width: 900px)  { main { padding: 32px 24px 60px; margin-left: 0; } aside { display: none; } }
+
+    /* ── CONTENT ── */
+    section { margin-bottom: 64px; scroll-margin-top: 80px; }
+
+    h1 { font-size: 30px; font-weight: 700; line-height: 1.25; margin-bottom: 12px; }
+    h2 { font-size: 20px; font-weight: 700; margin: 40px 0 12px; color: var(--text); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 15px; font-weight: 700; margin: 28px 0 8px; color: var(--text); }
+    h4 { font-size: 13px; font-weight: 700; margin: 20px 0 6px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
+
+    p { color: var(--text2); margin-bottom: 12px; }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .lead {
+      font-size: 16px; color: var(--text2); line-height: 1.7;
+      margin-bottom: 28px;
+    }
+
+    /* hero badges */
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 32px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    }
+    .badge-blue   { background: rgba(59,130,246,.12); color: #60a5fa; border: 1px solid rgba(59,130,246,.25); }
+    .badge-green  { background: rgba(34,197,94,.1);   color: #4ade80; border: 1px solid rgba(34,197,94,.2); }
+    .badge-purple { background: rgba(167,139,250,.12); color: #c4b5fd; border: 1px solid rgba(167,139,250,.25); }
+    .badge-yellow { background: rgba(234,179,8,.1);   color: #fbbf24; border: 1px solid rgba(234,179,8,.2); }
+
+    /* code */
+    pre {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px 22px;
+      overflow-x: auto; margin: 14px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; line-height: 1.65;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .88em;
+    }
+    p code, li code {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; color: var(--accent2);
+    }
+
+    /* code header */
+    .code-block { position: relative; margin: 14px 0; }
+    .code-lang {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-bottom: none; border-radius: 10px 10px 0 0;
+      padding: 7px 16px;
+    }
+    .code-lang span { font-size: 11.5px; color: var(--text3); font-weight: 600; letter-spacing: .04em; }
+    .copy-btn {
+      background: none; border: 1px solid var(--border); color: var(--text3);
+      padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
+      transition: .15s; font-family: inherit;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--text3); }
+    .code-block pre { border-radius: 0 0 10px 10px; margin: 0; }
+
+    /* table */
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead tr { background: var(--bg3); }
+    th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text3); letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.018); }
+    td code { color: var(--accent2); }
+
+    /* callout */
+    .callout {
+      display: flex; gap: 12px;
+      padding: 14px 16px; border-radius: 8px;
+      margin: 16px 0; font-size: 13.5px;
+    }
+    .callout-info   { background: rgba(59,130,246,.08); border-left: 3px solid var(--accent); }
+    .callout-warn   { background: rgba(234,179,8,.07);  border-left: 3px solid var(--yellow); }
+    .callout-danger { background: rgba(239,68,68,.07);  border-left: 3px solid var(--red); }
+    .callout-ok     { background: rgba(34,197,94,.07);  border-left: 3px solid var(--green); }
+    .callout-icon   { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .callout p      { margin: 0; }
+
+    /* steps */
+    .steps { counter-reset: step; margin: 16px 0; }
+    .step {
+      display: flex; gap: 16px; margin-bottom: 20px;
+      counter-increment: step;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(59,130,246,.15); border: 1.5px solid var(--accent);
+      color: var(--accent2); font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-content h3 { margin-top: 4px; }
+    .step-content p  { margin-top: 4px; }
+
+    /* arch diagram */
+    .arch {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 28px; margin: 16px 0;
+      font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+      line-height: 2; color: var(--text2);
+    }
+    .arch-highlight { color: var(--accent2); font-weight: 600; }
+    .arch-dim { color: var(--text3); }
+
+    /* method pills */
+    .method {
+      display: inline-block; padding: 2px 7px;
+      border-radius: 4px; font-size: 11px; font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .GET    { background: rgba(34,197,94,.12);  color: #4ade80; }
+    .POST   { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .PUT    { background: rgba(234,179,8,.12);  color: #fbbf24; }
+    .DELETE { background: rgba(239,68,68,.12);  color: #f87171; }
+    .WS     { background: rgba(167,139,250,.15);color: #c4b5fd; }
+
+    /* feature grid */
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; margin: 20px 0; }
+    .feature-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px;
+    }
+    .feature-card .icon { font-size: 22px; margin-bottom: 10px; }
+    .feature-card h3 { font-size: 14px; margin: 0 0 6px; color: var(--text); }
+    .feature-card p  { font-size: 13px; color: var(--text3); margin: 0; line-height: 1.5; }
+
+    /* ul / ol */
+    ul, ol { padding-left: 20px; color: var(--text2); margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+    li::marker { color: var(--text3); }
+
+    /* divider */
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+    /* ── SYNTAX COLORS (manual) ── */
+    .kw { color: #7dd3fc; } /* keyword */
+    .st { color: #86efac; } /* string */
+    .cm { color: var(--text3); font-style: italic; } /* comment */
+    .nm { color: #fbbf24; } /* number */
+    .fn { color: #c084fc; } /* function */
+    .at { color: #fb923c; } /* attr / key */
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <a class="logo" href="#">
+    <div class="logo-icon">⚡</div>
+    <span class="logo-name">Meter Monitor</span>
+    <span class="logo-ver">v1.0</span>
+  </a>
+  <div class="header-search">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="text" placeholder="Qidirish..." id="searchInput" />
+    <kbd>⌘K</kbd>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside id="sidebar">
+  <div class="nav-section">
+    <div class="nav-section-label">Boshlash</div>
+    <a class="nav-item active" href="#intro">Kirish</a>
+    <a class="nav-item" href="#architecture">Arxitektura</a>
+    <a class="nav-item" href="#quickstart">Tezkor Boshlash</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Komponentlar</div>
+    <a class="nav-item" href="#desktop">Desktop App <span class="nav-badge">PyQt6</span></a>
+    <a class="nav-item" href="#esp32">ESP32 Firmware</a>
+    <a class="nav-item" href="#backend">Backend API</a>
+    <a class="nav-item" href="#frontend">Frontend</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">API Referens</div>
+    <a class="nav-item" href="#api-auth">Autentifikatsiya</a>
+    <a class="nav-item" href="#api-devices">Qurilmalar</a>
+    <a class="nav-item" href="#api-readings">O'lchov ma'lumotlari</a>
+    <a class="nav-item" href="#api-buildings">Binolar</a>
+    <a class="nav-item" href="#api-alerts">Alertlar</a>
+    <a class="nav-item" href="#api-ota">OTA Firmware</a>
+    <a class="nav-item" href="#api-backups">Backup</a>
+    <a class="nav-item" href="#websocket">WebSocket</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Deployment</div>
+    <a class="nav-item" href="#env">Muhit o'zgaruvchilari</a>
+    <a class="nav-item" href="#production">Production</a>
+    <a class="nav-item" href="#monitoring">Monitoring</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main id="main">
+
+  <!-- ══════════════ KIRISH ══════════════ -->
+  <section id="intro">
+    <h1>Meter Monitor</h1>
+    <p class="lead">
+      Elektr, suv va gaz monitoringi uchun yagona platforma.
+      ESP32 qurilmalar sensorlardan ma'lumot o'qib, HTTP orqali backendga yuboradi.
+      Dashboard real vaqtda grafik, alert va boshqaruv imkoniyatlari beradi.
+    </p>
+
+    <div class="badges">
+      <span class="badge badge-blue">⚡ Elektr (TE71/TE73 DLMS)</span>
+      <span class="badge badge-green">💧 Suv</span>
+      <span class="badge badge-purple">🔥 Gaz</span>
+      <span class="badge badge-yellow">ESP32 · FastAPI · React</span>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">🖥️</div>
+        <h3>Desktop App</h3>
+        <p>TE71/TE73 hisoblagich bilan DLMS/COSEM orqali to'g'ridan-to'g'ri ishlash</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📡</div>
+        <h3>ESP32 Firmware</h3>
+        <p>RS-485, bosim va flow sensorlari uchun universal firmware</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">⚡</div>
+        <h3>Real-time Dashboard</h3>
+        <p>WebSocket orqali jonli grafik va alertlar</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔔</div>
+        <h3>Alert Tizimi</h3>
+        <p>Threshold qoidalar, eskalatsiya va Telegram/webhook bildirishnomalar</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔄</div>
+        <h3>OTA Updates</h3>
+        <p>ESP32 firmwareni masofadan yangilash va batch rollout</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💾</div>
+        <h3>Backup / Restore</h3>
+        <p>Admin panel orqali ma'lumot eksport va import</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ ARXITEKTURA ══════════════ -->
+  <section id="architecture">
+    <h2>Arxitektura</h2>
+    <p>Tizim to'rtta mustaqil komponentdan iborat:</p>
+
+    <div class="arch">
+<span class="arch-highlight">Sensor / Hisoblagich</span>
+  <span class="arch-dim">│  RS-485 (DLMS/COSEM) yoki analog bosim sensori</span>
+  ▼
+<span class="arch-highlight">ESP32</span>  <span class="arch-dim">────── universal firmware (elektr / suv / gaz)</span>
+  <span class="arch-dim">│  HTTP POST /api/readings</span>
+  <span class="arch-dim">│  X-Device-Token: &lt;token&gt;</span>
+  ▼
+<span class="arch-highlight">FastAPI Backend</span>  <span class="arch-dim">──── PostgreSQL + SQLAlchemy async</span>
+  <span class="arch-dim">│  WebSocket /ws</span>
+  ▼
+<span class="arch-highlight">React Dashboard</span>  <span class="arch-dim">──── Vite + PWA + React Query</span>
+
+<span class="arch-highlight">Desktop App</span>  <span class="arch-dim">────── PyQt6 · DLMS/COSEM · RS-485</span>
+  <span class="arch-dim">│  To'g'ridan-to'g'ri hisoblagichga ulanadi (backendsiz)</span>
+  <span class="arch-dim">│  Rele boshqarish, registrlarni o'qish, vaqt sinxron</span>
+    </div>
+
+    <div class="callout callout-info">
+      <div class="callout-icon">ℹ️</div>
+      <p>Backend MQTT ishlatmaydi. ESP32 bilan asosiy aloqa HTTP orqali. WebSocket faqat frontend uchun real-time event layer.</p>
+    </div>
+
+    <h3>Ma'lumot oqimi</h3>
+    <ol>
+      <li>ESP32 RS-485/sensor orqali o'qiydi → <code>POST /api/readings</code></li>
+      <li>Backend <code>utility_type</code> bo'yicha ajratib PostgreSQL ga yozadi</li>
+      <li>WebSocket barcha ulangan clientlarga <code>reading</code> event yuboradi</li>
+      <li>React Query cache yangilanadi → UI yangilanadi</li>
+    </ol>
+  </section>
+
+  <!-- ══════════════ QUICKSTART ══════════════ -->
+  <section id="quickstart">
+    <h2>Tezkor Boshlash</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Repository klonlash</h3>
+          <div class="code-block">
+            <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+            <pre>git clone https://github.com/your-org/meter-monitor.git
+cd meter-monitor</pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Muhit o'zgaruvchilari</h3>
+          <div class="code-block">
+            <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+            <pre>cp .env.example .env
+# .env faylini tahrirlab secret va tokenlarni o'zgartiring</pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Docker bilan ishga tushirish</h3>
+          <div class="code-block">
+            <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+            <pre>docker compose up -d --build</pre>
+          </div>
+          <p>Dashboard: <code>http://localhost:8000</code> · API docs: <code>http://localhost:8000/docs</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>Tayyor ekanligini tekshirish</h3>
+          <div class="code-block">
+            <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+            <pre>curl http://localhost:8000/health
+# {"status": "ok"}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-warn">
+      <div class="callout-icon">⚠️</div>
+      <p>Default login faqat development uchun. Productionda <code>SECRET_KEY</code>, <code>DEVICE_API_TOKEN</code> va admin parolni albatta almashtiring.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ DESKTOP APP ══════════════ -->
+  <section id="desktop">
+    <h2>Desktop App</h2>
+    <p>TE71 (1-fazali) va TE73 (3-fazali) hisoblagichlar bilan DLMS/COSEM protokoli orqali bevosita ishlash uchun PyQt6 dasturi. Backendga ulanish shart emas.</p>
+
+    <h3>O'rnatish</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>cd desktop
+pip install -r requirements.txt
+python main.py</pre>
+    </div>
+
+    <h3>Ulanish parametrlari</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Hisoblagich</th><th>Baud</th><th>Parity</th><th>Stop bits</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td>TE71 (1-fazali)</td><td><code>9600</code></td><td>N</td><td>1</td><td>Reader / Public / Manager</td></tr>
+          <tr><td>TE73 (3-fazali)</td><td><code>4800</code></td><td>N</td><td>1</td><td>Reader / Public / Manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Auth rejimlari</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Rejim</th><th>Client ID</th><th>Imkoniyat</th></tr></thead>
+        <tbody>
+          <tr><td>Public</td><td>16</td><td>Asosiy parametrlarni o'qish (parolsiz)</td></tr>
+          <tr><td>Reader</td><td>1</td><td>Barcha registrlar + rele boshqarish (HLS5)</td></tr>
+          <tr><td>Manager</td><td>2</td><td>Vaqt sinxron, tarif, parol o'zgartirish (LOW)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Asosiy funksiyalar</h3>
+    <ul>
+      <li><strong>Dashboard</strong> — Kuchlanish, tok, quvvat, chastota, energiya real-time</li>
+      <li><strong>Rele boshqarish</strong> — Remote reconnect / disconnect tasdiqlash dialogi bilan</li>
+      <li><strong>Registrlar</strong> — Barcha OBIS kodlarni o'qish, custom OBIS so'rovi</li>
+      <li><strong>Sozlamalar</strong> — Vaqt sinxron, tarif rejasi, parol o'zgartirish</li>
+      <li><strong>Log</strong> — HDLC frame log, hodisalar jurnali</li>
+      <li><strong>ESP32 Flash</strong> — Firmware yuklash va serial monitor</li>
+    </ul>
+
+    <h3>Loyiha tuzilmasi</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>TEXT</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>desktop/
+├── main.py                    # Entry point
+├── dlms/
+│   ├── hdlc.py               # HDLC framing (FCS16, send/recv)
+│   ├── connection.py         # SNRM/AARQ/DISC boshqaruvi
+│   ├── parser.py             # DLMS data types parser
+│   └── obis.py               # OBIS kodlar registri (TE71+TE73)
+├── controllers/
+│   ├── flash_controller.py   # ESP32 flash UI logikasi
+│   └── meter_controller.py   # Hisoblagich buyruqlari
+├── services/
+│   ├── flash_service.py      # PlatformIO integratsiya
+│   └── meter_service.py      # Yuqori darajali Meter klassi
+├── ui/
+│   ├── main_window.py        # Asosiy oyna + worker thread
+│   ├── connect_dialog.py     # Ulanish dialogi
+│   ├── flash_window.py       # ESP32 Flash oynasi
+│   ├── pages/               # Tab panellari
+│   │   ├── dashboard_page.py
+│   │   ├── relay_page.py
+│   │   ├── registers_page.py
+│   │   ├── settings_page.py
+│   │   └── log_page.py
+│   ├── widgets.py            # Qayta ishlatiluvchi widgetlar
+│   ├── theme.py              # Dark tema konstantalar
+│   └── styles.py            # QSS stillar
+└── tools/                    # Debug va test skriptlar</pre>
+    </div>
+  </section>
+
+  <!-- ══════════════ ESP32 ══════════════ -->
+  <section id="esp32">
+    <h2>ESP32 Firmware</h2>
+    <p>Universal firmware uchta utility type ni qo'llab-quvvatlaydi: elektr (TE71/TE73 RS-485 DLMS), suv (bosim sensori) va gaz (bosim/flow sensori).</p>
+
+    <h3>Build va yuklash</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre># PlatformIO CLI
+pio run                          # Build
+pio run -t upload                # Yukla
+pio device monitor               # Serial monitor
+
+# Yoki Desktop App orqali → "ESP32 ga firmware yuklash"</pre>
+    </div>
+
+    <h3>Konfiguratsiya (platformio.ini)</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>INI</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>[env:esp32]
+platform = espressif32
+board    = esp32dev
+build_flags =
+    '-DDEFAULT_SERVER_URL="http://192.168.1.100"'
+    '-DDEFAULT_WIFI_SSID="MyWiFi"'
+    '-DDEFAULT_WIFI_PASS="password"'
+    '-DDEVICE_TOKEN="T30gwzZJ6YTvQeLRMCZyTi-GBAYogsQV"'</pre>
+    </div>
+
+    <h3>Ishga tushish tartibi</h3>
+    <ol>
+      <li>ESP32 yoqilganda WiFi ga ulanadi</li>
+      <li><code>GET /api/device-config/{device_id}</code> — o'z konfiguratsiyasini so'raydi</li>
+      <li>Asosiy sensor/hisoblagichdan o'lchov o'qiydi</li>
+      <li><code>POST /api/readings</code> — backendga yuboradi</li>
+      <li>OTA check qiladi, yangi firmware bo'lsa yuklab o'rnatadi</li>
+    </ol>
+
+    <div class="callout callout-info">
+      <div class="callout-icon">ℹ️</div>
+      <p>Asosiy server ishlamasa, ESP32 backup serverlar ro'yxatidan qayta urinadi. Serverlar soni konfig orqali beriladi.</p>
+    </div>
+
+    <h3>O'lchov payload</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>JSON</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>{
+  <span class="at">"device_id"</span>:     <span class="st">"F42DC96D5820"</span>,
+  <span class="at">"utility_type"</span>:  <span class="st">"electricity"</span>,  <span class="cm">// "water" | "gas"</span>
+  <span class="at">"voltage"</span>:       <span class="nm">220.4</span>,
+  <span class="at">"current"</span>:       <span class="nm">1.82</span>,
+  <span class="at">"power"</span>:         <span class="nm">401.1</span>,
+  <span class="at">"energy_total"</span>:  <span class="nm">1842.5</span>,
+  <span class="at">"frequency"</span>:     <span class="nm">50.01</span>,
+  <span class="at">"power_factor"</span>:  <span class="nm">0.997</span>,
+  <span class="at">"ts"</span>:            <span class="nm">1720516200</span>
+}</pre>
+    </div>
+  </section>
+
+  <!-- ══════════════ BACKEND ══════════════ -->
+  <section id="backend">
+    <h2>Backend</h2>
+    <p>FastAPI + PostgreSQL + SQLAlchemy async. Repository/service arxitekturasi. Alembic migratsiyalar.</p>
+
+    <h3>Mustaqil ishlatish</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload</pre>
+    </div>
+
+    <h3>Testlar</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>cd backend
+pytest -v</pre>
+    </div>
+
+    <h3>Asosiy papkalar</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Papka</th><th>Maqsad</th></tr></thead>
+        <tbody>
+          <tr><td><code>routers/</code></td><td>HTTP endpointlar (auth, devices, readings, buildings, alerts, ota, backups…)</td></tr>
+          <tr><td><code>services/</code></td><td>Biznes logika — filter, sort, pagination, alert tekshirish</td></tr>
+          <tr><td><code>repositories/</code></td><td>DB so'rovlar, SQLAlchemy modellari</td></tr>
+          <tr><td><code>models/schemas.py</code></td><td>Pydantic request/response sxemalari</td></tr>
+          <tr><td><code>models/db_models.py</code></td><td>SQLAlchemy ORM modellari</td></tr>
+          <tr><td><code>alembic/</code></td><td>DB migratsiyalar</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ FRONTEND ══════════════ -->
+  <section id="frontend">
+    <h2>Frontend</h2>
+    <p>React + Vite + TypeScript. React Query — server state management. PWA qo'llab-quvvatlanadi.</p>
+
+    <h3>Ishga tushirish</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>cd meter-frontend
+pnpm install
+VITE_API_URL=http://localhost:8000 pnpm dev</pre>
+    </div>
+
+    <h3>Production build</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>VITE_API_URL=https://yourdomain.com pnpm build
+# dist/ → Docker backend static files sifatida serve qiladi</pre>
+    </div>
+
+    <div class="callout callout-warn">
+      <div class="callout-icon">⚠️</div>
+      <p><code>VITE_API_URL</code> build vaqtida o'rnatilishi shart. Runtime da o'zgartirib bo'lmaydi (Vite build-time env).</p>
+    </div>
+
+    <h3>Asosiy sahifalar</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sahifa</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td>Dashboard</td><td>Umumiy statistika, qurilmalar holati, grafik</td></tr>
+          <tr><td>Buildings</td><td>Binolar va measurement pointlar</td></tr>
+          <tr><td>Devices</td><td>Qurilmalar ro'yxati, qidirish, filter, sort, sahifalash</td></tr>
+          <tr><td>Alerts</td><td>Alertlar, tozalash, filtr</td></tr>
+          <tr><td>Users</td><td>Foydalanuvchilar boshqaruvi (admin)</td></tr>
+          <tr><td>OTA</td><td>Firmware katalog va batch rollout</td></tr>
+          <tr><td>Audit</td><td>Amallar jurnali</td></tr>
+          <tr><td>Backups</td><td>Backup yaratish, yuklab olish, restore</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ══════════════ API: AUTH ══════════════ -->
+  <section id="api-auth">
+    <h2>API — Autentifikatsiya</h2>
+
+    <h3><span class="method POST">POST</span> <code>/api/auth/login</code></h3>
+    <p>Username va parol bilan kirish. JWT access token qaytaradi.</p>
+    <div class="code-block">
+      <div class="code-lang"><span>JSON</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre><span class="cm">// Request</span>
+{ <span class="at">"username"</span>: <span class="st">"admin"</span>, <span class="at">"password"</span>: <span class="st">"Admin1234"</span> }
+
+<span class="cm">// Response</span>
+{ <span class="at">"access_token"</span>: <span class="st">"eyJ..."</span>, <span class="at">"token_type"</span>: <span class="st">"bearer"</span> }</pre>
+    </div>
+
+    <div class="callout callout-info">
+      <div class="callout-icon">ℹ️</div>
+      <p>Barcha himoyalangan endpointlarda <code>Authorization: Bearer &lt;token&gt;</code> header talab qilinadi.</p>
+    </div>
+
+    <h3><span class="method GET">GET</span> <code>/api/auth/users</code> <code class="method GET" style="font-size:11px">admin</code></h3>
+    <p>Foydalanuvchilar ro'yxati. <code>q</code>, <code>role</code>, <code>status</code>, <code>sort_by</code>, <code>sort_order</code>, <code>limit</code>, <code>offset</code> parametrlari qo'llab-quvvatlanadi.</p>
+  </section>
+
+  <!-- ══════════════ API: DEVICES ══════════════ -->
+  <section id="api-devices">
+    <h2>API — Qurilmalar</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/devices</code></td><td>Ro'yxat (q, sort, limit, offset)</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/devices</code></td><td>Yangi qurilma yaratish</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/devices/{id}</code></td><td>Bitta qurilma</td></tr>
+          <tr><td><span class="method PUT">PUT</span></td><td><code>/api/devices/{id}</code></td><td>Tahrirlash / binoga biriktirish</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/devices/{id}/latest</code></td><td>Oxirgi o'lchov</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/devices/{id}/history</code></td><td>O'lchov tarixi</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/device-config/{device_id}</code></td><td>ESP32 konfiguratsiya (tokensiz)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Yangi qurilma yaratish</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>JSON</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre><span class="cm">// POST /api/devices</span>
+{
+  <span class="at">"device_id"</span>:    <span class="st">"F42DC96D5820"</span>,
+  <span class="at">"utility_type"</span>: <span class="st">"electricity"</span>,
+  <span class="at">"name"</span>:         <span class="st">"1-bino asosiy hisoblagich"</span>
+}</pre>
+    </div>
+
+    <h3>O'lchov yuborish (ESP32)</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>curl -X POST http://localhost:8000/api/readings \
+  -H "X-Device-Token: your-device-token" \
+  -H "Content-Type: application/json" \
+  -d '{"device_id":"F42DC96D5820","utility_type":"electricity","voltage":220.4,"current":1.82,"power":401.1}'</pre>
+    </div>
+  </section>
+
+  <!-- ══════════════ API: READINGS ══════════════ -->
+  <section id="api-readings">
+    <h2>API — O'lchov ma'lumotlari</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/readings</code></td><td>O'lchov yuborish (ESP32, Device token)</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/summary</code></td><td>Umumiy statistika</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/analytics/hourly</code></td><td>Soatlik agregatsiya (utility_type, building_id)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ API: BUILDINGS ══════════════ -->
+  <section id="api-buildings">
+    <h2>API — Binolar</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/buildings</code></td><td>Barcha binolar</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/buildings</code></td><td>Bino yaratish</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/buildings/{id}</code></td><td>Bino detali</td></tr>
+          <tr><td><span class="method PUT">PUT</span></td><td><code>/api/buildings/{id}</code></td><td>Tahrirlash</td></tr>
+          <tr><td><span class="method DELETE">DELETE</span></td><td><code>/api/buildings/{id}</code></td><td>O'chirish</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ API: ALERTS ══════════════ -->
+  <section id="api-alerts">
+    <h2>API — Alertlar</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/alerts</code></td><td>Alert ro'yxati (type, severity, status filtrlari)</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/alerts/{id}/clear</code></td><td>Alertni yopish</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/alerts/rules</code></td><td>Alert qoidalari</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Alert turlari</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tip</th><th>Qachon</th></tr></thead>
+        <tbody>
+          <tr><td><code>device_offline</code></td><td>Qurilmadan uzoq vaqt o'lchov kelmasa</td></tr>
+          <tr><td><code>voltage_anomaly</code></td><td>Kuchlanish belgilangan chegaradan chiqsa</td></tr>
+          <tr><td><code>high_consumption</code></td><td>Quvvat sarfi kutilgandan yuqori</td></tr>
+          <tr><td><code>low_water_pressure</code></td><td>Suv bosimi minimumdan past</td></tr>
+          <tr><td><code>gas_pressure_critical</code></td><td>Gaz bosimi kritik chegarada</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Bildirishnoma kanallari</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>ENV</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>ALERT_NOTIFICATION_CHANNELS=internal,telegram
+TELEGRAM_BOT_TOKEN=1234567890:ABC...
+TELEGRAM_CHAT_ID=-1001234567890
+ALERT_WEBHOOK_URL=https://hooks.example.com/meter</pre>
+    </div>
+  </section>
+
+  <!-- ══════════════ API: OTA ══════════════ -->
+  <section id="api-ota">
+    <h2>API — OTA Firmware</h2>
+    <p>OTA printer driver katalogiga o'xshash ishlaydi: admin firmware yuklaydi, ESP32 o'z profiliga mos versiyani topadi va yuklab o'rnatadi.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/ota/upload</code></td><td>Firmware .bin yuklash</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/ota/list</code></td><td>Firmware ro'yxati</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/ota/batches</code></td><td>OTA batch yaratish</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/ota/batches/{id}/process</code></td><td>Batch ishga tushirish</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/ota/batches/{id}/cancel</code></td><td>Batch bekor qilish</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/ota/report</code></td><td>ESP32 OTA natijasini yuboradi</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ API: BACKUPS ══════════════ -->
+  <section id="api-backups">
+    <h2>API — Backup</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Tavsif</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/backups</code></td><td>Manual backup yaratish</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/backups</code></td><td>Backup ro'yxati</td></tr>
+          <tr><td><span class="method GET">GET</span></td><td><code>/api/backups/download/{filename}</code></td><td>Yuklab olish</td></tr>
+          <tr><td><span class="method POST">POST</span></td><td><code>/api/backups/restore/{filename}?confirm=RESTORE</code></td><td>Restore qilish</td></tr>
+          <tr><td><span class="method DELETE">DELETE</span></td><td><code>/api/backups/{filename}</code></td><td>O'chirish</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-danger">
+      <div class="callout-icon">🚨</div>
+      <p>Restore xavfli amal. <code>?confirm=RESTORE</code> query parametri majburiy — tasodifiy restore oldini oladi.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ WEBSOCKET ══════════════ -->
+  <section id="websocket">
+    <h2>WebSocket</h2>
+    <p>Frontend initial ma'lumotlarni HTTP orqali oladi. WebSocket esa React Query cache'ni yangilaydi yoki invalidate qiladi — polling emas, push-based.</p>
+
+    <h3>Ulanish</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>TEXT</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>WS /ws?token=&lt;jwt_access_token&gt;</pre>
+    </div>
+
+    <h3>Eventlar</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Event</th><th>Qachon yuboriladi</th><th>Frontend ta'siri</th></tr></thead>
+        <tbody>
+          <tr><td><code>snapshot</code></td><td>Ulanish paytida</td><td>devices va alerts cache'ni boshlang'ich to'ldiradi</td></tr>
+          <tr><td><code>device_online</code></td><td>Qurilma register yoki ping</td><td>device online/last_seen yangilanadi</td></tr>
+          <tr><td><code>device_offline</code></td><td>Qurilma timeout</td><td>device status offline</td></tr>
+          <tr><td><code>device_updated</code></td><td>Qurilma ma'lumotlari o'zgarsa</td><td>devices, summary invalidate</td></tr>
+          <tr><td><code>reading</code></td><td>Yangi o'lchov kelsa</td><td>latest reading yangilanadi</td></tr>
+          <tr><td><code>readings_batch</code></td><td>Batch o'lchov</td><td>hourly, summary invalidate</td></tr>
+          <tr><td><code>alert</code></td><td>Yangi alert</td><td>alerts, summary invalidate</td></tr>
+          <tr><td><code>firmware</code></td><td>Firmware yuklansa</td><td>OTA katalog invalidate</td></tr>
+          <tr><td><code>ota_report</code></td><td>ESP32 OTA natijasi</td><td>OTA batch invalidate</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>reading event namunasi</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>JSON</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>{
+  <span class="at">"type"</span>:       <span class="st">"reading"</span>,
+  <span class="at">"device_id"</span>:  <span class="st">"F42DC96D5820"</span>,
+  <span class="at">"utility_type"</span>: <span class="st">"electricity"</span>,
+  <span class="at">"data"</span>: {
+    <span class="at">"voltage"</span>: <span class="nm">220.4</span>,
+    <span class="at">"current"</span>: <span class="nm">1.82</span>,
+    <span class="at">"power"</span>:   <span class="nm">401.1</span>,
+    <span class="at">"ts"</span>:      <span class="nm">1720516200</span>
+  }
+}</pre>
+    </div>
+  </section>
+
+  <hr />
+
+  <!-- ══════════════ ENV ══════════════ -->
+  <section id="env">
+    <h2>Muhit o'zgaruvchilari</h2>
+
+    <div class="code-block">
+      <div class="code-lang"><span>.env</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre><span class="cm"># Database</span>
+DATABASE_URL=postgresql+asyncpg://meter:meter_password@db:5432/meter_monitor
+
+<span class="cm"># Xavfsizlik (productionda albatta o'zgartiring)</span>
+SECRET_KEY=<span class="st">your-very-long-random-secret-key-here</span>
+DEVICE_API_TOKEN=<span class="st">your-device-token-here</span>
+
+<span class="cm"># Admin hisobi (bootstrap)</span>
+BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_PASSWORD=Admin1234
+
+<span class="cm"># Alert kanallari</span>
+ALERT_NOTIFICATION_CHANNELS=internal
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+ALERT_WEBHOOK_URL=
+
+<span class="cm"># Application</span>
+APP_ENV=production
+LOG_LEVEL=INFO</pre>
+    </div>
+
+    <div class="callout callout-danger">
+      <div class="callout-icon">🚨</div>
+      <p>Production da <code>SECRET_KEY</code> va <code>DEVICE_API_TOKEN</code> default qiymatlar bilan qolmasin. Kamida 32 ta tasodifiy belgi ishlating: <code>openssl rand -hex 32</code></p>
+    </div>
+  </section>
+
+  <!-- ══════════════ PRODUCTION ══════════════ -->
+  <section id="production">
+    <h2>Production Deployment</h2>
+
+    <h3>Minimal talablar</h3>
+    <ul>
+      <li>PostgreSQL 15+ (SQLite faqat development)</li>
+      <li>RAM: 512 MB+, CPU: 1 core+</li>
+      <li>HTTPS — reverse proxy (nginx / Caddy)</li>
+      <li>Persistent volume: <code>/app/data</code> (firmware va backup fayllar)</li>
+    </ul>
+
+    <h3>Docker Compose (production)</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>docker compose -f docker-compose.yml up -d --build
+docker compose exec backend alembic upgrade head</pre>
+    </div>
+
+    <h3>Migratsiya (yangi versiya)</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>docker compose exec backend alembic upgrade head</pre>
+    </div>
+
+    <h3>Checklist</h3>
+    <ul>
+      <li>✅ <code>SECRET_KEY</code> o'zgartirilgan (<code>openssl rand -hex 32</code>)</li>
+      <li>✅ <code>DEVICE_API_TOKEN</code> o'zgartirilgan</li>
+      <li>✅ Admin parol o'zgartirilgan</li>
+      <li>✅ <code>APP_ENV=production</code></li>
+      <li>✅ HTTPS sozlangan</li>
+      <li>✅ PostgreSQL persistent volume</li>
+      <li>✅ Backup yo'nalishi persistent volume</li>
+      <li>✅ <code>alembic upgrade head</code> ishga tushirilgan</li>
+    </ul>
+
+    <div class="callout callout-ok">
+      <div class="callout-icon">✅</div>
+      <p>GitHub Actions CI/CD orqali backend va frontend avtomatik deploy qilinadi. <code>main</code> branchga push = production deploy.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ MONITORING ══════════════ -->
+  <section id="monitoring">
+    <h2>Monitoring</h2>
+
+    <h3>Health check</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>curl http://localhost:8000/health
+# {"status": "ok", "db": "ok", "version": "1.0.0"}</pre>
+    </div>
+
+    <h3>Loglar</h3>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>docker compose logs -f backend     # Backend log
+docker compose logs -f db          # PostgreSQL log</pre>
+    </div>
+
+    <h3>Audit log</h3>
+    <p>Barcha muhim amallar (login, qurilma tahrirlash, restore, OTA) audit jurnaliga yoziladi.</p>
+    <div class="code-block">
+      <div class="code-lang"><span>BASH</span><button class="copy-btn" onclick="copyCode(this)">Nusxalash</button></div>
+      <pre>GET /api/audit-logs?limit=50&sort_by=created_at&sort_order=desc</pre>
+    </div>
+  </section>
+
+</main>
+
+<!-- ON-PAGE TOC -->
+<nav class="toc" id="pageToc">
+  <div class="toc-label">Ushbu sahifada</div>
+  <a class="toc-item" href="#intro">Kirish</a>
+  <a class="toc-item" href="#architecture">Arxitektura</a>
+  <a class="toc-item" href="#quickstart">Tezkor Boshlash</a>
+  <a class="toc-item" href="#desktop">Desktop App</a>
+  <a class="toc-item" href="#esp32">ESP32 Firmware</a>
+  <a class="toc-item" href="#backend">Backend</a>
+  <a class="toc-item" href="#frontend">Frontend</a>
+  <a class="toc-item" href="#api-auth">Auth API</a>
+  <a class="toc-item" href="#api-devices">Devices API</a>
+  <a class="toc-item" href="#api-readings">Readings API</a>
+  <a class="toc-item" href="#api-buildings">Buildings API</a>
+  <a class="toc-item" href="#api-alerts">Alerts API</a>
+  <a class="toc-item" href="#api-ota">OTA API</a>
+  <a class="toc-item" href="#api-backups">Backup API</a>
+  <a class="toc-item" href="#websocket">WebSocket</a>
+  <a class="toc-item" href="#env">Env</a>
+  <a class="toc-item" href="#production">Production</a>
+  <a class="toc-item" href="#monitoring">Monitoring</a>
+</nav>
+
+</div><!-- /layout -->
+
+<script>
+// Active sidebar on scroll
+const sections = document.querySelectorAll('section[id]');
+const navItems = document.querySelectorAll('.nav-item');
+const tocItems = document.querySelectorAll('.toc-item');
+
+function setActive(id) {
+  navItems.forEach(el => {
+    el.classList.toggle('active', el.getAttribute('href') === '#' + id);
+  });
+  tocItems.forEach(el => {
+    el.classList.toggle('active', el.getAttribute('href') === '#' + id);
+  });
+}
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id); });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// Copy code
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.textContent = 'Nusxalandi!';
+    setTimeout(() => btn.textContent = 'Nusxalash', 1800);
+  });
+}
+
+// Search (simple highlight)
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  if (!q) { document.querySelectorAll('mark').forEach(m => m.outerHTML = m.innerHTML); return; }
+});
+
+// Keyboard shortcut ⌘K focus search
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+  }
+});
+</script>
+
+</body>
+</html>
