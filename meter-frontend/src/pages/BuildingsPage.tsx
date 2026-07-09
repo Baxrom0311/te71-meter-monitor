@@ -11,6 +11,22 @@ import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 
+// Google Maps URL dan lat/lng ajratish
+function parseCoordsFromMapsUrl(url: string): { lat: string; lng: string } | null {
+  try {
+    // @lat,lng,zoom  →  google.com/maps/@41.299,69.240,17z
+    const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+    if (atMatch) return { lat: atMatch[1], lng: atMatch[2] }
+    // ?q=lat,lng  →  maps.google.com/maps?q=41.299,69.240
+    const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+    if (qMatch) return { lat: qMatch[1], lng: qMatch[2] }
+    // ll=lat,lng
+    const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/)
+    if (llMatch) return { lat: llMatch[1], lng: llMatch[2] }
+  } catch {}
+  return null
+}
+
 export default function BuildingsPage() {
   const { data: buildings, isLoading, isError, error: queryError, refetch } = useBuildings()
   const { isAdmin } = useAuth()
@@ -27,6 +43,15 @@ export default function BuildingsPage() {
   const [mapsUrl, setMapsUrl] = useState('')
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
+
+  const handleMapsUrlChange = (url: string) => {
+    setMapsUrl(url)
+    const coords = parseCoordsFromMapsUrl(url)
+    if (coords) {
+      setLatitude(coords.lat)
+      setLongitude(coords.lng)
+    }
+  }
   const [floors, setFloors] = useState(1)
   const [entrancesCount, setEntrancesCount] = useState(1)
   const [description, setDescription] = useState('')
@@ -334,15 +359,25 @@ export default function BuildingsPage() {
                     <input
                       type="url"
                       value={mapsUrl}
-                      onChange={(e) => setMapsUrl(e.target.value)}
-                      placeholder="https://maps.google.com/..."
+                      onChange={(e) => handleMapsUrlChange(e.target.value)}
+                      placeholder="https://maps.google.com/... yoki maps.app.goo.gl/..."
                       className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
                     />
+                    {mapsUrl && !latitude && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {mapsUrl.includes('goo.gl') || mapsUrl.includes('maps.app')
+                          ? 'Qisqa link — koordinatni qo\'lda kiriting (ixtiyoriy)'
+                          : 'Koordinata aniqlanmadi — qo\'lda kiriting (ixtiyoriy)'}
+                      </p>
+                    )}
+                    {mapsUrl && latitude && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Koordinata avtomatik aniqlandi</p>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Latitude</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Latitude <span className="text-gray-400">(ixtiyoriy)</span></label>
                     <input
                       type="number"
                       step="any"
@@ -355,7 +390,7 @@ export default function BuildingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Longitude</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Longitude <span className="text-gray-400">(ixtiyoriy)</span></label>
                     <input
                       type="number"
                       step="any"

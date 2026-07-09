@@ -11,6 +11,7 @@ import apiClient from '@/lib/api'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
+import { UtilityChartsPanel } from '@/components/UtilityChartsPanel'
 
 export default function BuildingDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -48,6 +49,18 @@ export default function BuildingDetailPage() {
   const [editMapsUrl, setEditMapsUrl] = useState('')
   const [editLatitude, setEditLatitude] = useState('')
   const [editLongitude, setEditLongitude] = useState('')
+
+  const handleEditMapsUrlChange = (url: string) => {
+    setEditMapsUrl(url)
+    try {
+      const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+      if (atMatch) { setEditLatitude(atMatch[1]); setEditLongitude(atMatch[2]); return }
+      const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+      if (qMatch) { setEditLatitude(qMatch[1]); setEditLongitude(qMatch[2]); return }
+      const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/)
+      if (llMatch) { setEditLatitude(llMatch[1]); setEditLongitude(llMatch[2]) }
+    } catch {}
+  }
   const [editFloors, setEditFloors] = useState(1)
   const [editEntrancesCount, setEditEntrancesCount] = useState(1)
   const [editDescription, setEditDescription] = useState('')
@@ -267,6 +280,12 @@ export default function BuildingDetailPage() {
               )}
             </div>
 
+            <UtilityChartsPanel
+              buildingId={buildingIdInt}
+              title={`${building.name} bo‘yicha sarf grafiklari`}
+              subtitle="Ushbu binoga biriktirilgan elektr, suv va gaz qurilmalari bo‘yicha oxirgi 24 soat"
+            />
+
             {/* Connected Devices List */}
             <div className="glass-card rounded-xl p-6 shadow space-y-4">
               <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
@@ -298,7 +317,7 @@ export default function BuildingDetailPage() {
                   <table className="w-full text-sm text-left">
                     <thead>
                       <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-650 dark:text-gray-400 font-semibold">
-                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Holat</th>
                         <th className="px-6 py-4">Qurilma nomi / ID</th>
                         <th className="px-6 py-4">Turi</th>
                         <th className="px-6 py-4">IP manzil</th>
@@ -399,15 +418,21 @@ export default function BuildingDetailPage() {
                     <input
                       type="url"
                       value={editMapsUrl}
-                      onChange={(e) => setEditMapsUrl(e.target.value)}
-                      placeholder="https://maps.google.com/..."
+                      onChange={(e) => handleEditMapsUrlChange(e.target.value)}
+                      placeholder="https://maps.google.com/... yoki maps.app.goo.gl/..."
                       className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
                     />
+                    {editMapsUrl && editLatitude && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Koordinata avtomatik aniqlandi</p>
+                    )}
+                    {editMapsUrl && !editLatitude && (
+                      <p className="text-xs text-gray-500 mt-1">Qisqa link — koordinatni qo'lda kiriting (ixtiyoriy)</p>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Latitude</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Latitude <span className="text-gray-400">(ixtiyoriy)</span></label>
                     <input
                       type="number"
                       step="any"
@@ -419,7 +444,7 @@ export default function BuildingDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Longitude</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Longitude <span className="text-gray-400">(ixtiyoriy)</span></label>
                     <input
                       type="number"
                       step="any"
