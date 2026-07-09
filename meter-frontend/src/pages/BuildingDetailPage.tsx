@@ -47,20 +47,6 @@ export default function BuildingDetailPage() {
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
   const [editMapsUrl, setEditMapsUrl] = useState('')
-  const [editLatitude, setEditLatitude] = useState('')
-  const [editLongitude, setEditLongitude] = useState('')
-
-  const handleEditMapsUrlChange = (url: string) => {
-    setEditMapsUrl(url)
-    try {
-      const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
-      if (atMatch) { setEditLatitude(atMatch[1]); setEditLongitude(atMatch[2]); return }
-      const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
-      if (qMatch) { setEditLatitude(qMatch[1]); setEditLongitude(qMatch[2]); return }
-      const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/)
-      if (llMatch) { setEditLatitude(llMatch[1]); setEditLongitude(llMatch[2]) }
-    } catch {}
-  }
   const [editFloors, setEditFloors] = useState(1)
   const [editEntrancesCount, setEditEntrancesCount] = useState(1)
   const [editDescription, setEditDescription] = useState('')
@@ -134,8 +120,6 @@ export default function BuildingDetailPage() {
     setEditName(building.name)
     setEditAddress(building.address ?? '')
     setEditMapsUrl(building.maps_url ?? '')
-    setEditLatitude(building.latitude?.toString() ?? '')
-    setEditLongitude(building.longitude?.toString() ?? '')
     setEditFloors(building.floors)
     setEditEntrancesCount(building.entrances_count)
     setEditDescription(building.description ?? '')
@@ -154,8 +138,6 @@ export default function BuildingDetailPage() {
         name: editName,
         address: editAddress || null,
         maps_url: editMapsUrl || null,
-        latitude: editLatitude ? Number(editLatitude) : null,
-        longitude: editLongitude ? Number(editLongitude) : null,
         floors: editFloors,
         entrances_count: editEntrancesCount,
         description: editDescription || null,
@@ -418,43 +400,10 @@ export default function BuildingDetailPage() {
                     <input
                       type="url"
                       value={editMapsUrl}
-                      onChange={(e) => handleEditMapsUrlChange(e.target.value)}
-                      placeholder="https://maps.google.com/... yoki maps.app.goo.gl/..."
+                      onChange={(e) => setEditMapsUrl(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/..."
                       className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
                     />
-                    {editMapsUrl && editLatitude && (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Koordinata avtomatik aniqlandi</p>
-                    )}
-                    {editMapsUrl && !editLatitude && (
-                      <p className="text-xs text-gray-500 mt-1">Qisqa link — koordinatni qo'lda kiriting (ixtiyoriy)</p>
-                    )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Latitude <span className="text-gray-400">(ixtiyoriy)</span></label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={-90}
-                      max={90}
-                      value={editLatitude}
-                      onChange={(e) => setEditLatitude(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Longitude <span className="text-gray-400">(ixtiyoriy)</span></label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={-180}
-                      max={180}
-                      value={editLongitude}
-                      onChange={(e) => setEditLongitude(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
