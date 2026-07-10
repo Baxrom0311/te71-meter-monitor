@@ -21,9 +21,14 @@ function emitStatus(status: WebSocketConnectionStatus) {
 
 function getWebSocketURL(): string {
   const token = getTokenFromStorage()
-  const protocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws'
-  const host = new URL(API_BASE_URL).host
-  return `${protocol}://${host}/ws?token=${token}`
+  if (API_BASE_URL) {
+    const protocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws'
+    const host = new URL(API_BASE_URL).host
+    return `${protocol}://${host}/ws?token=${token}`
+  }
+  // same-origin fallback
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${protocol}://${window.location.host}/ws?token=${token}`
 }
 
 function connect() {
