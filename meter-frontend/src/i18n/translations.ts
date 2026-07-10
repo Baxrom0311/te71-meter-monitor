@@ -10,7 +10,6 @@ export const translations = {
     audit: 'Audit jurnali',
     settings: 'Sozlamalar',
     chat: 'AI Yordamchi',
-    guide: 'O\'rnatish qo\'llanmasi',
     analytics: 'Tahlil (Analytics)',
   },
 

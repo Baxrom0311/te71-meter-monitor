@@ -11,7 +11,6 @@ type PageKey =
   | 'audit'
   | 'settings'
   | 'chat'
-  | 'guide'
   | 'analytics'
 
 const pageLoaders = {
@@ -27,7 +26,6 @@ const pageLoaders = {
   audit: () => import('@/pages/AuditPage'),
   settings: () => import('@/pages/SettingsPage'),
   chat: () => import('@/pages/ChatPage'),
-  guide: () => import('@/pages/InstallGuidePage'),
   analytics: () => import('@/pages/AnalyticsPage'),
 } satisfies Record<PageKey, () => Promise<{ default: ComponentType }>>
 
@@ -50,7 +48,6 @@ function routeToPageKey(path: string): PageKey {
   if (path === '/audit') return 'audit'
   if (path === '/settings') return 'settings'
   if (path === '/chat') return 'chat'
-  if (path === '/guide') return 'guide'
   if (path === '/analytics') return 'analytics'
   return 'dashboard'
 }

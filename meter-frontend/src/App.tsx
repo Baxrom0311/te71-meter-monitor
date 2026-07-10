@@ -25,7 +25,6 @@ const UsersPage = lazy(() => loadPage('users'))
 const AuditPage = lazy(() => loadPage('audit'))
 const SettingsPage = lazy(() => loadPage('settings'))
 const ChatPage = lazy(() => loadPage('chat'))
-const InstallGuidePage = lazy(() => loadPage('guide'))
 const AnalyticsPage = lazy(() => loadPage('analytics'))
 
 const queryClient = new QueryClient({
@@ -104,7 +103,6 @@ export default function App() {
                     <Route path="/audit" element={<ProtectedRoute requireAdmin><AuditPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-                    <Route path="/guide" element={<ProtectedRoute><InstallGuidePage /></ProtectedRoute>} />
                     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
