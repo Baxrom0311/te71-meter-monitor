@@ -64,7 +64,6 @@ export default function LoginPage() {
           style={{ color: isDark ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.11)' }}
         />
         <div className="absolute inset-0 bg-dashboard-circuit animate-circuit-drift" />
-        <div className="absolute inset-0 utility-atmosphere" />
         <div className="absolute inset-x-0 top-0 h-full bg-dashboard-scan animate-scanline" />
         <div className="absolute left-[28%] top-0 h-full w-px bg-signal-column animate-signal-column" />
         <div className="absolute left-[72%] top-0 h-full w-px bg-signal-column animate-signal-column-delayed" />

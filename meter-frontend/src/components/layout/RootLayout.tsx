@@ -32,7 +32,6 @@ export function RootLayout({ children }: RootLayoutProps) {
         />
 
         <div className="absolute inset-0 bg-dashboard-circuit animate-circuit-drift" />
-        <div className="absolute inset-0 utility-atmosphere" />
         <div className="absolute inset-x-0 top-0 h-full bg-dashboard-scan animate-scanline" />
         <div className="absolute left-[18%] top-0 h-full w-px bg-signal-column animate-signal-column" />
         <div className="absolute left-[58%] top-0 h-full w-px bg-signal-column animate-signal-column-delayed" />
