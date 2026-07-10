@@ -84,7 +84,7 @@ export default function LoginPage() {
             <div className={clsx("w-9 h-9 rounded-lg flex items-center justify-center shadow-lg", isDark ? "bg-blue-600 shadow-blue-500/20" : "bg-white/20 shadow-black/10")}>
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-wider text-white">TE71 Meter</span>
+            <span className="font-bold text-lg tracking-wider text-white">SmartBino</span>
           </div>
 
           <div className="space-y-6 my-auto">
@@ -111,14 +111,14 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <p className={clsx("text-xs", isDark ? "text-gray-500" : "text-blue-200")}>© {new Date().getFullYear()} TE71 Meter. Barcha huquqlar himoyalangan.</p>
+          <p className={clsx("text-xs", isDark ? "text-gray-500" : "text-blue-200")}>© {new Date().getFullYear()} SmartBino. Barcha huquqlar himoyalangan.</p>
         </div>
 
         <div className="flex flex-col justify-center p-8 md:p-12 bg-white/20 dark:bg-gray-900/40">
           <div className="mb-8">
             <div className="md:hidden flex items-center gap-2 mb-4 justify-center">
               <Zap className="w-6 h-6 text-blue-500" />
-              <span className="font-bold text-xl text-gray-950 dark:text-white">TE71 Meter</span>
+              <span className="font-bold text-xl text-gray-950 dark:text-white">SmartBino</span>
             </div>
             <h3 className="text-2xl font-bold text-gray-950 dark:text-gray-100">{translations.login.title}</h3>
             <p className="text-gray-500 dark:text-gray-450 text-sm mt-1">{translations.login.subtitle}</p>

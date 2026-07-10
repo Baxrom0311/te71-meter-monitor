@@ -15,8 +15,8 @@ export const translations = {
 
   // Login
   login: {
-    title: 'Meter Monitor',
-    subtitle: 'Elektr hisoblagich monitoring tizimi',
+    title: 'SmartBino',
+    subtitle: 'Kommunal monitoring tizimi',
     username: 'Foydalanuvchi nomi',
     password: 'Parol',
     signIn: 'Kirish',

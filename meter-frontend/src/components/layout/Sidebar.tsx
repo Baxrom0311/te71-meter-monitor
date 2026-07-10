@@ -168,7 +168,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
           {/* Logo */}
           <div>
             <span className={clsx('font-bold text-lg leading-none block', isDark ? 'text-gray-100' : 'text-gray-900')}>
-              TE71 Meter
+              SmartBino
             </span>
             <span className="text-[10px] font-semibold uppercase text-blue-500 tracking-widest">Live telemetry</span>
           </div>
@@ -230,7 +230,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
             {!isCollapsed && (
               <div className="min-w-0">
                 <span className={clsx('text-xl font-bold leading-tight block truncate', isDark ? 'text-gray-100' : 'text-gray-900')}>
-                  TE71 Meter
+                  SmartBino
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-blue-500">
                   <Activity className="w-3 h-3" />
@@ -440,7 +440,7 @@ export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps)
               <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-base font-extrabold text-gray-950 dark:text-gray-100 leading-none">TE71 Meter</p>
+              <p className="text-base font-extrabold text-gray-950 dark:text-gray-100 leading-none">SmartBino</p>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-500 mt-1">Live stack</p>
             </div>
           </Link>

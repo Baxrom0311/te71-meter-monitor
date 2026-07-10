@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-icon.png', 'icon-dark-32x32.png', 'icon-light-32x32.png'],
       manifest: {
-        name: 'TE71 Meter Monitor',
-        short_name: 'TE71 Meter',
-        description: 'Elektr, suv va gaz monitoring platformasi',
+        name: 'SmartBino',
+        short_name: 'SmartBino',
+        description: 'Kommunal monitoring tizimi — elektr, suv va gaz nazorati',
         theme_color: '#030712',
         background_color: '#030712',
         display: 'standalone',
