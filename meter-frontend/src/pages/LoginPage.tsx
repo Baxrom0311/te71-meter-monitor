@@ -57,18 +57,6 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
-      <div className="absolute inset-0 pointer-events-none dashboard-background">
-        <div className="absolute inset-0 bg-dashboard-base" />
-        <div
-          className="absolute inset-0 bg-dashboard-grid animate-grid-pulse"
-          style={{ color: isDark ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.11)' }}
-        />
-        <div className="absolute inset-0 bg-dashboard-circuit animate-circuit-drift" />
-        <div className="absolute inset-0 utility-atmosphere" />
-        <div className="absolute inset-x-0 top-0 h-full bg-dashboard-scan animate-scanline" />
-        <div className="absolute left-[28%] top-0 h-full w-px bg-signal-column animate-signal-column" />
-        <div className="absolute left-[72%] top-0 h-full w-px bg-signal-column animate-signal-column-delayed" />
-      </div>
 
       {/* Main Grid Wrapper */}
       <div className="relative z-10 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 rounded-2xl border border-gray-300 dark:border-gray-800 bg-white/40 dark:bg-gray-900/50 backdrop-blur-xl shadow-2xl overflow-hidden min-h-[500px]">
