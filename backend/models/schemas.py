@@ -69,6 +69,22 @@ class BuildingCreate(BaseModel):
     floors: int = Field(1, ge=1)
     entrances_count: int = Field(1, ge=1)
     description: Optional[str] = None
+    # O'zimizdan qo'shimcha
+    image_url: Optional[str] = Field(None, max_length=1000)
+    total_apartments: Optional[int] = Field(None, ge=1)
+    construction_year: Optional[int] = Field(None, ge=1800, le=2100)
+    # Urganchshahar integratsiya
+    organization_name: Optional[str] = Field(None, max_length=255)
+    mahalla_name: Optional[str] = Field(None, max_length=255)
+    street_name: Optional[str] = Field(None, max_length=255)
+    object_type: Optional[str] = Field(None, max_length=255)
+    polygon_coordinate: Optional[str] = None
+    is_official: Optional[bool] = None
+    ext_sensor_temp_out: Optional[float] = None
+    ext_sensor_temp_in: Optional[float] = None
+    ext_sensor_pressure: Optional[str] = Field(None, max_length=50)
+    ext_sensor_online: Optional[bool] = None
+    ext_sensor_updated_at: Optional[str] = Field(None, max_length=100)
 
 
 class BuildingUpdate(BaseModel):
@@ -81,6 +97,22 @@ class BuildingUpdate(BaseModel):
     entrances_count: Optional[int] = Field(None, ge=1)
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    # O'zimizdan qo'shimcha
+    image_url: Optional[str] = Field(None, max_length=1000)
+    total_apartments: Optional[int] = Field(None, ge=1)
+    construction_year: Optional[int] = Field(None, ge=1800, le=2100)
+    # Urganchshahar integratsiya
+    organization_name: Optional[str] = Field(None, max_length=255)
+    mahalla_name: Optional[str] = Field(None, max_length=255)
+    street_name: Optional[str] = Field(None, max_length=255)
+    object_type: Optional[str] = Field(None, max_length=255)
+    polygon_coordinate: Optional[str] = None
+    is_official: Optional[bool] = None
+    ext_sensor_temp_out: Optional[float] = None
+    ext_sensor_temp_in: Optional[float] = None
+    ext_sensor_pressure: Optional[str] = Field(None, max_length=50)
+    ext_sensor_online: Optional[bool] = None
+    ext_sensor_updated_at: Optional[str] = Field(None, max_length=100)
 
 
 class BuildingUtilityCreate(BaseModel):
@@ -159,6 +191,22 @@ class BuildingResponse(BaseModel):
     is_active: bool
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
+    # O'zimizdan qo'shimcha
+    image_url: Optional[str] = None
+    total_apartments: Optional[int] = None
+    construction_year: Optional[int] = None
+    # Urganchshahar integratsiya
+    organization_name: Optional[str] = None
+    mahalla_name: Optional[str] = None
+    street_name: Optional[str] = None
+    object_type: Optional[str] = None
+    polygon_coordinate: Optional[str] = None
+    is_official: Optional[bool] = None
+    ext_sensor_temp_out: Optional[float] = None
+    ext_sensor_temp_in: Optional[float] = None
+    ext_sensor_pressure: Optional[str] = None
+    ext_sensor_online: Optional[bool] = None
+    ext_sensor_updated_at: Optional[str] = None
 
 
 class BuildingCreateResponse(BaseModel):

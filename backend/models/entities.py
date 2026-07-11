@@ -34,6 +34,24 @@ class Building(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # O'zimizdan qo'shimcha
+    image_url: Mapped[str | None] = mapped_column(String(1000))
+    total_apartments: Mapped[int | None] = mapped_column(Integer)
+    construction_year: Mapped[int | None] = mapped_column(Integer)
+
+    # Urganchshahar integratsiya maydonlari
+    organization_name: Mapped[str | None] = mapped_column(String(255))
+    mahalla_name: Mapped[str | None] = mapped_column(String(255))
+    street_name: Mapped[str | None] = mapped_column(String(255))
+    object_type: Mapped[str | None] = mapped_column(String(255))
+    polygon_coordinate: Mapped[str | None] = mapped_column(Text)
+    is_official: Mapped[bool | None] = mapped_column(Boolean)
+    ext_sensor_temp_out: Mapped[float | None] = mapped_column(Float)
+    ext_sensor_temp_in: Mapped[float | None] = mapped_column(Float)
+    ext_sensor_pressure: Mapped[str | None] = mapped_column(String(50))
+    ext_sensor_online: Mapped[bool | None] = mapped_column(Boolean)
+    ext_sensor_updated_at: Mapped[str | None] = mapped_column(String(100))
+
     utilities: Mapped[list["BuildingUtility"]] = relationship(back_populates="building")
     measurement_points: Mapped[list["MeasurementPoint"]] = relationship(back_populates="building")
     devices: Mapped[list["Device"]] = relationship(back_populates="building")

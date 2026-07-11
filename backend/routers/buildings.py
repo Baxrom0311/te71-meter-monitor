@@ -100,7 +100,6 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
             try:
                 import json as _json
                 poly = _json.loads(h.get("polygonCoordinate") or "[]")
-                # [[[ [lat, lon], ... ]]] yoki [[[ [lon, lat], ... ]]]
                 coords = poly[0][0] if poly and poly[0] else []
                 if coords:
                     lats = [c[0] for c in coords]
@@ -109,8 +108,12 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
                     lon = sum(lons) / len(lons)
             except Exception:
                 pass
-        desc_parts = [h.get("objectName"), h.get("organizationName"), h.get("mahallaName")]
-        desc = " · ".join(p for p in desc_parts if p)
+
+        # sensorData maydonlarini ajratish
+        sensor = h.get("sensorData") or {}
+        def _float(v):
+            try: return float(v) if v not in (None, "", "0") else None
+            except Exception: return None
 
         body = BuildingCreate(
             name=name[:255],
@@ -118,7 +121,19 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
             maps_url=ext_key,
             latitude=float(lat) if lat else None,
             longitude=float(lon) if lon else None,
-            description=desc or None,
+            description=(h.get("objectName") or None),
+            # Urganchshahar integratsiya
+            organization_name=(h.get("organizationName") or None),
+            mahalla_name=(h.get("mahallaName") or None),
+            street_name=(h.get("streetName") or None),
+            object_type=(h.get("objectName") or None),
+            polygon_coordinate=(h.get("polygonCoordinate") or None),
+            is_official=bool(h.get("isOfficial")),
+            ext_sensor_temp_out=_float(sensor.get("temperatureO")),
+            ext_sensor_temp_in=_float(sensor.get("temperatureI")),
+            ext_sensor_pressure=(str(sensor["pressure"]) if sensor.get("pressure") is not None else None),
+            ext_sensor_online=(bool(sensor.get("online")) if sensor else None),
+            ext_sensor_updated_at=(sensor.get("dateTime") or None),
         )
         await building_service.create_building(body)
         created += 1
