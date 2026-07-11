@@ -5,6 +5,10 @@ set -e
 
 : "${SERVER:?SERVER kerak, masalan: SERVER=root@1.2.3.4}"
 REMOTE="${REMOTE:-/root/meter_backend}"
+SSH_KEY="${SSH_KEY:-$HOME/docean}"
+SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no"
+SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
+RPATH="export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND="${BACKEND:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$BACKEND/.." && pwd)}"
@@ -23,11 +27,15 @@ if grep -Eq 'CHANGE_ME|change-in-prod|Admin1234' "$ENV_FILE"; then
 fi
 
 echo "=== 1. Backend sync ==="
-ssh "$SERVER" "mkdir -p $REMOTE/data $REMOTE/firmware $REMOTE/backups $REMOTE/frontend"
-rsync -avz --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' \
+$SSH "$SERVER" "$RPATH && mkdir -p $REMOTE/data $REMOTE/firmware $REMOTE/backups $REMOTE/frontend"
+COPYFILE_DISABLE=1 tar czf /tmp/meter_backend.tar.gz \
+  --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' \
   --exclude='venv' --exclude='data' --exclude='backups' --exclude='firmware' \
-  --exclude='tests' --exclude='deploy' \
-  "$BACKEND/" "$SERVER:$REMOTE/"
+  --exclude='tests' --exclude='deploy' --exclude='._*' \
+  -C "$BACKEND" .
+$SCP /tmp/meter_backend.tar.gz "$SERVER:/tmp/meter_backend.tar.gz"
+$SSH "$SERVER" "$RPATH && cd $REMOTE && tar xzf /tmp/meter_backend.tar.gz && rm /tmp/meter_backend.tar.gz"
+rm /tmp/meter_backend.tar.gz
 
 if [[ ! -f "$FRONTEND/index.html" ]]; then
   echo "Frontend build topilmadi: $FRONTEND/index.html"
@@ -36,26 +44,27 @@ if [[ ! -f "$FRONTEND/index.html" ]]; then
 fi
 
 echo "=== 2. Frontend sync ==="
-rsync -avz \
-  --exclude='*.map' \
-  "$FRONTEND/" "$SERVER:$REMOTE/frontend/"
+COPYFILE_DISABLE=1 tar czf /tmp/meter_frontend.tar.gz --exclude='*.map' --exclude='._*' -C "$FRONTEND" .
+$SCP /tmp/meter_frontend.tar.gz "$SERVER:/tmp/meter_frontend.tar.gz"
+$SSH "$SERVER" "$RPATH && mkdir -p $REMOTE/frontend && cd $REMOTE/frontend && tar xzf /tmp/meter_frontend.tar.gz && rm /tmp/meter_frontend.tar.gz"
+rm /tmp/meter_frontend.tar.gz
 
 echo "=== 3. .env file ==="
-scp "$ENV_FILE" "$SERVER:$REMOTE/.env"
+$SCP "$ENV_FILE" "$SERVER:$REMOTE/.env"
 
 echo "=== 4. systemd service ==="
-scp "$BACKEND/deploy/meter-api.service" "$SERVER:/etc/systemd/system/meter-api.service"
+$SCP "$BACKEND/deploy/meter-api.service" "$SERVER:/etc/systemd/system/meter-api.service"
 
 echo "=== 5. Install/update Python deps ==="
-ssh "$SERVER" "cd $REMOTE && test -x venv/bin/python || python3 -m venv venv && venv/bin/pip install -q -U pip && venv/bin/pip install -q -r requirements.txt"
+$SSH "$SERVER" "$RPATH && cd $REMOTE && test -x venv/bin/python || python3 -m venv venv && venv/bin/pip install -q -U pip && venv/bin/pip install -q -r requirements.txt"
 
 echo "=== 6. Run migrations ==="
-ssh "$SERVER" "cd $REMOTE && venv/bin/alembic upgrade head"
+$SSH "$SERVER" "$RPATH && cd $REMOTE && venv/bin/alembic upgrade head"
 
 echo "=== 7. Restart service ==="
-ssh "$SERVER" "systemctl daemon-reload && systemctl restart meter-api && sleep 2 && systemctl status meter-api --no-pager"
+$SSH "$SERVER" "$RPATH && systemctl daemon-reload && systemctl restart meter-api && sleep 2 && systemctl status meter-api --no-pager"
 
 echo ""
 echo "=== Done! ==="
-echo "Frontend: http://${SERVER#*@}/"
-echo "API docs: http://${SERVER#*@}/docs"
+echo "Frontend: https://ss.boos.uz/"
+echo "API docs: https://ss.boos.uz/docs"
