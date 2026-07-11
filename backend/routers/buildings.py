@@ -41,21 +41,37 @@ from services import readings as reading_service
 router = APIRouter(prefix="/api")
 
 
-EXTERNAL_API = "https://app.urganchshahar.uz/api/trashbags/houses"
+EXTERNAL_BASE = "https://app.urganchshahar.uz"
+EXTERNAL_API = f"{EXTERNAL_BASE}/api/trashbags/houses"
 EXTERNAL_SOURCE_PREFIX = "ext://urganchshahar/"
-EXTERNAL_SESSION = "BC00197D063A33D901B3C6A822A8F801"
+EXTERNAL_USER = "urganch"
+EXTERNAL_PASS = "urg2026@!"
+
+
+async def _get_external_session(client: httpx.AsyncClient) -> str:
+    """Urganchshahar tizimiga kirip JSESSIONID qaytaradi."""
+    resp = await client.post(
+        f"{EXTERNAL_BASE}/process_login",
+        data={"username": EXTERNAL_USER, "password": EXTERNAL_PASS},
+        headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+    for cookie in resp.cookies.jar:
+        if cookie.name == "JSESSIONID":
+            return cookie.value
+    raise HTTPException(status_code=502, detail="Urganchshahar: kirish amalga oshmadi")
 
 
 @router.post("/buildings/import-external")
 async def import_external_buildings(admin: dict = Depends(require_admin)):
     """Urganchshahar API dan binolarni import qiladi. Takrorlanmaydi."""
     try:
-        headers = {
-            "Cookie": f"JSESSIONID={EXTERNAL_SESSION}",
-            "User-Agent": "Mozilla/5.0",
-        }
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(EXTERNAL_API, headers=headers)
+        async with httpx.AsyncClient(timeout=30) as client:
+            session_id = await _get_external_session(client)
+            resp = await client.get(
+                EXTERNAL_API,
+                headers={"Cookie": f"JSESSIONID={session_id}", "User-Agent": "Mozilla/5.0"},
+            )
             resp.raise_for_status()
             houses: list[dict] = resp.json()
     except Exception as e:
