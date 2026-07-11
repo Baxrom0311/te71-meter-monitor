@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, X, Search, Home, Building2, MapPin, Layers, Navigation, ArrowRight, ExternalLink } from 'lucide-react'
+import { Plus, X, Search, Home, Building2, MapPin, Layers, Navigation, ArrowRight, ExternalLink, Download } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useBuildings } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -32,6 +32,20 @@ export default function BuildingsPage() {
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+
+  const handleImportExternal = async () => {
+    setImporting(true)
+    try {
+      const res = await apiClient.post<{ created: number; skipped: number; total: number }>('/api/buildings/import-external')
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      notifySuccess('Import tugadi', `${res.data.created} ta yangi bino qo'shildi, ${res.data.skipped} ta o'tkazib yuborildi.`)
+    } catch (err: any) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -98,13 +112,24 @@ export default function BuildingsPage() {
             <h1 className="text-3xl font-bold text-gray-100">{translations.buildings.title}</h1>
           </div>
           {isAdmin && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition text-sm font-semibold shadow"
-            >
-              <Plus className="w-4 h-4" />
-              {translations.buildings.addBuilding}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleImportExternal}
+                disabled={importing}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg transition text-sm font-semibold shadow"
+                title="Urganchshahar API dan binolarni import qilish"
+              >
+                <Download className="w-4 h-4" />
+                {importing ? 'Import...' : 'Import'}
+              </button>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition text-sm font-semibold shadow"
+              >
+                <Plus className="w-4 h-4" />
+                {translations.buildings.addBuilding}
+              </button>
+            </div>
           )}
         </div>
 

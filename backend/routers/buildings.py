@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.security import current_token_payload, require_admin
 from models.schemas import (
@@ -38,6 +39,57 @@ from services import buildings as building_service
 from services import readings as reading_service
 
 router = APIRouter(prefix="/api")
+
+
+EXTERNAL_API = "https://app.urganchshahar.uz/api/trashbags/houses"
+EXTERNAL_SOURCE_PREFIX = "ext://urganchshahar/"
+
+
+@router.post("/buildings/import-external")
+async def import_external_buildings(admin: dict = Depends(require_admin)):
+    """Urganchshahar API dan binolarni import qiladi. Takrorlanmaydi."""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(EXTERNAL_API)
+            resp.raise_for_status()
+            houses: list[dict] = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Tashqi API xatosi: {e}")
+
+    existing = await building_service.list_buildings()
+    existing_ext_ids = {
+        b["maps_url"]
+        for b in existing["buildings"]
+        if b.get("maps_url", "").startswith(EXTERNAL_SOURCE_PREFIX)
+    }
+
+    created, skipped = 0, 0
+    for h in houses:
+        ext_key = f"{EXTERNAL_SOURCE_PREFIX}{h['id']}"
+        if ext_key in existing_ext_ids:
+            skipped += 1
+            continue
+
+        name = (h.get("description") or "").strip() or f"Bino #{h['id']}"
+        lat = h.get("latitude") or None
+        lon = h.get("longitude") or None
+        desc_parts = [h.get("objectName"), h.get("organizationName"), h.get("mahallaName")]
+        desc = " · ".join(p for p in desc_parts if p)
+
+        body = BuildingCreate(
+            name=name[:255],
+            address=name[:500],
+            maps_url=ext_key,
+            latitude=float(lat) if lat else None,
+            longitude=float(lon) if lon else None,
+            description=desc or None,
+        )
+        await building_service.create_building(body)
+        created += 1
+
+    await audit.record(admin, "buildings.import_external", "building", None,
+                       {"source": "urganchshahar", "created": created, "skipped": skipped})
+    return {"ok": True, "created": created, "skipped": skipped, "total": len(houses)}
 
 
 @router.post("/buildings", response_model=BuildingCreateResponse)
