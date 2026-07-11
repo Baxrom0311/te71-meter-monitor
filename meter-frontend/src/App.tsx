@@ -26,6 +26,7 @@ const AuditPage = lazy(() => loadPage('audit'))
 const SettingsPage = lazy(() => loadPage('settings'))
 const ChatPage = lazy(() => loadPage('chat'))
 const AnalyticsPage = lazy(() => loadPage('analytics'))
+const DisplayPage = lazy(() => import('@/pages/DisplayPage'))
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -104,6 +105,7 @@ export default function App() {
                     <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+                    <Route path="/display" element={<DisplayPage />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Suspense>

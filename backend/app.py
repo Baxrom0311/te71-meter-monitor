@@ -30,6 +30,7 @@ from routers.ota import router as ota_router
 from routers.telemetry import router as telemetry_router
 from routers.websocket import router as websocket_router
 from routers.chat import router as chat_router
+from routers.display import router as display_router
 from services.auth import bootstrap_admin
 from services.background import (
     alert_notification_worker,
@@ -107,6 +108,7 @@ app.include_router(auth_router)
 app.include_router(websocket_router)
 app.include_router(health_router)
 app.include_router(chat_router)
+app.include_router(display_router)
 
 # Vite frontend static assets.
 if settings.static_dir.exists():
