@@ -91,8 +91,7 @@ class ValueCard(QFrame):
         self._tone = tone
 
         if accent:
-            # Add glowing effect to primary/accent cards
-            add_glow_effect(self, color_hex=Colors.ACCENT_BLUE, alpha=65, blur=18)
+            self.setProperty("accent", "true")
 
     def set_value(self, value: str, color: str | None = None):
         if color is None:
@@ -133,8 +132,8 @@ class RelayDiagramWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.connected = None  # None = unknown, True = closed, False = open
-        self.setMinimumSize(280, 100)
-        self.setMaximumSize(360, 120)
+        self.setMinimumSize(360, 100)
+        self.setMaximumSize(480, 120)
 
     def set_state(self, connected: bool | None):
         self.connected = connected
@@ -148,9 +147,9 @@ class RelayDiagramWidget(QWidget):
         h = self.height()
         cy = h / 2
 
-        # Draw transparent card container background
+        # Draw a compact circuit diagram background.
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#03050a"))
+        painter.setBrush(QColor("#f8fafc"))
         painter.drawRoundedRect(0, 0, w, h, 8, 8)
 
         # Draw wire lines
@@ -194,7 +193,7 @@ class RelayDiagramWidget(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(int(w/2 - 5), int(h - 22), 10, 10)
             painter.setPen(QColor(Colors.STATUS_GREEN))
-            painter.drawText(int(w/2 + 10), int(h - 13), "ZANJIR YOPILGAN (ON)")
+            painter.drawText(int(w/2 + 10), int(h - 13), "ZANJIR YOPILGAN")
 
         elif self.connected is False:
             # OPEN contact - neon red line pointing up 35 degrees
@@ -208,7 +207,7 @@ class RelayDiagramWidget(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(int(w/2 - 5), int(h - 22), 10, 10)
             painter.setPen(QColor(Colors.STATUS_ERROR))
-            painter.drawText(int(w/2 + 10), int(h - 13), "ZANJIR OCHILGAN (OFF)")
+            painter.drawText(int(w/2 + 10), int(h - 13), "ZANJIR OCHILGAN")
 
         else:
             # Unknown state - grey dashed line
@@ -242,4 +241,3 @@ def add_deep_shadow(widget, blur: int = 20):
     effect.setColor(QColor(0, 0, 0, 120))
     effect.setOffset(0, 4)
     widget.setGraphicsEffect(effect)
-

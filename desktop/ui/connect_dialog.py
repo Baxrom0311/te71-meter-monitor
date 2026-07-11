@@ -30,7 +30,7 @@ class ConnectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Hisoblagichga ulanish")
-        self.setFixedSize(520, 520)
+        self.setFixedSize(560, 620)
         self.setStyleSheet(CONNECT_DIALOG_STYLE)
 
         self.settings_storage = QSettings("Toshelectroapparat", "MeterTool")
@@ -45,8 +45,8 @@ class ConnectDialog(QDialog):
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(32, 28, 32, 28)
-        root.setSpacing(18)
+        root.setContentsMargins(36, 30, 36, 30)
+        root.setSpacing(16)
 
         title = QLabel("Elektr hisoblagich")
         title.setObjectName("page_title")
@@ -62,13 +62,13 @@ class ConnectDialog(QDialog):
         card.setObjectName("card")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(24, 22, 24, 22)
-        card_layout.setSpacing(14)
+        card_layout.setSpacing(16)
         root.addWidget(card)
 
         # Meter type
         card_layout.addWidget(self._field_label("Hisoblagich turi"))
         self.combo_meter = QComboBox()
-        self.combo_meter.setMinimumHeight(42)
+        self.combo_meter.setMinimumHeight(40)
         for label, _, _ in METER_TYPES:
             self.combo_meter.addItem(label)
         self.combo_meter.currentIndexChanged.connect(self._on_meter_changed)
@@ -85,16 +85,16 @@ class ConnectDialog(QDialog):
         port_row.setSpacing(10)
 
         self.combo_port = QComboBox()
-        self.combo_port.setMinimumHeight(42)
+        self.combo_port.setMinimumHeight(40)
         port_row.addWidget(self.combo_port, 3)
 
         self.btn_refresh = QPushButton("Yangilash")
-        self.btn_refresh.setMinimumHeight(42)
+        self.btn_refresh.setMinimumHeight(40)
         self.btn_refresh.clicked.connect(self._refresh_ports)
         port_row.addWidget(self.btn_refresh, 1)
 
         self.combo_baud = QComboBox()
-        self.combo_baud.setMinimumHeight(42)
+        self.combo_baud.setMinimumHeight(40)
         self.combo_baud.addItems(BAUD_OPTIONS)
         self.combo_baud.setCurrentText("9600")
         port_row.addWidget(self.combo_baud, 1)
@@ -109,7 +109,7 @@ class ConnectDialog(QDialog):
         v_parity.setSpacing(4)
         self.lbl_parity = self._field_label("Paritet (Parity)")
         self.combo_parity = QComboBox()
-        self.combo_parity.setMinimumHeight(42)
+        self.combo_parity.setMinimumHeight(40)
         self.combo_parity.addItems(["N (None)", "E (Even)", "O (Odd)"])
         v_parity.addWidget(self.lbl_parity)
         v_parity.addWidget(self.combo_parity)
@@ -119,7 +119,7 @@ class ConnectDialog(QDialog):
         v_stopbits.setSpacing(4)
         self.lbl_stopbits = self._field_label("Stop bitlar")
         self.combo_stopbits = QComboBox()
-        self.combo_stopbits.setMinimumHeight(42)
+        self.combo_stopbits.setMinimumHeight(40)
         self.combo_stopbits.addItems(["1", "1.5", "2"])
         v_stopbits.addWidget(self.lbl_stopbits)
         v_stopbits.addWidget(self.combo_stopbits)
@@ -130,7 +130,7 @@ class ConnectDialog(QDialog):
         # Auth mode
         card_layout.addWidget(self._field_label("Ulanish rejimi"))
         self.combo_auth = QComboBox()
-        self.combo_auth.setMinimumHeight(42)
+        self.combo_auth.setMinimumHeight(40)
         self.combo_auth.addItems([
             "Reader - o'qish va releni boshqarish",
             "Manager - servis rejimi (parol bilan)",
@@ -145,14 +145,14 @@ class ConnectDialog(QDialog):
         card_layout.addWidget(self.lbl_pwd)
 
         self.txt_password = QLineEdit("00000000")
-        self.txt_password.setMinimumHeight(42)
+        self.txt_password.setMinimumHeight(40)
         self.txt_password.setVisible(False)
         card_layout.addWidget(self.txt_password)
 
         # Connect button
         self.btn_connect = QPushButton("Hisoblagichga ulanish")
         self.btn_connect.setObjectName("primary")
-        self.btn_connect.setMinimumHeight(46)
+        self.btn_connect.setMinimumHeight(44)
         self.btn_connect.clicked.connect(self._on_connect)
         card_layout.addWidget(self.btn_connect)
 
@@ -173,8 +173,8 @@ class ConnectDialog(QDialog):
         card_layout.addLayout(div_layout)
 
         # ESP32 Flash button
-        self.btn_flash = QPushButton("⚡  ESP32 ga firmware yuklash")
-        self.btn_flash.setMinimumHeight(42)
+        self.btn_flash = QPushButton("ESP32 ga firmware yuklash")
+        self.btn_flash.setMinimumHeight(40)
         self.btn_flash.setStyleSheet(
             "QPushButton{background:#0f2d4a;color:#60a5fa;border:1.5px solid #1e4976;"
             "border-radius:8px;font-weight:700;}"
@@ -230,7 +230,7 @@ class ConnectDialog(QDialog):
     def _adjust_height(self):
         show_pwd = self.combo_auth.currentIndex() == 1
         manual = self.combo_meter.currentIndex() == 2
-        h = 520
+        h = 620
         if show_pwd:
             h += 55
         if manual:

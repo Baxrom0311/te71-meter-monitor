@@ -41,9 +41,9 @@ class MainWindow(QMainWindow):
         self.controller = controller
         self.settings = settings
 
-        self.setWindowTitle("Elektr nazorat — TE71/TE73")
-        self.setMinimumSize(800, 560)
-        self.resize(1180, 760)
+        self.setWindowTitle("Elektr nazorat - TE71/TE73")
+        self.setMinimumSize(980, 620)
+        self.resize(1240, 800)
 
         self.auto_refresh_timer = QTimer()
         self.auto_refresh_timer.timeout.connect(self._auto_refresh)
@@ -93,11 +93,11 @@ class MainWindow(QMainWindow):
         logo_layout.addWidget(logo)
 
         subtitle = QLabel("TE71 / TE73")
-        subtitle.setStyleSheet("font-size: 12px; color: #94a3b8; font-weight: 700;")
+        subtitle.setStyleSheet("font-size: 12px; color: #d0d5dd; font-weight: 700;")
         logo_layout.addWidget(subtitle)
 
         self.lbl_meter_type = QLabel("Hisoblagich aniqlanmoqda")
-        self.lbl_meter_type.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        self.lbl_meter_type.setStyleSheet("font-size: 12px; color: #98a2b3;")
         logo_layout.addWidget(self.lbl_meter_type)
 
         sb_layout.addWidget(logo_frame)
@@ -105,16 +105,16 @@ class MainWindow(QMainWindow):
         # Separator
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #24364f;")
+        sep.setStyleSheet("background-color: #2b364e;")
         sb_layout.addWidget(sep)
 
         # Nav buttons
         nav_items = [
-            ("📊", "Ko'rsatkichlar"),
-            ("🔌", "Rele"),
-            ("📋", "Registrlar"),
-            ("⚙️", "Sozlamalar"),
-            ("📝", "Log"),
+            ("", "Asosiy panel"),
+            ("", "Rele boshqarish"),
+            ("", "Tekshiruv"),
+            ("", "Servis"),
+            ("", "Jurnal"),
         ]
         for i, (icon, text) in enumerate(nav_items):
             btn = NavButton(icon, text, i)
@@ -131,24 +131,24 @@ class MainWindow(QMainWindow):
         conn_layout.setSpacing(2)
 
         self.lbl_port = QLabel(f"Port: {self.settings.get('port', '')}")
-        self.lbl_port.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        self.lbl_port.setStyleSheet("font-size: 12px; color: #d0d5dd;")
         conn_layout.addWidget(self.lbl_port)
 
         self.lbl_serial = QLabel("")
-        self.lbl_serial.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        self.lbl_serial.setStyleSheet("font-size: 12px; color: #d0d5dd;")
         conn_layout.addWidget(self.lbl_serial)
 
         # Status dot
         self.lbl_status = QLabel("Status: ulangan")
-        self.lbl_status.setStyleSheet("font-size: 12px; color: #86efac; font-weight: 700;")
+        self.lbl_status.setStyleSheet("font-size: 12px; color: #98f5bd; font-weight: 700;")
         conn_layout.addWidget(self.lbl_status)
 
         self.btn_reconnect = QPushButton("🔄 Qayta ulanish")
         self.btn_reconnect.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_reconnect.setStyleSheet(
-            "QPushButton{background:#0b1329;color:#38bdf8;border:1px solid #1e3a5f;"
+            "QPushButton{background:#24314a;color:#ffffff;border:1px solid #40506d;"
             "border-radius:6px;font-weight:700;padding:6px;font-size:11px;margin-top:6px;}"
-            "QPushButton:hover{background:#11224d;border-color:#38bdf8;color:#ffffff;}"
+            "QPushButton:hover{background:#31405c;border-color:#ffffff;color:#ffffff;}"
         )
         self.btn_reconnect.setVisible(False)
         self.btn_reconnect.clicked.connect(self._on_reconnect_clicked)
@@ -157,12 +157,12 @@ class MainWindow(QMainWindow):
         sb_layout.addWidget(conn_frame)
 
         # ESP32 Flash button
-        btn_flash = QPushButton("⚡  ESP32 Flash")
+        btn_flash = QPushButton("ESP32 Flash")
         btn_flash.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_flash.setStyleSheet(
-            "QPushButton{background:#0f2d4a;color:#60a5fa;border:1.5px solid #1e4976;"
+            "QPushButton{background:#24314a;color:#d0d5dd;border:1px solid #40506d;"
             "border-radius:8px;font-weight:700;margin:4px 16px;padding:8px;}"
-            "QPushButton:hover{background:#1e3a5f;}"
+            "QPushButton:hover{background:#31405c;color:#ffffff;}"
         )
         btn_flash.clicked.connect(self._open_flash_window)
         sb_layout.addWidget(btn_flash)
@@ -183,49 +183,90 @@ class MainWindow(QMainWindow):
     def _build_content(self, parent_layout: QHBoxLayout):
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(26, 22, 26, 14)
+        content_layout.setContentsMargins(24, 20, 24, 14)
         content_layout.setSpacing(12)
 
-        # Page header
+        # Page header: two rows so controls do not overlap on narrower screens.
         header = QFrame()
         header.setObjectName("headerCard")
-        header_layout = QHBoxLayout(header)
+        header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(18, 14, 18, 14)
-        header_layout.setSpacing(18)
+        header_layout.setSpacing(12)
+
+        top_row = QHBoxLayout()
+        top_row.setSpacing(12)
+        header_layout.addLayout(top_row)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(3)
-        self.lbl_page_title = QLabel("Ko'rsatkichlar")
+        self.lbl_page_title = QLabel("Asosiy panel")
         self.lbl_page_title.setObjectName("page_title")
         title_box.addWidget(self.lbl_page_title)
 
-        self.lbl_page_subtitle = QLabel("Hozirgi ko'rsatkichlar")
+        self.lbl_page_subtitle = QLabel("Hisoblagichning asosiy holati va o'lchovlari")
         self.lbl_page_subtitle.setObjectName("page_subtitle")
+        self.lbl_page_subtitle.setWordWrap(True)
         title_box.addWidget(self.lbl_page_subtitle)
-        header_layout.addLayout(title_box, 1)
+        top_row.addLayout(title_box, 1)
 
-        self.header_port_value = self._header_info(header_layout, "PORT", self.settings.get("port", ""))
-        self.header_serial_value = self._header_info(header_layout, "SERIAL", "---")
         self.header_status = QLabel("Ulangan")
         self.header_status.setObjectName("statusChipOk")
-        header_layout.addWidget(self.header_status)
+        top_row.addWidget(self.header_status)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(10)
+        header_layout.addLayout(bottom_row)
+
+        page_label = QLabel("Sahifa:")
+        page_label.setObjectName("smallLabel")
+        bottom_row.addWidget(page_label)
+
+        self.combo_pages = QComboBox()
+        self.combo_pages.addItems([
+            "Asosiy panel",
+            "Rele boshqarish",
+            "Tekshiruv",
+            "Servis",
+            "Jurnal",
+        ])
+        self.combo_pages.setMinimumWidth(170)
+        self.combo_pages.currentIndexChanged.connect(self._nav_to)
+        bottom_row.addWidget(self.combo_pages)
+
+        self.header_port_value = self._header_info(bottom_row, "PORT", self.settings.get("port", ""))
+        self.header_serial_value = self._header_info(bottom_row, "SERIAL", "---")
+        bottom_row.addStretch()
+
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(10)
+        header_layout.addLayout(actions_row)
 
         self.btn_header_refresh = QPushButton("Yangilash")
         self.btn_header_refresh.setObjectName("primary")
         self.btn_header_refresh.clicked.connect(self._refresh_current_page)
-        header_layout.addWidget(self.btn_header_refresh)
+        actions_row.addWidget(self.btn_header_refresh, 1)
+
+        self.btn_prev_page = QPushButton("Oldingi")
+        self.btn_prev_page.clicked.connect(lambda: self._nav_to(max(0, self.pages.currentIndex() - 1)))
+        actions_row.addWidget(self.btn_prev_page)
+
+        self.btn_next_page = QPushButton("Keyingi")
+        self.btn_next_page.clicked.connect(lambda: self._nav_to(min(self.pages.count() - 1, self.pages.currentIndex() + 1)))
+        actions_row.addWidget(self.btn_next_page)
+        actions_row.addStretch()
 
         # Auto-refresh controls
         self.chk_auto_refresh = QCheckBox("Avtomatik")
         self.chk_auto_refresh.setChecked(True)
         self.chk_auto_refresh.toggled.connect(self._on_auto_refresh_toggled)
-        header_layout.addWidget(self.chk_auto_refresh)
+        actions_row.addWidget(self.chk_auto_refresh)
 
         self.combo_refresh_interval = QComboBox()
         self.combo_refresh_interval.addItems(["3s", "5s", "10s", "30s"])
         self.combo_refresh_interval.setCurrentIndex(0)
         self.combo_refresh_interval.currentIndexChanged.connect(self._on_refresh_interval_changed)
-        header_layout.addWidget(self.combo_refresh_interval)
+        self.combo_refresh_interval.setMaximumWidth(80)
+        actions_row.addWidget(self.combo_refresh_interval)
 
         content_layout.addWidget(header)
 
@@ -308,8 +349,9 @@ class MainWindow(QMainWindow):
     # ── Controller Signal Handlers ────────────────────────────────────────
 
     def _on_info_updated(self, info):
-        self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {info.serial}")
-        self.lbl_serial.setText(f"S/N: {info.serial}")
+        serial = info.serial or "aniqlanmadi"
+        self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {serial}")
+        self.lbl_serial.setText(f"S/N: {serial}")
         self.header_serial_value.setText(info.serial or "---")
         self.settings_panel.update_info(
             info.serial, info.manufacturer, info.device_name,
@@ -373,18 +415,20 @@ class MainWindow(QMainWindow):
     def _on_custom_register_read(self, value: str):
         obis_str = self.registers_panel.obis_input.text()
         class_id = int(self.registers_panel.class_input.text() or "3")
-        self.registers_panel.add_custom_row(obis_str, class_id, value)
+        attr = int(self.registers_panel.attr_input.text() or "2")
+        self.registers_panel.add_custom_row(obis_str, class_id, attr, value)
 
     def _on_reconnect_result(self, ok: bool):
         if ok:
             self.lbl_status.setText("Status: ulangan")
-            self.lbl_status.setStyleSheet("font-size: 12px; color: #86efac; font-weight: 700;")
+            self.lbl_status.setStyleSheet("font-size: 12px; color: #98f5bd; font-weight: 700;")
             self.btn_reconnect.setVisible(False)
             self.log_panel.add_app_log("Hisoblagichga qayta ulanish muvaffaqiyatli!")
 
             info = self.controller.service.info
-            self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {info.serial}")
-            self.lbl_serial.setText(f"S/N: {info.serial}")
+            serial = info.serial or "aniqlanmadi"
+            self.lbl_meter_type.setText(f"{info.meter_type}  |  S/N: {serial}")
+            self.lbl_serial.setText(f"S/N: {serial}")
             self.header_serial_value.setText(info.serial or "---")
             self.settings_panel.update_info(
                 info.serial, info.manufacturer, info.device_name,
@@ -432,12 +476,21 @@ class MainWindow(QMainWindow):
         for btn in self.nav_buttons:
             btn.setChecked(btn.index == index)
 
+        if hasattr(self, "combo_pages") and self.combo_pages.currentIndex() != index:
+            self.combo_pages.blockSignals(True)
+            self.combo_pages.setCurrentIndex(index)
+            self.combo_pages.blockSignals(False)
+
+        if hasattr(self, "btn_prev_page"):
+            self.btn_prev_page.setEnabled(index > 0)
+            self.btn_next_page.setEnabled(index < self.pages.count() - 1)
+
         titles = [
-            ("Ko'rsatkichlar", "Asosiy elektr ko'rsatkichlari va energiya sarfi"),
-            ("Rele", "Yuklama relesi holati va boshqaruvi"),
-            ("Registrlar", "Barcha OBIS kod registrlari"),
-            ("Sozlamalar", "Hisoblagich ma'lumotlari va vaqt sinxronizatsiya"),
-            ("Kommunikatsiya Log", "HDLC TX/RX freymlar va dastur xabarlari"),
+            ("Asosiy panel", "Asosiy elektr ko'rsatkichlari va energiya sarfi"),
+            ("Rele boshqarish", "Yuklama relesi holati va boshqaruvi"),
+            ("Tekshiruv", "OBIS registrlar va qo'lda o'qish"),
+            ("Servis", "Hisoblagich ma'lumotlari, vaqt va servis amallari"),
+            ("Jurnal", "Aloqa freymlari va dastur xabarlari"),
         ]
         title, subtitle = titles[index]
         self.lbl_page_title.setText(title)
@@ -533,9 +586,13 @@ class MainWindow(QMainWindow):
         try:
             obis_tuple = tuple(int(p) for p in parts)
             class_id = int(self.registers_panel.class_input.text() or "3")
+            attr = int(self.registers_panel.attr_input.text() or "2")
         except ValueError:
             return
-        self.controller.read_custom_register(class_id, obis_tuple)
+        if attr < 1:
+            QMessageBox.warning(self, "Xato", "Attribute raqami 1 dan katta bo'lishi kerak")
+            return
+        self.controller.read_custom_register(class_id, obis_tuple, attr)
 
     def _on_reconnect_clicked(self):
         self.lbl_status.setText("Status: ulanmoqda...")

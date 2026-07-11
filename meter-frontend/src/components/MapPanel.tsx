@@ -1,11 +1,8 @@
 import { useEffect, useRef } from 'react'
-import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { ExternalLink, MapPin } from 'lucide-react'
 import { EmptyBlock } from '@/components/StateBlock'
+import { hasGoogleMapsKey, loadGoogleMaps } from '@/lib/googleMaps'
 import { resolveCoordinates } from '@/lib/map'
-
-const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || ''
 
 interface MapPanelProps {
   title?: string
@@ -32,27 +29,31 @@ export function MapPanel({
   const coordinates = resolveCoordinates(latitude, longitude, mapsUrl)
 
   useEffect(() => {
-    if (!containerRef.current || !coordinates || !MAPTILER_KEY) return
+    if (!containerRef.current || !coordinates || !hasGoogleMapsKey()) return
+    let cancelled = false
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`,
-      center: [coordinates.longitude, coordinates.latitude],
-      zoom: 16,
-      pitch: 40,
-      antialias: true,
+    loadGoogleMaps().then(() => {
+      const container = containerRef.current
+      if (!container || cancelled) return
+
+      const map = new google.maps.Map(container, {
+        center: { lat: coordinates.latitude, lng: coordinates.longitude },
+        zoom: 17,
+        mapId: 'smartbino_detail',
+        gestureHandling: 'greedy',
+        streetViewControl: false,
+        mapTypeControl: false,
+      })
+      new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat: coordinates.latitude, lng: coordinates.longitude },
+        title: name,
+      })
     })
 
-    new maplibregl.Marker({ color: '#3b82f6' })
-      .setLngLat([coordinates.longitude, coordinates.latitude])
-      .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(
-        `<div style="font-family:system-ui;padding:2px"><b>${name}</b>${address ? `<div style="font-size:11px;color:#64748b;margin-top:2px">${address}</div>` : ''}</div>`
-      ))
-      .addTo(map)
-
-    map.addControl(new maplibregl.NavigationControl(), 'top-right')
-
-    return () => map.remove()
+    return () => {
+      cancelled = true
+    }
   }, [coordinates?.latitude, coordinates?.longitude]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -68,14 +69,9 @@ export function MapPanel({
           </p>
         </div>
         {mapsUrl && !mapsUrl.startsWith('ext://') && (
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 transition"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Google Maps
+          <a href={mapsUrl} target="_blank" rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 transition">
+            <ExternalLink className="w-3.5 h-3.5" /> Google Maps
           </a>
         )}
       </div>
@@ -92,10 +88,7 @@ export function MapPanel({
         </div>
       ) : (
         <div className={heightClassName}>
-          <EmptyBlock
-            title="Koordinata topilmadi"
-            message="Xaritada ko'rsatish uchun latitude/longitude kiriting."
-          />
+          <EmptyBlock title="Koordinata topilmadi" message="Xaritada ko'rsatish uchun latitude/longitude kiriting." />
         </div>
       )}
     </section>

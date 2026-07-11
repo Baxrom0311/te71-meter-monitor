@@ -64,7 +64,7 @@ class LogPanel(QWidget):
         if self.chk_show_tx.isChecked():
             ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
             self.log_area.append(
-                f'<span style="color:#ff8844;">[{ts}] TX \u2192 {hex_data}</span>'
+                f'<span style="color:#f6ad55;">[{ts}] TX &gt; {hex_data}</span>'
             )
             self._trim()
 
@@ -72,15 +72,15 @@ class LogPanel(QWidget):
         if self.chk_show_rx.isChecked():
             ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
             self.log_area.append(
-                f'<span style="color:#44ff88;">[{ts}] RX \u2190 {hex_data}</span>'
+                f'<span style="color:#68d391;">[{ts}] RX &lt; {hex_data}</span>'
             )
             self._trim()
 
     def add_app_log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
         self.log_area.append(
-            f'<span style="color:#7a8aaa;">[{ts}]</span> '
-            f'<span style="color:{Colors.TEXT_PRIMARY};">{msg}</span>'
+            f'<span style="color:#98a2b3;">[{ts}]</span> '
+            f'<span style="color:#e4e7ec;">{msg}</span>'
         )
         self._trim()
 

@@ -66,8 +66,8 @@ class BuildingCreate(BaseModel):
     maps_url: Optional[str] = Field(None, max_length=1000)
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
-    floors: int = Field(1, ge=1)
-    entrances_count: int = Field(1, ge=1)
+    floors: int = Field(4, ge=1)
+    entrances_count: int = Field(3, ge=1)
     description: Optional[str] = None
     # O'zimizdan qo'shimcha
     image_url: Optional[str] = Field(None, max_length=1000)

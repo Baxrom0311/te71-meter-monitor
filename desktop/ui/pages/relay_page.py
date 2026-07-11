@@ -4,10 +4,21 @@ Uses shared SpinnerWidget from ui.widgets.
 Stillashtirish uchun theme.py rang konstantalari ishlatiladi.
 """
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget, QComboBox
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.theme import Colors, Fonts, inline_style
-from ui.widgets import SpinnerWidget, RelayDiagramWidget, add_glow_effect
+from ui.widgets import SpinnerWidget, RelayDiagramWidget
 
 
 class RelayPanel(QWidget):
@@ -59,27 +70,27 @@ class RelayPanel(QWidget):
 
         layout.addWidget(self.status_card)
 
-        button_row = QHBoxLayout()
-        button_row.setSpacing(12)
+        button_grid = QGridLayout()
+        button_grid.setSpacing(12)
 
         self.btn_reconnect = QPushButton("Releni yoqish")
         self.btn_reconnect.setObjectName("success")
         self.btn_reconnect.setMinimumHeight(52)
         self.btn_reconnect.setEnabled(False)
-        button_row.addWidget(self.btn_reconnect)
+        button_grid.addWidget(self.btn_reconnect, 0, 0)
 
         self.btn_disconnect = QPushButton("Releni o'chirish")
         self.btn_disconnect.setObjectName("danger")
         self.btn_disconnect.setMinimumHeight(52)
         self.btn_disconnect.setEnabled(False)
-        button_row.addWidget(self.btn_disconnect)
+        button_grid.addWidget(self.btn_disconnect, 0, 1)
 
         self.btn_refresh = QPushButton("Holatni yangilash")
-        self.btn_refresh.setMinimumHeight(52)
+        self.btn_refresh.setMinimumHeight(46)
         self.btn_refresh.setEnabled(False)
-        button_row.addWidget(self.btn_refresh)
+        button_grid.addWidget(self.btn_refresh, 1, 0, 1, 2)
 
-        layout.addLayout(button_row)
+        layout.addLayout(button_grid)
 
         details = QHBoxLayout()
         details.setSpacing(12)
@@ -87,9 +98,13 @@ class RelayPanel(QWidget):
         self.lbl_control_mode = self._detail_card(details, "Boshqaruv rejimi")
         layout.addLayout(details)
 
-        mode_card = QFrame()
-        mode_card.setObjectName("card")
-        mode_layout = QHBoxLayout(mode_card)
+        self.chk_advanced = QCheckBox("Servis rejimini ko'rsatish")
+        self.chk_advanced.toggled.connect(self._set_advanced_visible)
+        layout.addWidget(self.chk_advanced)
+
+        self.mode_card = QFrame()
+        self.mode_card.setObjectName("card")
+        mode_layout = QHBoxLayout(self.mode_card)
         mode_layout.setContentsMargins(18, 14, 18, 14)
         mode_layout.setSpacing(12)
 
@@ -116,7 +131,8 @@ class RelayPanel(QWidget):
         self.btn_set_mode.setEnabled(False)
         mode_layout.addWidget(self.btn_set_mode)
 
-        layout.addWidget(mode_card)
+        layout.addWidget(self.mode_card)
+        self.mode_card.setVisible(False)
 
         note = QLabel(
             "Eslatma: rele buyrug'i Reader rejimida yuboriladi. Dastur kerak bo'lsa shu rejimga avtomatik o'tadi."
@@ -153,20 +169,16 @@ class RelayPanel(QWidget):
             self.lbl_desc.setText("Elektr uzatilmoqda. Hisoblagich relesi ulangan.")
             self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.STATUS_GREEN_LIGHT))
             self.status_card.setStyleSheet(
-                f"QFrame#card {{ background: rgba(16, 185, 129, 0.1); border: 2px solid {Colors.STATUS_GREEN}; border-radius: 12px; }}"
+                f"QFrame#card {{ background: #f0fbf5; border: 2px solid {Colors.STATUS_GREEN}; border-radius: 8px; }}"
             )
-            # Apply green neon glow
-            add_glow_effect(self.status_card, color_hex=Colors.STATUS_GREEN, alpha=70, blur=22)
         else:
             self.lbl_state.setText("O'CHIRILGAN")
             self.lbl_state.setStyleSheet(inline_style(font_size=Fonts.SIZE_RELAY, font_weight=Fonts.WEIGHT_EXTRA_BOLD, color=Colors.STATUS_ERROR))
             self.lbl_desc.setText("Elektr uzatilmayapti. Kerak bo'lsa releni yoqing.")
             self.lbl_desc.setStyleSheet(inline_style(font_size=Fonts.SIZE_MEDIUM, color=Colors.STATUS_ERROR_LIGHT))
             self.status_card.setStyleSheet(
-                f"QFrame#card {{ background: rgba(239, 68, 68, 0.1); border: 2px solid {Colors.STATUS_ERROR}; border-radius: 12px; }}"
+                f"QFrame#card {{ background: #fff4f4; border: 2px solid {Colors.STATUS_ERROR}; border-radius: 8px; }}"
             )
-            # Apply red neon glow
-            add_glow_effect(self.status_card, color_hex=Colors.STATUS_ERROR, alpha=70, blur=22)
 
         self.lbl_control_state.setText(control_text)
         self.lbl_control_mode.setText(mode_text)
@@ -178,6 +190,9 @@ class RelayPanel(QWidget):
         self.btn_disconnect.setEnabled(enabled)
         self.btn_refresh.setEnabled(enabled)
         self.btn_set_mode.setEnabled(enabled)
+
+    def _set_advanced_visible(self, visible: bool):
+        self.mode_card.setVisible(visible)
 
     def confirm_action(self, action: str) -> bool:
         msg = QMessageBox(self)
@@ -193,10 +208,8 @@ class RelayPanel(QWidget):
         self.spinner.setVisible(True)
         self.diagram.set_state(None)  # unknown state during loading
         self.status_card.setStyleSheet(
-            f"QFrame#card {{ background: rgba(56, 189, 248, 0.05); border: 2px dashed {Colors.BORDER_MID}; border-radius: 12px; }}"
+            f"QFrame#card {{ background: #f8fbff; border: 2px dashed {Colors.BORDER_MID}; border-radius: 8px; }}"
         )
-        # Apply cyan loading glow
-        add_glow_effect(self.status_card, color_hex=Colors.ACCENT_BLUE, alpha=50, blur=22)
 
         if action == "relay_reconnect":
             self.lbl_state.setText("YOQILMOQDA...")

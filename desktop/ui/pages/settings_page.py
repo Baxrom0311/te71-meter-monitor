@@ -6,7 +6,18 @@ Responsive layout dynamically rearranges info cards based on window width.
 from datetime import datetime
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget, QGridLayout
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QGridLayout,
+)
 
 from ui.theme import Colors, Fonts, inline_style
 from ui.widgets import InfoCard
@@ -77,14 +88,22 @@ class SettingsPanel(QWidget):
 
         layout.addWidget(time_card)
 
-        layout.addWidget(self._section_title("Parol boshqarish"))
-        password_card = QFrame()
-        password_card.setObjectName("card")
-        pwd_layout = QHBoxLayout(password_card)
+        advanced_row = QHBoxLayout()
+        self.chk_advanced = QCheckBox("Servis amallarini ko'rsatish")
+        self.chk_advanced.toggled.connect(self._set_advanced_visible)
+        advanced_row.addWidget(self.chk_advanced)
+        advanced_row.addStretch()
+        layout.addLayout(advanced_row)
+
+        self.password_card = QFrame()
+        self.password_card.setObjectName("card")
+        pwd_layout = QHBoxLayout(self.password_card)
         pwd_layout.setContentsMargins(18, 16, 18, 16)
         pwd_layout.setSpacing(10)
 
-        pwd_layout.addWidget(QLabel("Yangi parol:"))
+        warning = QLabel("Parolni faqat servis zarur bo'lganda o'zgartiring:")
+        warning.setStyleSheet(inline_style(color=Colors.STATUS_ERROR_DARK, font_weight=Fonts.WEIGHT_BOLD))
+        pwd_layout.addWidget(warning)
         self.pwd_input = QLineEdit()
         self.pwd_input.setPlaceholderText("00000000")
         self.pwd_input.setMaximumWidth(180)
@@ -94,7 +113,8 @@ class SettingsPanel(QWidget):
         self.btn_set_pwd.setEnabled(False)
         pwd_layout.addWidget(self.btn_set_pwd)
         pwd_layout.addStretch()
-        layout.addWidget(password_card)
+        layout.addWidget(self.password_card)
+        self.password_card.setVisible(False)
 
         layout.addStretch()
         self._rearrange_layout()
@@ -147,6 +167,9 @@ class SettingsPanel(QWidget):
         self.btn_read_time.setEnabled(enabled)
         self.btn_sync_time.setEnabled(enabled)
         self.btn_set_pwd.setEnabled(enabled)
+
+    def _set_advanced_visible(self, visible: bool):
+        self.password_card.setVisible(visible)
 
     def confirm_sync(self) -> bool:
         msg = QMessageBox(self)

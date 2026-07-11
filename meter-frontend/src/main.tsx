@@ -1,19 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './styles/globals.css'
+import { cleanupLegacyServiceWorkersOnBoot } from '@/lib/appReload'
 
-const updateServiceWorker = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    window.dispatchEvent(new CustomEvent('meter:pwa-update-ready'))
-  },
-})
-
-window.addEventListener('meter:pwa-update-apply', () => {
-  updateServiceWorker(true)
-})
+void cleanupLegacyServiceWorkersOnBoot()
 
 try {
   const root = document.getElementById('root')

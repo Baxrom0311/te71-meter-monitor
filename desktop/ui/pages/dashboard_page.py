@@ -98,11 +98,11 @@ class DashboardPanel(QWidget):
         width = self.width()
 
         # Decide column count based on panel width
-        if width < 520:
+        if width < 620:
             cols = 1
-        elif width < 820:
+        elif width < 1100:
             cols = 2
-        elif width < 1120:
+        elif width < 1450:
             cols = 3
         else:
             cols = 4

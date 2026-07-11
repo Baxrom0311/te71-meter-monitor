@@ -11,39 +11,39 @@ class Colors:
     """Asosiy rang palitra."""
 
     # ── Background ─────────────────────────────────────────────────
-    BG_PRIMARY = "#070913"
-    BG_SURFACE = "#0b0f19"
-    BG_SIDEBAR = "#03050a"
-    BG_INPUT = "#0f172a"
-    BG_HOVER = "#1e293b"
-    BG_CARD_HOVER = "#0f1626"
+    BG_PRIMARY = "#f4f7fb"
+    BG_SURFACE = "#ffffff"
+    BG_SIDEBAR = "#172033"
+    BG_INPUT = "#f8fafc"
+    BG_HOVER = "#eef4ff"
+    BG_CARD_HOVER = "#f8fbff"
 
     # ── Text ───────────────────────────────────────────────────────
-    TEXT_PRIMARY = "#e2e8f0"
+    TEXT_PRIMARY = "#172033"
     TEXT_WHITE = "#ffffff"
-    TEXT_MUTED = "#94a3b8"
+    TEXT_MUTED = "#4b5b73"
     TEXT_DIMMED = "#667085"
-    TEXT_SUBTLE = "#64748b"
+    TEXT_SUBTLE = "#7b8797"
 
     # ── Accent ─────────────────────────────────────────────────────
-    ACCENT_BLUE = "#38bdf8"
-    ACCENT_BLUE_DARK = "#0284c7"
-    ACCENT_CYAN = "#1663d8"
+    ACCENT_BLUE = "#1769e0"
+    ACCENT_BLUE_DARK = "#1455b8"
+    ACCENT_CYAN = "#0f8bbf"
 
     # ── Status ─────────────────────────────────────────────────────
-    STATUS_OK = "#86efac"
-    STATUS_GREEN = "#10b981"
-    STATUS_GREEN_LIGHT = "#a7f3d0"
-    STATUS_ERROR = "#f87171"
-    STATUS_ERROR_DARK = "#cf2e2e"
-    STATUS_ERROR_LIGHT = "#fca5a5"
-    STATUS_WARN = "#f59e0b"
+    STATUS_OK = "#0f8a4b"
+    STATUS_GREEN = "#0f8a4b"
+    STATUS_GREEN_LIGHT = "#1f9d5a"
+    STATUS_ERROR = "#c03535"
+    STATUS_ERROR_DARK = "#9f2626"
+    STATUS_ERROR_LIGHT = "#d94b4b"
+    STATUS_WARN = "#b7791f"
 
     # ── Borders ────────────────────────────────────────────────────
-    BORDER_DARK = "#161e2e"
-    BORDER_MID = "#1e293b"
-    BORDER_LIGHT = "#24364f"
-    BORDER_BLUE = "#1e3a5f"
+    BORDER_DARK = "#d9e2ef"
+    BORDER_MID = "#cfd8e6"
+    BORDER_LIGHT = "#e6edf6"
+    BORDER_BLUE = "#bad1f5"
 
 
 class Fonts:

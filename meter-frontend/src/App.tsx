@@ -1,11 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastProvider } from '@/components/ToastProvider'
-import { PWAStatus } from '@/components/PWAStatus'
 import { RealtimeSync } from '@/components/RealtimeSync'
 import { ChartSkeleton, KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -69,21 +68,9 @@ function RouteBoundary({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const [updateAvailable, setUpdateAvailable] = useState(false)
-
-  useEffect(() => {
-    const handleUpdateReady = () => setUpdateAvailable(true)
-    window.addEventListener('meter:pwa-update-ready', handleUpdateReady)
-    return () => window.removeEventListener('meter:pwa-update-ready', handleUpdateReady)
-  }, [])
-
   return (
     <ThemeProvider>
       <ToastProvider>
-        <PWAStatus
-          updateAvailable={updateAvailable}
-          onUpdate={() => window.dispatchEvent(new CustomEvent('meter:pwa-update-apply'))}
-        />
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <RealtimeSync />

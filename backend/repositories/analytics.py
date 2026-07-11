@@ -1,7 +1,12 @@
-from sqlalchemy import Integer, and_, delete, desc, func, select
+from sqlalchemy import Integer, Numeric, and_, cast, delete, desc, func, select
 
 from models.entities import Alert, HourlyUtilityStats, Reading
 from repositories.base import BaseRepository
+
+
+def rnd(expr, digits):
+    """PostgreSQL round() faqat numeric tipni qabul qiladi."""
+    return func.round(cast(expr, Numeric), digits)
 
 
 class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
@@ -12,19 +17,19 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
         stmt = (
             select(
                 hour_ts.label("hour_ts"),
-                func.round(func.avg(Reading.voltage_l1), 1).label("avg_v1"),
-                func.round(func.min(Reading.voltage_l1), 1).label("min_v1"),
-                func.round(func.max(Reading.voltage_l1), 1).label("max_v1"),
-                func.round(func.avg(Reading.current_l1), 3).label("avg_i1"),
-                func.round(func.avg(Reading.power_w), 0).label("avg_pw"),
-                func.round(func.max(Reading.power_w), 0).label("max_pw"),
-                func.round(func.avg(Reading.frequency), 2).label("avg_freq"),
-                func.round(func.max(Reading.energy_kwh), 3).label("energy_kwh"),
-                func.round(func.avg(Reading.pressure_bar), 3).label("avg_pressure_bar"),
-                func.round(func.avg(Reading.pressure_bottom_bar), 3).label("avg_pressure_bottom_bar"),
-                func.round(func.avg(Reading.pressure_top_bar), 3).label("avg_pressure_top_bar"),
-                func.round(func.avg(Reading.flow_rate), 3).label("avg_flow_rate"),
-                func.round(func.max(Reading.volume_m3), 3).label("volume_m3"),
+                rnd(func.avg(Reading.voltage_l1), 1).label("avg_v1"),
+                rnd(func.min(Reading.voltage_l1), 1).label("min_v1"),
+                rnd(func.max(Reading.voltage_l1), 1).label("max_v1"),
+                rnd(func.avg(Reading.current_l1), 3).label("avg_i1"),
+                rnd(func.avg(Reading.power_w), 0).label("avg_pw"),
+                rnd(func.max(Reading.power_w), 0).label("max_pw"),
+                rnd(func.avg(Reading.frequency), 2).label("avg_freq"),
+                rnd(func.max(Reading.energy_kwh), 3).label("energy_kwh"),
+                rnd(func.avg(Reading.pressure_bar), 3).label("avg_pressure_bar"),
+                rnd(func.avg(Reading.pressure_bottom_bar), 3).label("avg_pressure_bottom_bar"),
+                rnd(func.avg(Reading.pressure_top_bar), 3).label("avg_pressure_top_bar"),
+                rnd(func.avg(Reading.flow_rate), 3).label("avg_flow_rate"),
+                rnd(func.max(Reading.volume_m3), 3).label("volume_m3"),
                 func.count().label("samples"),
             )
             .where(and_(Reading.device_id == device_id, Reading.ts > cutoff))
@@ -38,10 +43,10 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             await self.session.execute(
                 select(
                     func.count().label("samples"),
-                    func.round(func.max(Reading.energy_kwh), 3).label("energy_kwh"),
-                    func.round(func.avg(Reading.power_w), 2).label("avg_power_w"),
-                    func.round(func.max(Reading.power_w), 2).label("max_power_w"),
-                    func.round(func.avg(Reading.voltage_l1), 2).label("avg_voltage_l1"),
+                    rnd(func.max(Reading.energy_kwh), 3).label("energy_kwh"),
+                    rnd(func.avg(Reading.power_w), 2).label("avg_power_w"),
+                    rnd(func.max(Reading.power_w), 2).label("max_power_w"),
+                    rnd(func.avg(Reading.voltage_l1), 2).label("avg_voltage_l1"),
                 ).where(
                     and_(
                         Reading.building_id == building_id,
@@ -55,9 +60,9 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             await self.session.execute(
                 select(
                     func.count().label("samples"),
-                    func.round(func.avg(Reading.pressure_bottom_bar), 3).label("avg_pressure_bottom_bar"),
-                    func.round(func.avg(Reading.pressure_top_bar), 3).label("avg_pressure_top_bar"),
-                    func.round(func.avg(Reading.pressure_bottom_bar - Reading.pressure_top_bar), 3).label(
+                    rnd(func.avg(Reading.pressure_bottom_bar), 3).label("avg_pressure_bottom_bar"),
+                    rnd(func.avg(Reading.pressure_top_bar), 3).label("avg_pressure_top_bar"),
+                    rnd(func.avg(Reading.pressure_bottom_bar - Reading.pressure_top_bar), 3).label(
                         "avg_pressure_delta_bar"
                     ),
                     func.sum(
@@ -72,9 +77,9 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             await self.session.execute(
                 select(
                     func.count().label("samples"),
-                    func.round(func.avg(Reading.pressure_bar), 4).label("avg_pressure_bar"),
-                    func.round(func.min(Reading.pressure_bar), 4).label("min_pressure_bar"),
-                    func.round(func.max(Reading.pressure_bar), 4).label("max_pressure_bar"),
+                    rnd(func.avg(Reading.pressure_bar), 4).label("avg_pressure_bar"),
+                    rnd(func.min(Reading.pressure_bar), 4).label("min_pressure_bar"),
+                    rnd(func.max(Reading.pressure_bar), 4).label("max_pressure_bar"),
                     func.sum(Reading.leak_detected.cast(Integer)).label("leak_count"),
                 ).where(
                     and_(Reading.building_id == building_id, Reading.utility_type == "gas", Reading.ts > cutoff)
@@ -195,9 +200,9 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             select(
                 per_device_subq.c.bucket_ts,
                 per_device_subq.c.building_id,
-                func.round(func.sum(per_device_subq.c.energy_kwh_delta), 3).label("energy_kwh_delta"),
-                func.round(func.sum(per_device_subq.c.energy_kwh_max), 3).label("energy_kwh_max"),
-                func.round(func.avg(per_device_subq.c.avg_power_w), 1).label("avg_power_w"),
+                rnd(func.sum(per_device_subq.c.energy_kwh_delta), 3).label("energy_kwh_delta"),
+                rnd(func.sum(per_device_subq.c.energy_kwh_max), 3).label("energy_kwh_max"),
+                rnd(func.avg(per_device_subq.c.avg_power_w), 1).label("avg_power_w"),
                 func.sum(per_device_subq.c.samples).label("samples"),
             )
             .group_by(per_device_subq.c.bucket_ts, per_device_subq.c.building_id)
@@ -227,8 +232,8 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
         stmt = (
             select(
                 per_device.c.building_id,
-                func.round(func.sum(per_device.c.energy_kwh_delta), 3).label("total_energy_kwh"),
-                func.round(func.avg(per_device.c.avg_power_w), 1).label("avg_power_w"),
+                rnd(func.sum(per_device.c.energy_kwh_delta), 3).label("total_energy_kwh"),
+                rnd(func.avg(per_device.c.avg_power_w), 1).label("avg_power_w"),
                 func.sum(per_device.c.readings).label("readings"),
             )
             .group_by(per_device.c.building_id)

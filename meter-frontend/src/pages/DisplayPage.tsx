@@ -276,7 +276,7 @@ export default function DisplayPage() {
                           color: '#f1f5f9',
                         }}
                         labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}
-                        formatter={(v: number) => [`${v} ${cfg.unit}`, cfg.label]}
+                        formatter={(v) => [`${Number(v ?? 0)} ${cfg.unit}`, cfg.label]}
                         cursor={{ stroke: cfg.color, strokeWidth: 1, strokeOpacity: 0.4 }}
                       />
                       {cfg.nominal && (

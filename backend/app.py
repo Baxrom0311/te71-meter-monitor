@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -114,10 +114,30 @@ app.include_router(display_router)
 if settings.static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(settings.static_dir / "assets")), name="assets")
 
+# SW kill-switch: eski service worker larni o'chirish
+_SW_KILL = b"""self.addEventListener('install',()=>self.skipWaiting())
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c)))).then(()=>self.registration.unregister())))"""
+
+@app.get("/sw.js")
+async def service_worker_kill():
+    return Response(content=_SW_KILL, media_type="application/javascript",
+                    headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+
+@app.get("/workbox-{rest:path}")
+async def workbox_kill(rest: str):
+    return Response(content=b"", status_code=410)
+
 # SPA catch-all — barcha /api/* dan tashqari yo'llar index.html qaytaradi
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def spa_fallback(full_path: str):
     index_file = settings.static_dir / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return HTMLResponse(f"<h1>{settings.app_name} v{settings.app_version}</h1>")

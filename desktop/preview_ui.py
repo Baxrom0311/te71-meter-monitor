@@ -7,6 +7,7 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
@@ -88,7 +89,7 @@ def main():
     app.setStyleSheet(APP_STYLE)
 
     dialog = ConnectDialog()
-    dialog.grab().save("preview_connect.png")
+    dialog.grab().save(os.path.join(BASE_DIR, "preview_connect.png"))
 
     # Create the controller with mock objects
     from controllers.meter_controller import MeterController
@@ -105,16 +106,43 @@ def main():
     window.relay_panel.update_status(
         status.output_state, status.control_text, status.mode_text, status.control_mode
     )
-    window.grab().save("preview_main.png")
+    window.resize(980, 620)
+    window.grab().save(os.path.join(BASE_DIR, "preview_compact.png"))
     window._nav_to(1)
-    window.grab().save("preview_relay.png")
+    window.relay_panel.hide_loading()
+    window.relay_panel.update_status(
+        status.output_state, status.control_text, status.mode_text, status.control_mode
+    )
+    window.grab().save(os.path.join(BASE_DIR, "preview_compact_relay.png"))
     window._nav_to(2)
     window.registers_panel.populate([
         {"obis": "0.0.96.1.0.255", "name_uz": "Seriya raqami", "name": "Serial", "value": "12345678", "unit": "", "category": "info"},
         {"obis": "1.0.32.7.0.255", "name_uz": "Kuchlanish L1", "name": "Voltage L1", "value": "220.4 V", "unit": "V", "category": "instant"},
         {"obis": "1.0.15.8.0.255", "name_uz": "Umumiy energiya", "name": "Energy", "value": "1534.2 kWh", "unit": "kWh", "category": "energy"},
     ])
-    window.grab().save("preview_registers.png")
+    window.grab().save(os.path.join(BASE_DIR, "preview_compact_registers.png"))
+    window._nav_to(3)
+    window.settings_panel.update_info("12345678", "TEA", "TE71", "1.0", "TE71")
+    window.grab().save(os.path.join(BASE_DIR, "preview_compact_settings.png"))
+    window._nav_to(0)
+    window.resize(1240, 800)
+    window.grab().save(os.path.join(BASE_DIR, "preview_main.png"))
+    window._nav_to(1)
+    window.relay_panel.hide_loading()
+    window.relay_panel.update_status(
+        status.output_state, status.control_text, status.mode_text, status.control_mode
+    )
+    window.grab().save(os.path.join(BASE_DIR, "preview_relay.png"))
+    window._nav_to(2)
+    window.registers_panel.populate([
+        {"obis": "0.0.96.1.0.255", "name_uz": "Seriya raqami", "name": "Serial", "value": "12345678", "unit": "", "category": "info"},
+        {"obis": "1.0.32.7.0.255", "name_uz": "Kuchlanish L1", "name": "Voltage L1", "value": "220.4 V", "unit": "V", "category": "instant"},
+        {"obis": "1.0.15.8.0.255", "name_uz": "Umumiy energiya", "name": "Energy", "value": "1534.2 kWh", "unit": "kWh", "category": "energy"},
+    ])
+    window.grab().save(os.path.join(BASE_DIR, "preview_registers.png"))
+    window._nav_to(3)
+    window.settings_panel.update_info("12345678", "TEA", "TE71", "1.0", "TE71")
+    window.grab().save(os.path.join(BASE_DIR, "preview_settings.png"))
 
     QTimer.singleShot(0, app.quit)
     app.exec()

@@ -105,8 +105,10 @@ class MeterService:
 
     def read_scalers(self):
         """Read scaler/unit for key registers (attribute 3)."""
-        scaler_keys = ["energy_total", "voltage_l1", "current_l1",
-                       "power_active_plus", "frequency", "power_factor"]
+        scaler_keys = [
+            key for key, reg in REGISTERS.items()
+            if reg.class_id == 3 and reg.category in {"energy", "instant"}
+        ]
         for key in scaler_keys:
             reg = REGISTERS.get(key)
             if not reg or reg.class_id != 3:

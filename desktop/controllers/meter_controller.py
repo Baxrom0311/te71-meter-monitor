@@ -99,8 +99,8 @@ class _MeterWorker(QThread):
             return (ok, status)
 
         elif self._action == "read_custom":
-            class_id, obis_tuple = self._args
-            raw = svc.conn.get_attribute(class_id, obis_tuple, 2)
+            class_id, obis_tuple, attr = self._args
+            raw = svc.conn.get_attribute(class_id, obis_tuple, attr)
             if raw:
                 val, _, _ = parse_dlms_data(raw)
                 return format_value(val)
@@ -235,8 +235,8 @@ class MeterController(QObject):
     def change_password(self, new_password: str):
         self._enqueue("change_password", new_password)
 
-    def read_custom_register(self, class_id: int, obis_tuple: tuple):
-        self._enqueue("read_custom", class_id, obis_tuple)
+    def read_custom_register(self, class_id: int, obis_tuple: tuple, attr: int = 2):
+        self._enqueue("read_custom", class_id, obis_tuple, attr)
 
     def reconnect(self):
         self._enqueue("reconnect")

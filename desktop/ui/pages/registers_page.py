@@ -28,25 +28,33 @@ class RegistersPanel(QWidget):
         # ===== Toolbar =====
         toolbar = QFrame()
         toolbar.setObjectName("card")
-        tb_layout = QHBoxLayout(toolbar)
-        tb_layout.setContentsMargins(16, 12, 16, 12)
-        tb_layout.setSpacing(12)
+        toolbar_layout = QVBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(16, 12, 16, 12)
+        toolbar_layout.setSpacing(10)
+
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(10)
+        toolbar_layout.addLayout(action_layout)
 
         self.btn_read_all = QPushButton("Registrlarni o'qish")
         self.btn_read_all.setObjectName("primary")
         self.btn_read_all.setEnabled(False)
-        tb_layout.addWidget(self.btn_read_all)
+        action_layout.addWidget(self.btn_read_all)
 
         self.btn_export = QPushButton("Eksport (CSV)")
         self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self._export_csv)
-        tb_layout.addWidget(self.btn_export)
+        action_layout.addWidget(self.btn_export)
+        action_layout.addStretch()
+
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(10)
+        toolbar_layout.addLayout(filter_layout)
 
         # Filter
-        tb_layout.addSpacing(8)
         filter_lbl = QLabel("Filtr:")
         filter_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
-        tb_layout.addWidget(filter_lbl)
+        filter_layout.addWidget(filter_lbl)
 
         self.filter_combo = QComboBox()
         self.filter_combo.addItems([
@@ -57,43 +65,51 @@ class RegistersPanel(QWidget):
             "Rele",
         ])
         self.filter_combo.currentIndexChanged.connect(self._apply_filter_and_search)
-        tb_layout.addWidget(self.filter_combo)
+        filter_layout.addWidget(self.filter_combo)
 
         # Search Bar
-        tb_layout.addSpacing(12)
         search_lbl = QLabel("Qidirish:")
         search_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
-        tb_layout.addWidget(search_lbl)
+        filter_layout.addWidget(search_lbl)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Nomi yoki OBIS kodini yozing...")
         self.search_input.setMinimumHeight(36)
-        self.search_input.setMinimumWidth(220)
         self.search_input.textChanged.connect(self._apply_filter_and_search)
-        tb_layout.addWidget(self.search_input)
+        filter_layout.addWidget(self.search_input, 1)
 
-        tb_layout.addStretch()
+        custom_layout = QHBoxLayout()
+        custom_layout.setSpacing(10)
+        toolbar_layout.addLayout(custom_layout)
 
         # Custom OBIS
         obis_lbl = QLabel("OBIS:")
         obis_lbl.setStyleSheet(inline_style(color=Colors.TEXT_DIMMED, font_weight=Fonts.WEIGHT_BOLD))
-        tb_layout.addWidget(obis_lbl)
+        custom_layout.addWidget(obis_lbl)
 
         self.obis_input = QLineEdit()
         self.obis_input.setPlaceholderText("1.0.15.8.0.255")
-        self.obis_input.setMaximumWidth(160)
+        self.obis_input.setMinimumWidth(180)
+        self.obis_input.setMaximumWidth(220)
         self.obis_input.setMinimumHeight(36)
-        tb_layout.addWidget(self.obis_input)
+        custom_layout.addWidget(self.obis_input)
 
         self.class_input = QLineEdit("3")
         self.class_input.setPlaceholderText("Class")
-        self.class_input.setMaximumWidth(50)
+        self.class_input.setMaximumWidth(70)
         self.class_input.setMinimumHeight(36)
-        tb_layout.addWidget(self.class_input)
+        custom_layout.addWidget(self.class_input)
+
+        self.attr_input = QLineEdit("2")
+        self.attr_input.setPlaceholderText("Attr")
+        self.attr_input.setMaximumWidth(70)
+        self.attr_input.setMinimumHeight(36)
+        custom_layout.addWidget(self.attr_input)
 
         self.btn_read_custom = QPushButton("Bitta o'qish")
         self.btn_read_custom.setEnabled(False)
-        tb_layout.addWidget(self.btn_read_custom)
+        custom_layout.addWidget(self.btn_read_custom)
+        custom_layout.addStretch()
 
         layout.addWidget(toolbar)
 
@@ -157,11 +173,11 @@ class RegistersPanel(QWidget):
         self.lbl_status.setText(f"{len(data)} ta registr tekshirildi, {ok_count} tasi o'qildi")
         self.btn_export.setEnabled(self.table.rowCount() > 0)
 
-    def add_custom_row(self, obis: str, class_id: int, value: str):
+    def add_custom_row(self, obis: str, class_id: int, attr: int, value: str):
         row = self.table.rowCount()
         self.table.setRowCount(row + 1)
         self.table.setItem(row, 0, QTableWidgetItem(obis))
-        self.table.setItem(row, 1, QTableWidgetItem("Qo'lda kiritilgan"))
+        self.table.setItem(row, 1, QTableWidgetItem(f"Qo'lda kiritilgan (class {class_id}, attr {attr})"))
         val_item = QTableWidgetItem(value)
         val_item.setForeground(QColor(Colors.ACCENT_BLUE))
         self.table.setItem(row, 2, val_item)
