@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, X, Search, Home, Building2, MapPin, Layers, Navigation, ArrowRight, ExternalLink, Download } from 'lucide-react'
+import { Plus, X, Search, Home, Building2, MapPin, Layers, Navigation, ArrowRight, Download } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useBuildings } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -10,8 +10,27 @@ import apiClient from '@/lib/api'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
-import { MapPanel } from '@/components/MapPanel'
-import { resolveCoordinates } from '@/lib/map'
+import { lazy, Suspense } from 'react'
+const MapboxBuildings = lazy(() => import('@/components/MapboxBuildings').then(m => ({ default: m.MapboxBuildings })))
+import type { Building } from '@/types/api'
+
+function getBuildingStatus(b: Building): 'online' | 'offline' | 'unknown' {
+  if (!b.is_active) return 'offline'
+  if (b.ext_sensor_online === true) return 'online'
+  if (b.ext_sensor_online === false) return 'offline'
+  return 'unknown'
+}
+
+const STATUS_DOT: Record<string, string> = {
+  online: 'bg-green-500 shadow-[0_0_6px_#22c55e]',
+  unknown: 'bg-yellow-400 shadow-[0_0_6px_#eab308]',
+  offline: 'bg-red-500 shadow-[0_0_6px_#ef4444]',
+}
+const STATUS_LABEL: Record<string, string> = {
+  online: 'Faol',
+  unknown: 'Noaniq',
+  offline: 'Nofaol',
+}
 
 export default function BuildingsPage() {
   const { data: buildings, isLoading, isError, error: queryError, refetch } = useBuildings()
@@ -27,8 +46,8 @@ export default function BuildingsPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [mapsUrl, setMapsUrl] = useState('')
-  const [floors, setFloors] = useState(1)
-  const [entrancesCount, setEntrancesCount] = useState(1)
+  const [floors, setFloors] = useState(4)
+  const [entrancesCount, setEntrancesCount] = useState(3)
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,8 +88,8 @@ export default function BuildingsPage() {
       setName('')
       setAddress('')
       setMapsUrl('')
-      setFloors(1)
-      setEntrancesCount(1)
+      setFloors(4)
+      setEntrancesCount(3)
       setDescription('')
     } catch (err: any) {
       console.error(err)
@@ -96,7 +115,7 @@ export default function BuildingsPage() {
   }, [buildings, searchQuery])
 
   const mappedBuildings = useMemo(
-    () => filteredBuildings.filter((b) => resolveCoordinates(b.latitude, b.longitude, b.maps_url)),
+    () => filteredBuildings.filter((b) => b.latitude && b.longitude),
     [filteredBuildings],
   )
 
@@ -147,71 +166,29 @@ export default function BuildingsPage() {
           </div>
         </div>
 
-        {mappedBuildings.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-5">
-            {selectedMapBuilding && (
-              <MapPanel
-                title="Binolar xaritasi"
-                subtitle={`${mappedBuildings.length} ta koordinatali bino`}
-                name={selectedMapBuilding.name}
-                address={selectedMapBuilding.address}
-                mapsUrl={selectedMapBuilding.maps_url}
-                latitude={selectedMapBuilding.latitude}
-                longitude={selectedMapBuilding.longitude}
-                heightClassName="h-[360px]"
-              />
-            )}
-
-            <div className="glass-card rounded-2xl p-5 space-y-4">
-              {selectedMapBuilding ? (
-                <>
-                  <div>
-                    <p className="text-xs font-bold uppercase text-gray-500 mb-1">Tanlangan bino</p>
-                    <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{selectedMapBuilding.name}</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{selectedMapBuilding.address ?? 'Manzil kiritilmagan'}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-gray-300 dark:border-gray-800 p-3">
-                      <p className="text-[11px] uppercase font-bold text-gray-500">Latitude</p>
-                      <p className="font-mono text-sm text-gray-950 dark:text-gray-100">{selectedMapBuilding.latitude}</p>
-                    </div>
-                    <div className="rounded-xl border border-gray-300 dark:border-gray-800 p-3">
-                      <p className="text-[11px] uppercase font-bold text-gray-500">Longitude</p>
-                      <p className="font-mono text-sm text-gray-950 dark:text-gray-100">{selectedMapBuilding.longitude}</p>
-                    </div>
-                  </div>
-                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
-                    {mappedBuildings.map((building) => (
-                      <button
-                        key={building.id}
-                        onClick={() => setSelectedMapBuildingId(building.id)}
-                        className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                          selectedMapBuilding.id === building.id
-                            ? 'border-blue-500/40 bg-blue-500/10'
-                            : 'border-gray-300/60 dark:border-gray-800/70 hover:border-blue-500/30'
-                        }`}
-                      >
-                        <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{building.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{building.address ?? building.maps_url ?? 'Manzil yo‘q'}</p>
-                      </button>
-                    ))}
-                  </div>
-                  {selectedMapBuilding.maps_url && (
-                    <a
-                      href={selectedMapBuilding.maps_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Google Mapsda ochish
-                    </a>
-                  )}
-                </>
-              ) : (
-                <EmptyBlock title="Koordinata yo‘q" message="Xaritada ko‘rsatish uchun latitude/longitude kerak." />
-              )}
+        {/* Mapbox 3D xarita */}
+        {buildings && buildings.length > 0 && (
+          <div className="glass-card rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-800/40">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-400" />
+                <span className="font-bold text-gray-100 text-sm">Binolar xaritasi (3D)</span>
+                <span className="text-xs text-gray-500">{mappedBuildings.length} ta koordinatali</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-semibold">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Faol</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Noaniq</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Nofaol</span>
+              </div>
             </div>
+            <Suspense fallback={<div className="h-[500px] flex items-center justify-center bg-gray-900/50 text-gray-500 text-sm">Xarita yuklanmoqda...</div>}>
+              <MapboxBuildings
+                buildings={filteredBuildings}
+                selectedId={selectedMapBuildingId}
+                onSelect={setSelectedMapBuildingId}
+                height="500px"
+              />
+            </Suspense>
           </div>
         )}
 
@@ -226,60 +203,58 @@ export default function BuildingsPage() {
               <Link
                 key={building.id}
                 to={`/buildings/${building.id}`}
-                className="group glass-card glass-card-hover rounded-2xl p-6 block relative overflow-hidden"
+                className="group glass-card glass-card-hover rounded-2xl p-5 block relative overflow-hidden"
               >
-                {/* Building Icon & Header */}
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="space-y-1">
-                    <h3 className="text-xl font-bold text-gray-950 dark:text-gray-100 group-hover:text-blue-500 transition-colors">
+                {/* Status dot */}
+                {(() => {
+                  const st = getBuildingStatus(building)
+                  return (
+                    <span className={`absolute top-4 right-4 w-2.5 h-2.5 rounded-full ${STATUS_DOT[st]}`} title={STATUS_LABEL[st]} />
+                  )
+                })()}
+
+                {/* Header */}
+                <div className="flex items-start gap-3 mb-3 pr-5">
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0 group-hover:scale-110 transition-transform duration-300">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-950 dark:text-gray-100 group-hover:text-blue-500 transition-colors leading-tight truncate">
                       {building.name}
                     </h3>
                     {building.address && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-blue-550 shrink-0" />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 shrink-0" />
                         <span className="truncate">{building.address}</span>
                       </p>
                     )}
-                  </div>
-                  <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                    <Building2 className="w-5 h-5" />
+                    {building.organization_name && (
+                      <p className="text-xs text-blue-400/70 mt-0.5 truncate">{building.organization_name}</p>
+                    )}
                   </div>
                 </div>
 
-                {/* Badges Info */}
-                <div className="flex flex-wrap gap-2.5 my-4">
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/50 dark:bg-white/5 border border-gray-300/40 dark:border-white/5 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    <Layers className="w-3.5 h-3.5 text-blue-500" />
-                    <span>{building.floors} qavat</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/50 dark:bg-white/5 border border-gray-300/40 dark:border-white/5 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    <Navigation className="w-3.5 h-3.5 text-purple-500" />
-                    <span>{building.entrances_count} kirish</span>
-                  </div>
-                  {building.maps_url && (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/50 dark:bg-white/5 border border-gray-300/40 dark:border-white/5 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      <ExternalLink className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Maps</span>
-                    </div>
+                {/* Badges */}
+                <div className="flex flex-wrap gap-2 my-3">
+                  <span className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-white/8 rounded-lg text-xs font-semibold text-gray-300">
+                    <Layers className="w-3 h-3 text-blue-400" />{building.floors} qavat
+                  </span>
+                  <span className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-white/8 rounded-lg text-xs font-semibold text-gray-300">
+                    <Navigation className="w-3 h-3 text-purple-400" />{building.entrances_count} kirish
+                  </span>
+                  {building.ext_sensor_temp_out != null && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-white/8 rounded-lg text-xs font-semibold text-gray-300">
+                      🌡 {building.ext_sensor_temp_out}°C
+                    </span>
                   )}
                 </div>
 
-                {/* Description and arrow */}
-                <div className="pt-3 border-t border-gray-300/40 dark:border-white/5 flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    {building.description ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-450 truncate italic">
-                        {building.description}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500 dark:text-gray-550 italic">
-                        Tavsif mavjud emas
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300 shrink-0">
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
+                {/* Footer */}
+                <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500 truncate italic flex-1">
+                    {building.description || building.mahalla_name || 'Tavsif mavjud emas'}
+                  </p>
+                  <ArrowRight className="w-4 h-4 text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all shrink-0" />
                 </div>
               </Link>
             ))}

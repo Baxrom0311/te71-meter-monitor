@@ -31,6 +31,22 @@ export interface Building {
   is_active: boolean
   created_at: number
   updated_at: number
+  // O'zimizdan
+  image_url: string | null
+  total_apartments: number | null
+  construction_year: number | null
+  // Urganchshahar
+  organization_name: string | null
+  mahalla_name: string | null
+  street_name: string | null
+  object_type: string | null
+  polygon_coordinate: string | null
+  is_official: boolean | null
+  ext_sensor_temp_out: number | null
+  ext_sensor_temp_in: number | null
+  ext_sensor_pressure: string | null
+  ext_sensor_online: boolean | null
+  ext_sensor_updated_at: string | null
 }
 
 // Device — backend actual shape
