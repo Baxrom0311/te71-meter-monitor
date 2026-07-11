@@ -94,6 +94,21 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
         name = (h.get("description") or "").strip() or f"Bino #{h['id']}"
         lat = h.get("latitude") or None
         lon = h.get("longitude") or None
+
+        # lat/lon 0.0 bo'lsa polygonCoordinate dan markaz hisoblash
+        if not lat or not lon:
+            try:
+                import json as _json
+                poly = _json.loads(h.get("polygonCoordinate") or "[]")
+                # [[[ [lat, lon], ... ]]] yoki [[[ [lon, lat], ... ]]]
+                coords = poly[0][0] if poly and poly[0] else []
+                if coords:
+                    lats = [c[0] for c in coords]
+                    lons = [c[1] for c in coords]
+                    lat = sum(lats) / len(lats)
+                    lon = sum(lons) / len(lons)
+            except Exception:
+                pass
         desc_parts = [h.get("objectName"), h.get("organizationName"), h.get("mahallaName")]
         desc = " · ".join(p for p in desc_parts if p)
 
