@@ -1,6 +1,11 @@
+import { useEffect, useRef } from 'react'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { ExternalLink, MapPin } from 'lucide-react'
 import { EmptyBlock } from '@/components/StateBlock'
-import { osmEmbedUrl, resolveCoordinates } from '@/lib/map'
+import { resolveCoordinates } from '@/lib/map'
+
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || ''
 
 interface MapPanelProps {
   title?: string
@@ -23,7 +28,32 @@ export function MapPanel({
   longitude,
   heightClassName = 'h-[360px]',
 }: MapPanelProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const coordinates = resolveCoordinates(latitude, longitude, mapsUrl)
+
+  useEffect(() => {
+    if (!containerRef.current || !coordinates || !MAPTILER_KEY) return
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`,
+      center: [coordinates.longitude, coordinates.latitude],
+      zoom: 16,
+      pitch: 40,
+      antialias: true,
+    })
+
+    new maplibregl.Marker({ color: '#3b82f6' })
+      .setLngLat([coordinates.longitude, coordinates.latitude])
+      .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(
+        `<div style="font-family:system-ui;padding:2px"><b>${name}</b>${address ? `<div style="font-size:11px;color:#64748b;margin-top:2px">${address}</div>` : ''}</div>`
+      ))
+      .addTo(map)
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-right')
+
+    return () => map.remove()
+  }, [coordinates?.latitude, coordinates?.longitude]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className="glass-card rounded-2xl overflow-hidden shadow border border-gray-300/60 dark:border-gray-800/70">
@@ -37,7 +67,7 @@ export function MapPanel({
             {subtitle ?? address ?? name}
           </p>
         </div>
-        {mapsUrl && (
+        {mapsUrl && !mapsUrl.startsWith('ext://') && (
           <a
             href={mapsUrl}
             target="_blank"
@@ -51,15 +81,9 @@ export function MapPanel({
       </div>
 
       {coordinates ? (
-        <div className={`relative ${heightClassName} bg-gray-100 dark:bg-gray-950`}>
-          <iframe
-            title={`${name} xaritasi`}
-            src={osmEmbedUrl(coordinates)}
-            className="absolute inset-0 h-full w-full border-0"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-          <div className="pointer-events-none absolute left-4 bottom-4 rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/90 dark:bg-gray-950/90 px-3 py-2 shadow-xl backdrop-blur">
+        <div className={`relative ${heightClassName}`}>
+          <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+          <div className="pointer-events-none absolute left-4 bottom-4 rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/90 dark:bg-gray-950/90 px-3 py-2 shadow-xl backdrop-blur z-10">
             <p className="text-xs font-black text-gray-950 dark:text-gray-100">{name}</p>
             <p className="text-[11px] font-mono text-gray-600 dark:text-gray-400">
               {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
@@ -70,7 +94,7 @@ export function MapPanel({
         <div className={heightClassName}>
           <EmptyBlock
             title="Koordinata topilmadi"
-            message="Xaritada ko‘rsatish uchun latitude/longitude yoki koordinatali Google Maps link kiriting."
+            message="Xaritada ko'rsatish uchun latitude/longitude kiriting."
           />
         </div>
       )}

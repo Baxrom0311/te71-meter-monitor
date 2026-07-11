@@ -38,12 +38,3 @@ export function resolveCoordinates(
   return coordinatesFromMapsUrl(mapsUrl)
 }
 
-export function osmEmbedUrl(coordinates: Coordinates, zoom = 17) {
-  const delta = zoom >= 17 ? 0.004 : 0.01
-  const left = coordinates.longitude - delta
-  const right = coordinates.longitude + delta
-  const bottom = coordinates.latitude - delta
-  const top = coordinates.latitude + delta
-  const marker = `${coordinates.latitude},${coordinates.longitude}`
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`
-}
