@@ -43,14 +43,19 @@ router = APIRouter(prefix="/api")
 
 EXTERNAL_API = "https://app.urganchshahar.uz/api/trashbags/houses"
 EXTERNAL_SOURCE_PREFIX = "ext://urganchshahar/"
+EXTERNAL_SESSION = "BC00197D063A33D901B3C6A822A8F801"
 
 
 @router.post("/buildings/import-external")
 async def import_external_buildings(admin: dict = Depends(require_admin)):
     """Urganchshahar API dan binolarni import qiladi. Takrorlanmaydi."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(EXTERNAL_API)
+        headers = {
+            "Cookie": f"JSESSIONID={EXTERNAL_SESSION}",
+            "User-Agent": "Mozilla/5.0",
+        }
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(EXTERNAL_API, headers=headers)
             resp.raise_for_status()
             houses: list[dict] = resp.json()
     except Exception as e:
