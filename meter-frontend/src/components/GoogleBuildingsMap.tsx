@@ -20,9 +20,32 @@ interface Props {
   selectedId?: number | null
   onSelect?: (id: number) => void
   height?: string
+  mode?: '2d' | '3d'
+  onModeChange?: (mode: '2d' | '3d') => void
 }
 
-export function GoogleBuildingsMap({ buildings, selectedId, onSelect, height = '500px' }: Props) {
+function applyMapMode(map: google.maps.Map, mode: '2d' | '3d') {
+  if (mode === '3d') {
+    map.setMapTypeId(google.maps.MapTypeId.SATELLITE)
+    map.setTilt(45)
+    map.setHeading(map.getHeading() || 55)
+    map.setZoom(Math.max(map.getZoom() || 18, 18))
+    return
+  }
+
+  map.setMapTypeId(google.maps.MapTypeId.ROADMAP)
+  map.setTilt(0)
+  map.setHeading(0)
+}
+
+export function GoogleBuildingsMap({
+  buildings,
+  selectedId,
+  onSelect,
+  height = '500px',
+  mode = '2d',
+  onModeChange,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([])
@@ -32,8 +55,8 @@ export function GoogleBuildingsMap({ buildings, selectedId, onSelect, height = '
   const flyTo = useCallback((b: Building) => {
     if (!mapRef.current || !b.latitude || !b.longitude) return
     mapRef.current.panTo({ lat: b.latitude, lng: b.longitude })
-    mapRef.current.setZoom(17)
-  }, [])
+    mapRef.current.setZoom(mode === '3d' ? 18 : 17)
+  }, [mode])
 
   function infoHtml(b: Building) {
     return `<div style="font-family:system-ui;min-width:180px;padding:4px 2px">
@@ -58,13 +81,16 @@ export function GoogleBuildingsMap({ buildings, selectedId, onSelect, height = '
 
       const map = new google.maps.Map(container, {
         center: center ? { lat: center.latitude!, lng: center.longitude! } : { lat: 41.55, lng: 60.64 },
-        zoom: 13,
+        zoom: mode === '3d' ? 18 : 13,
         mapId: 'smartbino_map',
         gestureHandling: 'greedy',
         disableDefaultUI: false,
-        mapTypeControl: true,
+        mapTypeControl: false,
         streetViewControl: false,
+        fullscreenControl: true,
+        rotateControl: true,
       })
+      applyMapMode(map, mode)
       mapRef.current = map
       infoRef.current = new google.maps.InfoWindow()
 
@@ -140,6 +166,24 @@ export function GoogleBuildingsMap({ buildings, selectedId, onSelect, height = '
   }, [buildings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!mapRef.current) return
+    applyMapMode(mapRef.current, mode)
+    if (mode !== '3d') return
+
+    const target =
+      (selectedId ? buildings.find((b) => b.id === selectedId) : null) ??
+      buildings.find((b) => b.latitude && b.longitude)
+    if (target?.latitude && target.longitude) {
+      mapRef.current.panTo({ lat: target.latitude, lng: target.longitude })
+      mapRef.current.setZoom(18)
+      window.setTimeout(() => {
+        mapRef.current?.setTilt(45)
+        mapRef.current?.setHeading(mapRef.current.getHeading() || 55)
+      }, 250)
+    }
+  }, [mode, selectedId, buildings])
+
+  useEffect(() => {
     if (!selectedId) return
     const b = buildings.find((x) => x.id === selectedId)
     if (b) flyTo(b)
@@ -156,5 +200,59 @@ export function GoogleBuildingsMap({ buildings, selectedId, onSelect, height = '
     )
   }
 
-  return <div ref={containerRef} className="rounded-b-2xl overflow-hidden" style={{ height, width: '100%' }} />
+  const rotate = (delta: number) => {
+    const map = mapRef.current
+    if (!map) return
+    map.setHeading(((map.getHeading() || 0) + delta + 360) % 360)
+  }
+
+  const pitch = (tilt: number) => {
+    const map = mapRef.current
+    if (!map) return
+    map.setTilt(tilt)
+  }
+
+  return (
+    <div className="relative rounded-b-2xl overflow-hidden" style={{ height, width: '100%' }}>
+      <div ref={containerRef} className="absolute inset-0" />
+
+      <div className="absolute left-4 top-4 z-10 flex items-center overflow-hidden rounded-xl border border-gray-800/70 bg-gray-950/90 p-1 shadow-2xl backdrop-blur">
+        <button
+          type="button"
+          onClick={() => onModeChange?.('2d')}
+          className={`px-3 py-1.5 text-xs font-black transition ${mode === '2d' ? 'rounded-lg bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+        >
+          2D
+        </button>
+        <button
+          type="button"
+          onClick={() => onModeChange?.('3d')}
+          className={`px-3 py-1.5 text-xs font-black transition ${mode === '3d' ? 'rounded-lg bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+        >
+          3D
+        </button>
+      </div>
+
+      {mode === '3d' && (
+        <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
+          <div className="flex overflow-hidden rounded-xl border border-gray-800/70 bg-gray-950/90 p-1 shadow-2xl backdrop-blur">
+            <button type="button" onClick={() => rotate(-35)} className="px-3 py-1.5 text-xs font-black text-gray-200 hover:bg-gray-800 rounded-lg">
+              Chap
+            </button>
+            <button type="button" onClick={() => rotate(35)} className="px-3 py-1.5 text-xs font-black text-gray-200 hover:bg-gray-800 rounded-lg">
+              O'ng
+            </button>
+          </div>
+          <div className="flex overflow-hidden rounded-xl border border-gray-800/70 bg-gray-950/90 p-1 shadow-2xl backdrop-blur">
+            <button type="button" onClick={() => pitch(0)} className="px-3 py-1.5 text-xs font-black text-gray-200 hover:bg-gray-800 rounded-lg">
+              Tekis
+            </button>
+            <button type="button" onClick={() => pitch(45)} className="px-3 py-1.5 text-xs font-black text-gray-200 hover:bg-gray-800 rounded-lg">
+              Qiya
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

@@ -68,6 +68,7 @@ export default function BuildingsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedMapBuildingId, setSelectedMapBuildingId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [mapMode, setMapMode] = useState<'2d' | '3d'>('3d')
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(DEFAULT_COLS)
   const [colPickerOpen, setColPickerOpen] = useState(false)
 
@@ -237,13 +238,36 @@ export default function BuildingsPage() {
                 <span className="font-bold text-gray-100 text-sm">Binolar xaritasi</span>
                 <span className="text-xs text-gray-500">{mappedBuildings.length} ta koordinatali</span>
               </div>
-              <div className="flex items-center gap-3 text-xs font-semibold">
+              <div className="flex items-center gap-3 text-xs font-semibold flex-wrap justify-end">
+                <div className="flex items-center gap-1 bg-gray-900/70 rounded-lg p-1 border border-gray-800/70">
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('2d')}
+                    className={`px-2.5 py-1 rounded-md transition ${mapMode === '2d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                  >
+                    2D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('3d')}
+                    className={`px-2.5 py-1 rounded-md transition ${mapMode === '3d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                  >
+                    3D
+                  </button>
+                </div>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Faol</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Noaniq</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Nofaol</span>
               </div>
             </div>
-              <GoogleBuildingsMap buildings={filteredBuildings} selectedId={selectedMapBuildingId} onSelect={setSelectedMapBuildingId} height="480px" />
+              <GoogleBuildingsMap
+                buildings={filteredBuildings}
+                selectedId={selectedMapBuildingId}
+                onSelect={setSelectedMapBuildingId}
+                height="520px"
+                mode={mapMode}
+                onModeChange={setMapMode}
+              />
           </div>
         )}
 
