@@ -25,6 +25,35 @@ Production tartib:
 - Backend ESP32 uchun alohida `device_token` qaytaradi.
 - ESP32 keyingi barcha requestlarda shu `device_token`ni `X-Device-Token` headerida yuboradi.
 
+## Test Hisoblagich Rejimi
+
+Production qurilmalarga aralashmaslik uchun test hisoblagichlar alohida rejimda yuritiladi.
+
+Backend sozlamalari:
+
+```text
+TEST_DEVICE_API_TOKEN=<ixtiyoriy-test-token>
+TEST_METER_SERIALS=202032000525
+TEST_DEVICE_TTL_SEC=300
+```
+
+Test rejim ikki usulda aniqlanadi:
+
+1. ESP32 `X-Device-Token` sifatida `TEST_DEVICE_API_TOKEN` yuborsa.
+2. Reading/register payload ichida `meter_serial` `TEST_METER_SERIALS` ro'yxatida bo'lsa.
+3. WiFiManager/flash app orqali `test mode` yoqilsa (`is_test_device=true` payload yuboriladi).
+
+Test device qoidalari:
+
+- `device_id` baribir ESP32 MAC bo'lib qoladi.
+- Backend device'ni `is_test_device=true` qiladi.
+- `building_id` va `point_id` avtomatik `null` qilinadi.
+- Test device building/measurement pointga biriktirilmaydi.
+- Existing production device test mode payload/token bilan kelib qolsa backend `403` qaytaradi.
+- Har reading/status kelganda `auto_cleanup_at = now + TEST_DEVICE_TTL_SEC` yangilanadi.
+- TTL tugasa background worker test device va unga bog'langan test reading/alert/command yozuvlarini o'chiradi.
+- Hisoblagich seriali o'zgarsa pending commandlar `cancelled` qilinadi.
+
 ## Server Fallback
 
 Firmware bir nechta server URL bilan ishlaydi:

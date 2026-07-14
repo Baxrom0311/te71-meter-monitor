@@ -9,7 +9,18 @@ from sqlalchemy.exc import IntegrityError
 from core.config import settings
 from core.database import SessionLocal
 from core.time import now_ts
-from models.entities import Alert, Device, Reading, WorkerLock
+from models.entities import (
+    Alert,
+    AlertNotification,
+    Command,
+    Device,
+    FirmwareInstallEvent,
+    HourlyUtilityStats,
+    MeasurementPoint,
+    OTABatchDevice,
+    Reading,
+    WorkerLock,
+)
 from services.websocket import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -111,6 +122,48 @@ async def cleanup_old_data_once() -> dict:
     }
 
 
+async def cleanup_expired_test_devices_once() -> dict:
+    n = now_ts()
+    async with SessionLocal() as session:
+        device_ids = list(
+            (
+                await session.scalars(
+                    select(Device.id)
+                    .where(
+                        and_(
+                            Device.is_test_device.is_(True),
+                            Device.auto_cleanup_at.is_not(None),
+                            Device.auto_cleanup_at <= n,
+                        )
+                    )
+                    .limit(500)
+                )
+            ).all()
+        )
+        if not device_ids:
+            return {"deleted_test_devices": 0}
+
+        await session.execute(update(MeasurementPoint).where(MeasurementPoint.device_id.in_(device_ids)).values(device_id=None))
+        await session.execute(delete(OTABatchDevice).where(OTABatchDevice.device_id.in_(device_ids)))
+        await session.execute(delete(FirmwareInstallEvent).where(FirmwareInstallEvent.device_id.in_(device_ids)))
+        await session.execute(delete(HourlyUtilityStats).where(HourlyUtilityStats.device_id.in_(device_ids)))
+        await session.execute(delete(AlertNotification).where(AlertNotification.device_id.in_(device_ids)))
+        await session.execute(delete(Alert).where(Alert.device_id.in_(device_ids)))
+        await session.execute(delete(Command).where(Command.device_id.in_(device_ids)))
+        await session.execute(delete(Reading).where(Reading.device_id.in_(device_ids)))
+        result = await session.execute(
+            delete(Device)
+            .where(
+                and_(
+                    Device.is_test_device.is_(True),
+                    Device.id.in_(device_ids),
+                )
+            )
+        )
+        await session.commit()
+    return {"deleted_test_devices": result.rowcount or 0}
+
+
 async def offline_detector() -> None:
     await asyncio.sleep(30)
     while True:
@@ -129,6 +182,17 @@ async def data_cleanup() -> None:
         except Exception as exc:
             logger.exception("data_cleanup error: %s", exc)
         await asyncio.sleep(86400)
+
+
+async def test_device_cleanup_worker() -> None:
+    """Test qurilmalarni TTL tugaganda o'chirish — har 60s."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await run_with_worker_lock("test_device_cleanup_worker", 55, cleanup_expired_test_devices_once)
+        except Exception as exc:
+            logger.exception("test_device_cleanup_worker error: %s", exc)
+        await asyncio.sleep(60)
 
 
 async def alert_notification_worker() -> None:

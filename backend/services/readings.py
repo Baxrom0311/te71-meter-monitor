@@ -10,9 +10,10 @@ from models.entities import Device, Reading
 from models.schemas import MeterReading, MeterReadingBatch
 from repositories.base import model_to_dict
 from repositories.buildings import MeasurementPointRepository
-from repositories.devices import DeviceRepository
+from repositories.devices import CommandRepository, DeviceRepository
 from repositories.readings import ReadingRepository
 from services import alerts as alert_service
+from services.devices import is_test_meter_serial, mark_test_device
 from services.websocket import ws_manager
 
 
@@ -44,7 +45,7 @@ def _validate_reading(body: MeterReading) -> None:
     _validate_range("temperature_c", body.temperature_c, settings.min_temperature_c, settings.max_temperature_c)
 
 
-async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: int) -> list[dict]:
+async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: int, test_mode: bool = False) -> list[dict]:
     """Bitta session ichida reading saqlash. Alert broadcastlarni qaytaradi."""
     if body.reading_id:
         if await ReadingRepository(session).exists_external_id(body.device_id, body.reading_id):
@@ -52,6 +53,7 @@ async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: 
 
     device_repo = DeviceRepository(session)
     device = await device_repo.get(body.device_id)
+    requested_test_mode = test_mode or bool(body.is_test_device) or is_test_meter_serial(body.meter_serial)
     if not device:
         device = Device(
             id=body.device_id,
@@ -61,14 +63,38 @@ async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: 
             created_at=ts,
         )
         device_repo.add(device)
+    elif requested_test_mode and not device.is_test_device:
+        raise HTTPException(403, "Test rejim production qurilma uchun ishlatilmaydi")
 
     device.last_seen = ts
     device.utility_type = body.utility_type or device.utility_type
     device.software_version = body.software_version or body.fw_version or device.software_version
     device.hardware_version = body.hardware_version or device.hardware_version
     device.fw_version = body.fw_version or device.fw_version
-    device.building_id = body.building_id or device.building_id
-    device.point_id = body.point_id or device.point_id
+    if body.meter_serial:
+        if device.meter_serial and body.meter_serial != device.meter_serial:
+            from services import audit as audit_service
+            await audit_service.record(
+                {"sub": 0, "username": f"device:{body.device_id}"},
+                "device.meter_serial_changed",
+                "device",
+                body.device_id,
+                {"old_serial": device.meter_serial, "new_serial": body.meter_serial, "reason": "reading"}
+            )
+            device.previous_meter_serial = device.meter_serial
+            device.meter_changed_at = ts
+            device.needs_rebind = True
+            device.building_id = None
+            device.point_id = None
+            await CommandRepository(session).cancel_active_for_device(body.device_id, "meter_serial_changed")
+        device.meter_serial = body.meter_serial
+        if requested_test_mode:
+            mark_test_device(device, ts)
+    elif requested_test_mode:
+        mark_test_device(device, ts)
+    if not device.is_test_device:
+        device.building_id = body.building_id or device.building_id
+        device.point_id = body.point_id or device.point_id
     device.updated_at = ts
 
     await alert_service.clear_offline_alerts_for_device(session, body.device_id)
@@ -77,10 +103,11 @@ async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: 
         device_id=body.device_id,
         reading_id=body.reading_id,
         sequence_no=body.sequence_no,
-        building_id=body.building_id or device.building_id,
-        point_id=body.point_id or device.point_id,
+        building_id=None if device.is_test_device else (body.building_id or device.building_id),
+        point_id=None if device.is_test_device else (body.point_id or device.point_id),
         utility_type=body.utility_type,
         sensor_type=body.sensor_type,
+        meter_serial=body.meter_serial,
         ts=ts,
         voltage_l1=body.voltage_l1,
         voltage_l2=body.voltage_l2,
@@ -110,21 +137,23 @@ async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: 
         created_at=ts,
     )
     ReadingRepository(session).add(reading)
+    if device.is_test_device:
+        return []
     return await alert_service.check_alerts(session, body)
 
 
-async def save_reading(body: MeterReading) -> int:
+async def save_reading(body: MeterReading, test_mode: bool = False) -> int:
     _validate_reading(body)
     ts = now_ts()
     async with SessionLocal() as session:
-        alert_broadcasts = await _save_reading_internal(session, body, ts)
+        alert_broadcasts = await _save_reading_internal(session, body, ts, test_mode)
         await session.commit()
     for msg in alert_broadcasts:
         await ws_manager.broadcast(msg)
     return ts
 
 
-async def save_reading_batch(body: MeterReadingBatch) -> dict:
+async def save_reading_batch(body: MeterReadingBatch, test_mode: bool = False) -> dict:
     if not body.readings:
         raise HTTPException(422, "readings bo'sh bo'lmasin")
     expected_device_id = body.device_id or body.readings[0].device_id
@@ -153,7 +182,7 @@ async def save_reading_batch(body: MeterReadingBatch) -> dict:
                     if await ReadingRepository(session).exists_external_id(reading.device_id, reading.reading_id):
                         skipped += 1
                         continue
-                broadcasts = await _save_reading_internal(session, reading, ts)
+                broadcasts = await _save_reading_internal(session, reading, ts, test_mode)
                 all_alert_broadcasts.extend(broadcasts)
                 accepted += 1
             except HTTPException as exc:

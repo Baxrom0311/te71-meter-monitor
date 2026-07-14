@@ -6,7 +6,7 @@ class Settings:
     db_path: Path = Path(os.getenv("DB_PATH", "data/meters.db"))
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://meter:meter_password@localhost:5432/meter_monitor",
+        "sqlite+aiosqlite:///data/meters.db",
     )
     ota_dir: Path = Path(os.getenv("OTA_DIR", "firmware"))
     backup_dir: Path = Path(os.getenv("BACKUP_DIR", "backups"))
@@ -21,6 +21,9 @@ class Settings:
         for item in os.getenv("PUBLIC_SERVER_URLS", "").split(",")
         if item.strip()
     ]
+    external_urganch_base_url: str = os.getenv("EXTERNAL_URGANCH_BASE_URL", "https://app.urganchshahar.uz").rstrip("/")
+    external_urganch_username: str = os.getenv("EXTERNAL_URGANCH_USERNAME", "")
+    external_urganch_password: str = os.getenv("EXTERNAL_URGANCH_PASSWORD", "")
     cors_origins: list[str] = [
         item.strip()
         for item in os.getenv("CORS_ORIGINS", "*").split(",")
@@ -43,6 +46,13 @@ class Settings:
     ota_batch_retry_timeout_sec: int = int(os.getenv("OTA_BATCH_RETRY_TIMEOUT_SEC", "900"))
     ota_batch_max_retries: int = int(os.getenv("OTA_BATCH_MAX_RETRIES", "3"))
     device_api_token: str = os.getenv("DEVICE_API_TOKEN", "")
+    test_device_api_token: str = os.getenv("TEST_DEVICE_API_TOKEN", "")
+    test_meter_serials: set[str] = {
+        item.strip()
+        for item in os.getenv("TEST_METER_SERIALS", "202032000525").split(",")
+        if item.strip()
+    }
+    test_device_ttl_sec: int = int(os.getenv("TEST_DEVICE_TTL_SEC", "300"))
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     run_inline_workers: bool = os.getenv("RUN_INLINE_WORKERS", "true").lower() in {"1", "true", "yes", "on"}
@@ -99,6 +109,8 @@ class Settings:
             errors.append("COMMAND_TTL_SEC kamida 1 bo'lishi kerak")
         if self.command_max_pending_per_device < 1:
             errors.append("COMMAND_MAX_PENDING_PER_DEVICE kamida 1 bo'lishi kerak")
+        if self.test_device_ttl_sec < 60:
+            errors.append("TEST_DEVICE_TTL_SEC kamida 60 bo'lishi kerak")
         if self.ota_batch_process_interval_sec < 1:
             errors.append("OTA_BATCH_PROCESS_INTERVAL_SEC kamida 1 bo'lishi kerak")
         if self.ota_batch_retry_timeout_sec < 1:
@@ -137,11 +149,10 @@ class Settings:
             errors.append("DEVICE_API_TOKEN production uchun kuchli va kamida 24 belgili bo'lishi kerak")
         if self.bootstrap_admin_password and self.bootstrap_admin_password in insecure_values:
             errors.append("BOOTSTRAP_ADMIN_PASSWORD default qiymatda qolmasligi kerak")
-        # CORS va TrustedHost chekovi o'chirilgan (development/test rejimi uchun ruxsat)
-        # if self.cors_origins == ["*"]:
-        #     errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
-        # if self.trusted_hosts == ["*"]:
-        #     errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
+        if self.cors_origins == ["*"]:
+            errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
+        if self.trusted_hosts == ["*"]:
+            errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
         if "telegram" in self.alert_notification_channels and (
             not self.telegram_bot_token or not self.telegram_chat_id
         ):

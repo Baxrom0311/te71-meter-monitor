@@ -40,6 +40,7 @@ from services.background import (
     data_cleanup,
     offline_detector,
     ota_batch_worker,
+    test_device_cleanup_worker,
 )
 from services.monitoring import build_snapshot
 from services.websocket import ws_manager
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     if settings.run_inline_workers:
         asyncio.create_task(offline_detector())
         asyncio.create_task(data_cleanup())
+        asyncio.create_task(test_device_cleanup_worker())
         asyncio.create_task(alert_notification_worker())
         asyncio.create_task(command_cleanup_worker())
         asyncio.create_task(audit_cleanup_worker())
@@ -69,10 +71,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

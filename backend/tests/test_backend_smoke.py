@@ -35,7 +35,7 @@ from core.middleware import (
 )
 from core.security import decode_access_token, validate_access_token
 from core.database import SessionLocal
-from models.entities import Alert, Building, OTABatchDevice
+from models.entities import Alert, Building, Device, OTABatchDevice, Reading
 from models.schemas import (
     BuildingCreate,
     ChatRequest,
@@ -50,7 +50,7 @@ from models.schemas import (
 )
 from schemas.auth import LoginRequest, UserCreate, UserUpdate
 from routers import chat as chat_router
-from services import analytics, audit, auth, backup, buildings, commands, devices, monitoring, ota, readings
+from services import analytics, audit, auth, backup, background, buildings, commands, devices, monitoring, ota, readings
 
 platform = SimpleNamespace(
     aggregate_hourly_stats_once=analytics.aggregate_hourly_stats_once,
@@ -389,6 +389,73 @@ class BackendSmokeTest(unittest.IsolatedAsyncioTestCase):
                     firmware_mode=FirmwareMode.gas,
                 )
             )
+
+    async def test_test_device_flow_is_isolated_and_cleaned_up(self) -> None:
+        old_test_token = settings.test_device_api_token
+        settings.test_device_api_token = "test-device-token"
+        try:
+            await platform.register_device(
+                DeviceRegister(
+                    device_id="esp32-prod-guard-01",
+                    utility_type=UtilityType.electricity,
+                    firmware_mode=FirmwareMode.electricity,
+                )
+            )
+            with self.assertRaises(HTTPException):
+                await platform.verify_device_access("esp32-prod-guard-01", "test-device-token")
+            with self.assertRaises(HTTPException):
+                await platform.save_reading(
+                    MeterReading(
+                        device_id="esp32-prod-guard-01",
+                        utility_type=UtilityType.electricity,
+                        is_test_device=True,
+                        energy_kwh=1,
+                    )
+                )
+
+            await platform.save_reading(
+                MeterReading(
+                    device_id="esp32-test-sim-01",
+                    utility_type=UtilityType.electricity,
+                    meter_serial="202032000525",
+                    voltage_l1=1,
+                    frequency=50,
+                    energy_kwh=1.5,
+                ),
+                test_mode=True,
+            )
+
+            device = await platform.get_device("esp32-test-sim-01")
+            self.assertTrue(device["is_test_device"])
+            self.assertIsNone(device["building_id"])
+            self.assertIsNone(device["point_id"])
+            self.assertTrue(device["auto_cleanup_at"])
+
+            async with SessionLocal() as session:
+                alert_count = await session.scalar(
+                    select(func.count()).select_from(Alert).where(Alert.device_id == "esp32-test-sim-01")
+                )
+                reading_count = await session.scalar(
+                    select(func.count()).select_from(Reading).where(Reading.device_id == "esp32-test-sim-01")
+                )
+                row = await session.get(Device, "esp32-test-sim-01")
+                row.auto_cleanup_at = 1
+                await session.commit()
+
+            self.assertEqual(alert_count, 0)
+            self.assertEqual(reading_count, 1)
+            cleanup = await background.cleanup_expired_test_devices_once()
+            self.assertEqual(cleanup["deleted_test_devices"], 1)
+
+            async with SessionLocal() as session:
+                deleted_device = await session.get(Device, "esp32-test-sim-01")
+                deleted_readings = await session.scalar(
+                    select(func.count()).select_from(Reading).where(Reading.device_id == "esp32-test-sim-01")
+                )
+            self.assertIsNone(deleted_device)
+            self.assertEqual(deleted_readings, 0)
+        finally:
+            settings.test_device_api_token = old_test_token
 
     async def test_ota_batch_claim_prevents_duplicate_processing(self) -> None:
         building = await platform.create_building(BuildingCreate(name="OTA Claim Building", floors=4, entrances_count=1))

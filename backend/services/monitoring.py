@@ -15,8 +15,20 @@ from services.websocket import ws_manager
 
 async def build_snapshot() -> dict:
     async with SessionLocal() as session:
-        devices = (await session.scalars(select(Device).where(Device.is_active.is_(True)))).all()
-        alerts = (await session.scalars(select(Alert).order_by(desc(Alert.ts)).limit(20))).all()
+        devices = (
+            await session.scalars(
+                select(Device).where(and_(Device.is_active.is_(True), Device.is_test_device.is_(False)))
+            )
+        ).all()
+        alerts = (
+            await session.scalars(
+                select(Alert)
+                .join(Device, Device.id == Alert.device_id)
+                .where(Device.is_test_device.is_(False))
+                .order_by(desc(Alert.ts))
+                .limit(20)
+            )
+        ).all()
     device_rows = [model_to_dict(device) | {"online": devices_service.online_status(device.last_seen)} for device in devices]
     return {"devices": device_rows, "alerts": [model_to_dict(alert) for alert in alerts]}
 
@@ -24,25 +36,51 @@ async def build_snapshot() -> dict:
 async def summary() -> dict:
     n = now_ts()
     async with SessionLocal() as session:
-        total = await session.scalar(select(func.count()).select_from(Device).where(Device.is_active.is_(True))) or 0
+        total = (
+            await session.scalar(
+                select(func.count()).select_from(Device).where(
+                    and_(Device.is_active.is_(True), Device.is_test_device.is_(False))
+                )
+            )
+            or 0
+        )
         online = (
             await session.scalar(
                 select(func.count()).select_from(Device).where(
-                    and_(Device.is_active.is_(True), Device.last_seen > n - settings.offline_sec)
+                    and_(
+                        Device.is_active.is_(True),
+                        Device.is_test_device.is_(False),
+                        Device.last_seen > n - settings.offline_sec,
+                    )
                 )
             )
             or 0
         )
         active_alerts = (
-            await session.scalar(select(func.count()).select_from(Alert).where(and_(Alert.cleared.is_(False), Alert.ts > n - 86400)))
+            await session.scalar(
+                select(func.count())
+                .select_from(Alert)
+                .join(Device, Device.id == Alert.device_id)
+                .where(and_(Alert.cleared.is_(False), Alert.ts > n - 86400, Device.is_test_device.is_(False)))
+            )
             or 0
         )
-        reads_last_hour = await session.scalar(select(func.count()).select_from(Reading).where(Reading.ts > n - 3600)) or 0
+        reads_last_hour = (
+            await session.scalar(
+                select(func.count())
+                .select_from(Reading)
+                .join(Device, Device.id == Reading.device_id)
+                .where(and_(Reading.ts > n - 3600, Device.is_test_device.is_(False)))
+            )
+            or 0
+        )
         # Har bir device uchun oxirgi energy_kwh ni summalaymiz
         r_inner = aliased(Reading)
         latest_energy_subq = (
             select(func.max(r_inner.ts).label("max_ts"), r_inner.device_id)
+            .join(Device, Device.id == r_inner.device_id)
             .where(r_inner.energy_kwh.isnot(None))
+            .where(Device.is_test_device.is_(False))
             .group_by(r_inner.device_id)
             .subquery()
         )

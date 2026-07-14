@@ -318,6 +318,7 @@ class DeviceRegister(BaseModel):
     firmware_mode: FirmwareMode = FirmwareMode.auto
     meter_type: Optional[str] = "unknown"
     meter_serial: Optional[str] = None
+    is_test_device: Optional[bool] = None
     serial_number: Optional[str] = None
     hardware_version: Optional[str] = None
     software_version: Optional[str] = None
@@ -441,6 +442,11 @@ class DeviceResponse(BaseModel):
     firmware_mode: str
     meter_type: Optional[str] = None
     meter_serial: Optional[str] = None
+    previous_meter_serial: Optional[str] = None
+    meter_changed_at: Optional[int] = None
+    needs_rebind: bool = False
+    is_test_device: bool = False
+    auto_cleanup_at: Optional[int] = None
     serial_number: Optional[str] = None
     hardware_version: Optional[str] = None
     software_version: Optional[str] = None
@@ -894,6 +900,8 @@ class MeterReading(BaseModel):
     point_id: Optional[int] = None
     utility_type: UtilityType = UtilityType.electricity
     sensor_type: Optional[str] = None
+    meter_serial: Optional[str] = None
+    is_test_device: Optional[bool] = None
     fw_version: Optional[str] = None
     software_version: Optional[str] = None
     hardware_version: Optional[str] = None
@@ -930,6 +938,23 @@ class MeterReadingBatch(BaseModel):
     readings: list[MeterReading]
 
 
+class TestDeviceSimulationRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+    meter_serial: str = Field("202032000525", min_length=1, max_length=128)
+    utility_type: UtilityType = UtilityType.electricity
+    energy_kwh: Optional[float] = 1.0
+    production_guard_only: bool = False
+
+
+class TestDeviceSimulationResponse(BaseModel):
+    ok: bool
+    saved: bool
+    guarded: bool
+    message: str
+    ts: Optional[int] = None
+    device: Optional[DeviceResponse] = None
+
+
 class ReadingResponse(BaseModel):
     id: int
     device_id: str
@@ -939,6 +964,7 @@ class ReadingResponse(BaseModel):
     point_id: Optional[int] = None
     utility_type: str
     sensor_type: Optional[str] = None
+    meter_serial: Optional[str] = None
     ts: int
     voltage_l1: Optional[float] = None
     voltage_l2: Optional[float] = None

@@ -1,6 +1,6 @@
 from sqlalchemy import Integer, Numeric, and_, cast, delete, desc, func, select
 
-from models.entities import Alert, HourlyUtilityStats, Reading
+from models.entities import Alert, Device, HourlyUtilityStats, Reading
 from repositories.base import BaseRepository
 
 
@@ -118,7 +118,8 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                 func.max(Reading.volume_m3).label("max_volume_m3"),
                 func.sum(Reading.leak_detected.cast(Integer)).label("leak_count"),
             )
-            .where(Reading.ts >= cutoff)
+            .join(Device, Device.id == Reading.device_id)
+            .where(and_(Reading.ts >= cutoff, Device.is_test_device.is_(False)))
             .group_by(hour_ts, Reading.building_id, Reading.point_id, Reading.device_id, Reading.utility_type)
         )
         return [dict(row) for row in (await self.session.execute(stmt)).mappings().all()]
@@ -189,8 +190,10 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                     Reading.ts <= to_ts,
                     Reading.utility_type == "electricity",
                     Reading.energy_kwh.isnot(None),
+                    Device.is_test_device.is_(False),
                 )
             )
+            .join(Device, Device.id == Reading.device_id)
             .group_by(bucket_ts, Reading.building_id, Reading.device_id)
         )
         if building_id:
@@ -224,8 +227,10 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                     Reading.ts >= from_ts,
                     Reading.utility_type == "electricity",
                     Reading.energy_kwh.isnot(None),
+                    Device.is_test_device.is_(False),
                 )
             )
+            .join(Device, Device.id == Reading.device_id)
             .group_by(Reading.building_id, Reading.device_id)
             .subquery()
         )

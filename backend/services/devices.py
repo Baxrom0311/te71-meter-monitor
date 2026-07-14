@@ -8,7 +8,7 @@ from models.entities import Device, DeviceProvisioningToken
 from models.schemas import DeviceCreate, DeviceProvisioningTokenCreate, DeviceRegister, DeviceStatus, DeviceUpdate
 from repositories.base import model_to_dict
 from repositories.buildings import BuildingRepository, MeasurementPointRepository
-from repositories.devices import DeviceProvisioningTokenRepository, DeviceRepository
+from repositories.devices import CommandRepository, DeviceProvisioningTokenRepository, DeviceRepository
 from services.websocket import ws_manager
 
 
@@ -26,6 +26,23 @@ def _global_device_token_ok(token: str | None) -> bool:
     return bool(settings.device_api_token and token and token == settings.device_api_token)
 
 
+def is_test_device_token(token: str | None) -> bool:
+    return bool(settings.test_device_api_token and token and token == settings.test_device_api_token)
+
+
+def is_test_meter_serial(meter_serial: str | None) -> bool:
+    return bool(meter_serial and meter_serial in settings.test_meter_serials)
+
+
+def mark_test_device(device: Device, ts: int) -> None:
+    device.is_test_device = True
+    device.is_active = True
+    device.auto_cleanup_at = ts + settings.test_device_ttl_sec
+    device.building_id = None
+    device.point_id = None
+    device.needs_rebind = False
+
+
 def _server_targets() -> list[dict]:
     return [
         {"url": url, "priority": index + 1, "enabled": True}
@@ -38,7 +55,16 @@ async def verify_device_access(device_id: str | None, token: str | None) -> None
         raise HTTPException(400, "device_id kerak")
     async with SessionLocal() as session:
         device = await DeviceRepository(session).get(device_id)
+    if is_test_device_token(token):
+        if device and not device.is_test_device:
+            raise HTTPException(403, "Test token production qurilma uchun ishlatilmaydi")
+        return
     if device and not device.is_active:
+        if device.is_test_device:
+            if _global_device_token_ok(token):
+                return
+            if device.api_token_hash and token and verify_password(token, device.api_token_hash):
+                return
         raise HTTPException(403, "Qurilma o'chirilgan")
     if device and device.api_token_hash:
         if token and verify_password(token, device.api_token_hash):
@@ -109,7 +135,7 @@ async def _consume_provisioning_token(session, body: DeviceRegister, ts: int) ->
     }
 
 
-async def register_device(body: DeviceRegister) -> dict:
+async def register_device(body: DeviceRegister, token: str | None = None) -> dict:
     ts = now_ts()
     device_token = None
     applied_utility_type = body.utility_type
@@ -124,9 +150,12 @@ async def register_device(body: DeviceRegister) -> dict:
 
         device_repo = DeviceRepository(session)
         device = await device_repo.get(body.device_id)
+        requested_test_mode = bool(body.is_test_device) or is_test_device_token(token) or is_test_meter_serial(body.meter_serial)
         if not device:
             device = Device(id=body.device_id, name=body.name or body.device_id, registered=ts, created_at=ts)
             device_repo.add(device)
+        elif requested_test_mode and not device.is_test_device:
+            raise HTTPException(403, "Test token production qurilma uchun ishlatilmaydi")
 
         if provisioned:
             device_token = generate_secret_token()
@@ -136,11 +165,27 @@ async def register_device(body: DeviceRegister) -> dict:
             device.token_revoked_by_user_id = None
             device.token_revoked_by_username = None
 
+        test_mode = requested_test_mode
         device.name = device.name or body.name or body.device_id
         device.utility_type = applied_utility_type
         device.device_role = applied_device_role
         device.firmware_mode = applied_firmware_mode
         device.meter_type = body.meter_type
+        if body.meter_serial and device.meter_serial and body.meter_serial != device.meter_serial:
+            from services import audit as audit_service
+            await audit_service.record(
+                {"sub": 0, "username": f"device:{body.device_id}"},
+                "device.meter_serial_changed",
+                "device",
+                body.device_id,
+                {"old_serial": device.meter_serial, "new_serial": body.meter_serial, "reason": "register"}
+            )
+            device.previous_meter_serial = device.meter_serial
+            device.meter_changed_at = ts
+            device.needs_rebind = True
+            device.building_id = None
+            device.point_id = None
+            await CommandRepository(session).cancel_active_for_device(body.device_id, "meter_serial_changed")
         device.meter_serial = body.meter_serial or device.meter_serial
         device.serial_number = body.serial_number or device.serial_number
         device.hardware_version = body.hardware_version or device.hardware_version
@@ -163,6 +208,8 @@ async def register_device(body: DeviceRegister) -> dict:
         )
         device.last_seen = ts
         device.updated_at = ts
+        if test_mode:
+            mark_test_device(device, ts)
         await session.commit()
 
     await ws_manager.broadcast(
@@ -180,7 +227,7 @@ async def register_device(body: DeviceRegister) -> dict:
     return result
 
 
-async def update_device_status(body: DeviceStatus) -> dict:
+async def update_device_status(body: DeviceStatus, test_mode: bool = False) -> dict:
     ts = now_ts()
     async with SessionLocal() as session:
         device_repo = DeviceRepository(session)
@@ -196,6 +243,8 @@ async def update_device_status(body: DeviceStatus) -> dict:
         device.build_number = body.build_number or device.build_number
         device.last_seen = ts if body.online else device.last_seen
         device.updated_at = ts
+        if test_mode:
+            mark_test_device(device, ts)
         if body.online:
             from services.alerts import clear_offline_alerts_for_device
             await clear_offline_alerts_for_device(session, body.device_id)
@@ -210,6 +259,8 @@ async def list_devices(
     group: str | None = None,
     building: str | None = None,
     utility_type: str | None = None,
+    is_test_device: bool | None = None,
+    device_id: str | None = None,
     q: str | None = None,
     sort_by: str = "last_seen",
     sort_order: str = "desc",
@@ -222,9 +273,14 @@ async def list_devices(
 
     devices = []
     query = (q or "").strip().lower()
+    device_id_query = (device_id or "").strip().lower()
     for device in rows:
         is_online = (device.last_seen or 0) > cutoff
         if online is not None and is_online != online:
+            continue
+        if is_test_device is not None and bool(device.is_test_device) != is_test_device:
+            continue
+        if device_id_query and device_id_query not in device.id.lower():
             continue
         payload = model_to_dict(device) | {"online": is_online}
         if query:
@@ -297,6 +353,8 @@ async def create_device(body: DeviceCreate) -> dict:
             created_at=ts,
             updated_at=ts,
         )
+        if is_test_meter_serial(body.meter_serial):
+            mark_test_device(device, ts)
         device_repo.add(device)
         await session.commit()
         await session.refresh(device)
@@ -335,6 +393,11 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
             building_id = fields.get("building_id") or device.building_id
             if building_id and point.building_id and point.building_id != building_id:
                 raise HTTPException(422, "Measurement point boshqa buildingga tegishli")
+        if device.is_test_device and (
+            ("building_id" in fields and fields["building_id"] is not None)
+            or ("point_id" in fields and fields["point_id"] is not None)
+        ):
+            raise HTTPException(400, "Test qurilma building yoki measurement pointga biriktirilmaydi")
         # DeviceUpdate schema uses 'building'/'floor' as API names, but the entity
         # uses 'building_text'/'floor_text' (since 'building' is the FK relationship)
         _remap = {"building": "building_text", "floor": "floor_text"}

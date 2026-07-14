@@ -3,6 +3,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from core.config import settings
 from core.security import current_token_payload, require_admin
 from models.schemas import (
     BuildingAnalyticsResponse,
@@ -41,18 +42,19 @@ from services import readings as reading_service
 router = APIRouter(prefix="/api")
 
 
-EXTERNAL_BASE = "https://app.urganchshahar.uz"
-EXTERNAL_API = f"{EXTERNAL_BASE}/api/trashbags/houses"
 EXTERNAL_SOURCE_PREFIX = "ext://urganchshahar/"
-EXTERNAL_USER = "urganch"
-EXTERNAL_PASS = "urg2026@!"
 
 
 async def _get_external_session(client: httpx.AsyncClient) -> str:
     """Urganchshahar tizimiga kirip JSESSIONID qaytaradi."""
+    if not settings.external_urganch_username or not settings.external_urganch_password:
+        raise HTTPException(status_code=503, detail="Urganchshahar import sozlamalari kiritilmagan")
     resp = await client.post(
-        f"{EXTERNAL_BASE}/process_login",
-        data={"username": EXTERNAL_USER, "password": EXTERNAL_PASS},
+        f"{settings.external_urganch_base_url}/process_login",
+        data={
+            "username": settings.external_urganch_username,
+            "password": settings.external_urganch_password,
+        },
         headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/x-www-form-urlencoded"},
         follow_redirects=False,
     )
@@ -69,7 +71,7 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
         async with httpx.AsyncClient(timeout=30) as client:
             session_id = await _get_external_session(client)
             resp = await client.get(
-                EXTERNAL_API,
+                f"{settings.external_urganch_base_url}/api/trashbags/houses",
                 headers={"Cookie": f"JSESSIONID={session_id}", "User-Agent": "Mozilla/5.0"},
             )
             resp.raise_for_status()

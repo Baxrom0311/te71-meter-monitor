@@ -38,13 +38,13 @@ router = APIRouter(prefix="/api")
 async def register_device(body: DeviceRegister, x_device_token: Optional[str] = Header(None)):
     if not body.provisioning_token:
         await device_service.verify_device_access(body.device_id, x_device_token)
-    return await device_service.register_device(body)
+    return await device_service.register_device(body, x_device_token)
 
 
 @router.post("/device-status", response_model=DeviceStatusResponse)
 async def device_status(body: DeviceStatus, x_device_token: Optional[str] = Header(None)):
     await device_service.verify_device_access(body.device_id, x_device_token)
-    return await device_service.update_device_status(body)
+    return await device_service.update_device_status(body, test_mode=device_service.is_test_device_token(x_device_token))
 
 
 @router.get("/device-config/{device_id}", response_model=DeviceConfigResponse)
@@ -60,6 +60,8 @@ async def list_devices(
     group: Optional[str] = None,
     building: Optional[str] = None,
     utility_type: Optional[str] = None,
+    is_test_device: Optional[bool] = None,
+    device_id: Optional[str] = None,
     q: Optional[str] = None,
     sort_by: str = Query("last_seen", pattern="^(last_seen|name|type|status)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
@@ -73,6 +75,8 @@ async def list_devices(
         group=group,
         building=building,
         utility_type=utility_type,
+        is_test_device=is_test_device,
+        device_id=device_id,
         q=q,
         sort_by=sort_by,
         sort_order=sort_order,

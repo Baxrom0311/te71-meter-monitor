@@ -101,6 +101,20 @@ class CommandRepository(BaseRepository[Command]):
         result = await self.session.execute(stmt)
         return result.rowcount or 0
 
+    async def cancel_active_for_device(self, device_id: str, reason: str) -> int:
+        result = await self.session.execute(
+            update(Command)
+            .where(
+                and_(
+                    Command.device_id == device_id,
+                    Command.acked.is_(None),
+                    Command.status.in_(["pending", "sent"]),
+                )
+            )
+            .values(status="cancelled", ack_result=reason)
+        )
+        return result.rowcount or 0
+
     async def pollable_for_device(self, device_id: str, now: int, limit: int = 5) -> list[Command]:
         return list(
             (
