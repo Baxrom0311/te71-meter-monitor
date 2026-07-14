@@ -26,6 +26,7 @@ const SettingsPage = lazy(() => loadPage('settings'))
 const ChatPage = lazy(() => loadPage('chat'))
 const AnalyticsPage = lazy(() => loadPage('analytics'))
 const DisplayPage = lazy(() => import('@/pages/DisplayPage'))
+const DemoPage = lazy(() => import('@/pages/DemoPage'))
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -93,6 +94,7 @@ export default function App() {
                     <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
                     <Route path="/display" element={<DisplayPage />} />
+                    <Route path="/demo" element={<DemoPage />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Suspense>
