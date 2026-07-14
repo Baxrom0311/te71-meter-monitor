@@ -86,6 +86,7 @@ static String sensor_build_json(const char* device_id,
     doc["utility_type"] = "gas";
     doc["sensor_type"]  = "gas_pressure";
     doc["fw_version"]   = fw_ver;
+    if (g_cfg.test_mode) doc["is_test_device"] = true;
     doc["pressure_bar"] = serialized(String(d.pressure_bar, 3));
     String out;
     serializeJson(doc, out);

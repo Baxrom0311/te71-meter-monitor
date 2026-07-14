@@ -100,6 +100,7 @@ static String sensor_build_json(const char* device_id,
     doc["utility_type"]        = "water";
     doc["sensor_type"]         = "water_pressure";
     doc["fw_version"]          = fw_ver;
+    if (g_cfg.test_mode) doc["is_test_device"] = true;
     doc["pressure_bottom_bar"] = serialized(String(d.pressure_bottom_bar, 3));
     doc["pressure_top_bar"]    = serialized(String(d.pressure_top_bar, 3));
     String out;

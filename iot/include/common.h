@@ -12,12 +12,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
+#include <WiFiClientSecure.h>
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
+#include <strings.h>
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NVS Config
@@ -30,10 +32,25 @@ struct AppConfig {
     char server_url[CFG_SERVER_LEN];
     char device_token[CFG_TOKEN_LEN];
     char meter_serial[CFG_SERIAL_LEN];  // Oxirgi ma'lum seriya — WiFiManager da ko'rsatish uchun
+    bool test_mode;
 };
 
 static AppConfig g_cfg;
 static Preferences g_prefs;
+static WiFiClientSecure g_secure_client;
+
+static bool http_begin_url(HTTPClient& http, const char* url) {
+    if (strncmp(url, "https://", 8) == 0) {
+        g_secure_client.setInsecure();
+        return http.begin(g_secure_client, url);
+    }
+    return http.begin(url);
+}
+
+static void http_prepare(HTTPClient& http, uint16_t timeout_ms) {
+    http.setTimeout(timeout_ms);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+}
 
 static void cfg_load() {
     // Compile-time default (platformio.ini BUILD_FLAGS orqali)
@@ -44,12 +61,18 @@ static void cfg_load() {
     g_cfg.device_token[0] = '\0';
 #endif
     g_cfg.meter_serial[0] = '\0';
+#ifdef DEFAULT_TEST_MODE
+    g_cfg.test_mode = DEFAULT_TEST_MODE;
+#else
+    g_cfg.test_mode = false;
+#endif
 
     // NVS dan yuklash (WiFiManager orqali saqlangan qiymatlar ustunlik qiladi)
     g_prefs.begin("app", true);
     g_prefs.getString("srv", g_cfg.server_url,    CFG_SERVER_LEN);
     g_prefs.getString("tok", g_cfg.device_token,  CFG_TOKEN_LEN);
     g_prefs.getString("msr", g_cfg.meter_serial,  CFG_SERIAL_LEN);
+    g_cfg.test_mode = g_prefs.getBool("test", g_cfg.test_mode);
     g_prefs.end();
 
     // http:// yo'q bo'lsa qo'shish
@@ -63,12 +86,26 @@ static void cfg_load() {
     if (p) memmove(p, p + 5, strlen(p + 5) + 1);
 }
 
-static void cfg_save(const char* srv, const char* tok) {
+static bool cfg_parse_test_mode(const char* mode) {
+    if (!mode) return false;
+    return strcasecmp(mode, "test") == 0 ||
+           strcmp(mode, "1") == 0 ||
+           strcasecmp(mode, "true") == 0 ||
+           strcasecmp(mode, "yes") == 0;
+}
+
+static void cfg_save(const char* srv, const char* tok, const char* mode) {
     if (srv && srv[0]) strncpy(g_cfg.server_url,   srv, CFG_SERVER_LEN - 1);
-    if (tok && tok[0]) strncpy(g_cfg.device_token, tok, CFG_TOKEN_LEN  - 1);
+    if (tok) {
+        strncpy(g_cfg.device_token, tok, CFG_TOKEN_LEN - 1);
+        g_cfg.device_token[CFG_TOKEN_LEN - 1] = '\0';
+    }
+    g_cfg.test_mode = cfg_parse_test_mode(mode);
     g_prefs.begin("app", false);
     g_prefs.putString("srv", g_cfg.server_url);
     if (g_cfg.device_token[0]) g_prefs.putString("tok", g_cfg.device_token);
+    else g_prefs.remove("tok");
+    g_prefs.putBool("test", g_cfg.test_mode);
     g_prefs.end();
 }
 
@@ -130,10 +167,12 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
         "padding:10px;font-size:12px;color:#94a3b8;margin-bottom:8px'>"
         "<b style='color:#60a5fa'>Qurilma ID:</b> %s<br>"
         "<b style='color:#60a5fa'>Hisoblagich:</b> %s<br>"
+        "<b style='color:#60a5fa'>Rejim:</b> %s<br>"
         "<small>Bu ma'lumotlarni dashboard da qurilmangizni topish uchun ishlating</small>"
         "</p>",
         device_mac[0] ? device_mac : "aniqlanmoqda...",
-        meter_serial[0] ? meter_serial : "aniqlanmoqda..."
+        meter_serial[0] ? meter_serial : "aniqlanmoqda...",
+        g_cfg.test_mode ? "TEST" : "PRODUCTION"
     );
 
     WiFiManagerParameter p_info(info_html);
@@ -143,17 +182,21 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
     WiFiManagerParameter p_tok("token",
         "API token (admin beradi — bo'sh qoldirsa ochiq rejim)",
         g_cfg.device_token, 63);
+    WiFiManagerParameter p_mode("mode",
+        "Rejim: prod yoki test",
+        g_cfg.test_mode ? "test" : "prod", 8);
 
     WiFiManager wm;
     wm.setTitle("Meter Monitor — Sozlash");
     wm.addParameter(&p_info);
     wm.addParameter(&p_srv);
     wm.addParameter(&p_tok);
+    wm.addParameter(&p_mode);
     wm.setConnectTimeout(20);
     wm.setConfigPortalTimeout(180);
     wm.setSaveConfigCallback([&]() {
-        cfg_save(p_srv.getValue(), p_tok.getValue());
-        Serial.printf("Config saqlandi: %s\n", g_cfg.server_url);
+        cfg_save(p_srv.getValue(), p_tok.getValue(), p_mode.getValue());
+        Serial.printf("Config saqlandi: %s (%s)\n", g_cfg.server_url, g_cfg.test_mode ? "TEST" : "PROD");
     });
 
     // Custom AP sahifasi sarlavhasi
@@ -183,12 +226,15 @@ static bool http_post(const char* path, const String& body) {
     HTTPClient http;
     char url[220];
     snprintf(url, sizeof(url), "%s%s", g_cfg.server_url, path);
-    http.begin(url);
+    if (!http_begin_url(http, url)) return false;
     http.addHeader("Content-Type", "application/json");
     if (g_cfg.device_token[0])
         http.addHeader("X-Device-Token", g_cfg.device_token);
-    http.setTimeout(8000);
+    http_prepare(http, 8000);
     int code = http.POST(body);
+    if (code < 200 || code >= 300) {
+        Serial.printf("POST %s xato: HTTP %d %s\n", path, code, http.getString().c_str());
+    }
     http.end();
     return code >= 200 && code < 300;
 }
@@ -198,12 +244,15 @@ static String http_get(const char* path) {
     HTTPClient http;
     char url[220];
     snprintf(url, sizeof(url), "%s%s", g_cfg.server_url, path);
-    http.begin(url);
+    if (!http_begin_url(http, url)) return "";
     if (g_cfg.device_token[0])
         http.addHeader("X-Device-Token", g_cfg.device_token);
-    http.setTimeout(5000);
+    http_prepare(http, 5000);
     int code = http.GET();
     String resp = (code == 200) ? http.getString() : "";
+    if (code < 200 || code >= 300) {
+        Serial.printf("GET %s xato: HTTP %d\n", path, code);
+    }
     http.end();
     return resp;
 }
@@ -216,11 +265,12 @@ static bool server_check() {
     HTTPClient http;
     char url[120];
     snprintf(url, sizeof(url), "%s/health", g_cfg.server_url);
-    http.begin(url);
-    http.setTimeout(8000);
+    if (!http_begin_url(http, url)) return false;
+    http_prepare(http, 8000);
     int code = http.GET();
+    String resp = http.getString();
     http.end();
-    if (code > 0) {
+    if (code >= 200 && code < 300) {
         Serial.printf("Server: OK (HTTP %d)\n", code);
         return true;
     }
@@ -228,7 +278,7 @@ static bool server_check() {
     if      (code == -1)  r = "ulanmadi (REFUSED)";
     else if (code == -11) r = "timeout";
     else if (code == -4)  r = "WiFi yo'q";
-    Serial.printf("Server: XATO (kod=%d, %s)\n", code, r);
+    Serial.printf("Server: XATO (kod=%d, %s) %s\n", code, r, resp.c_str());
     return false;
 }
 
@@ -240,10 +290,10 @@ static void ota_check(const char* device_id, const char* fw_version) {
     char url[220];
     snprintf(url, sizeof(url), "%s/api/ota/check/%s?current_version=%s",
              g_cfg.server_url, device_id, fw_version);
-    http.begin(url);
+    if (!http_begin_url(http, url)) return;
     if (g_cfg.device_token[0])
         http.addHeader("X-Device-Token", g_cfg.device_token);
-    http.setTimeout(5000);
+    http_prepare(http, 5000);
     int code = http.GET();
     if (code != 200) { http.end(); return; }
     StaticJsonDocument<256> doc;
@@ -252,9 +302,15 @@ static void ota_check(const char* device_id, const char* fw_version) {
     if (!doc["update"].as<bool>()) return;
     String fw_url = String(g_cfg.server_url) + doc["url"].as<String>();
     Serial.printf("OTA: v%s → yangilash...\n", doc["version"].as<const char*>());
-    HTTPClient fw_http;
-    fw_http.begin(fw_url);
-    if (httpUpdate.update(fw_http) == HTTP_UPDATE_OK) ESP.restart();
+    if (fw_url.startsWith("https://")) {
+        WiFiClientSecure fw_client;
+        fw_client.setInsecure();
+        if (httpUpdate.update(fw_client, fw_url) == HTTP_UPDATE_OK) ESP.restart();
+    } else {
+        HTTPClient fw_http;
+        fw_http.begin(fw_url);
+        if (httpUpdate.update(fw_http) == HTTP_UPDATE_OK) ESP.restart();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -279,17 +335,18 @@ static bool app_register(const char* device_id,
     doc["ip"]               = WiFi.localIP().toString();
     doc["rssi"]             = WiFi.RSSI();
     doc["chip_model"]       = "ESP32";
+    if (g_cfg.test_mode) doc["is_test_device"] = true;
     String body;
     serializeJson(doc, body);
 
     HTTPClient http;
     char url[220];
     snprintf(url, sizeof(url), "%s/api/register", g_cfg.server_url);
-    http.begin(url);
+    if (!http_begin_url(http, url)) return false;
     http.addHeader("Content-Type", "application/json");
     if (g_cfg.device_token[0])
         http.addHeader("X-Device-Token", g_cfg.device_token);
-    http.setTimeout(8000);
+    http_prepare(http, 8000);
     int code = http.POST(body);
 
     bool ok = (code == 200 || code == 201);
@@ -302,7 +359,7 @@ static bool app_register(const char* device_id,
         }
         Serial.printf("Ro'yxatdan o'tildi: %s (%s)\n", device_id, meter_type);
     } else {
-        Serial.printf("Register xato: HTTP %d\n", code);
+        Serial.printf("Register xato: HTTP %d %s\n", code, http.getString().c_str());
     }
     http.end();
     return ok;

@@ -9,8 +9,9 @@
  * Birinchi sozlash:
  *   1. "MeterSetup" WiFi AP → 192.168.4.1
  *   2. Server URL: http://67.205.171.93
- *   3. Device Token (backend DEVICE_API_TOKEN)
- *   4. Save → restart → tayyor
+ *   3. Device Token (prod token yoki test token)
+ *   4. Rejim: prod yoki test
+ *   5. Save → restart → tayyor
  *
  * Arxitektura:
  *   include/common.h              → WiFi, HTTP, NVS, OTA, backend API
@@ -131,6 +132,7 @@ void setup() {
     // NVS dan config yuklash
     cfg_load();
     Serial.printf("Server     : %s\n", g_cfg.server_url);
+    Serial.printf("Rejim      : %s\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
     Serial.printf("Token      : %s\n",
         g_cfg.device_token[0] ? "✓ sozlangan" : "✗ YO'Q — WiFiManager da kiriting!");
 
@@ -212,6 +214,7 @@ void setup() {
         g_sensor_meta.sensor_type[0]  ? g_sensor_meta.sensor_type  : "aniqlanmadi");
 #endif
     Serial.printf( "│  Server     : %-30s│\n", g_cfg.server_url);
+    Serial.printf( "│  Rejim      : %-30s│\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
     Serial.println("└──────────────────────────────────────────────┘");
     Serial.println("Tayyor!\n");
 }

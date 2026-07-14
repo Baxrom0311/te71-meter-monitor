@@ -355,6 +355,18 @@ static bool sensor_connect() {
     dlms_disconnect();
     Serial.print(" 4800...");
     if (sensor_try_baud(4800)) { g_sensor_meta.meter_baud = 4800; return true; }
+    dlms_disconnect();
+
+    if (g_cfg.test_mode) {
+        Serial.println("\n[TEST MODE] Hisoblagich topilmadi. Mock/Simulyatsiya ishga tushirildi!");
+        dlms_connected = true;
+        g_sensor_meta.meter_baud = 9600;
+        if (!g_sensor_meta.meter_serial[0]) {
+            strncpy(g_sensor_meta.meter_serial, "202032000525", sizeof(g_sensor_meta.meter_serial));
+        }
+        strncpy(g_sensor_meta.sensor_type, "te71", sizeof(g_sensor_meta.sensor_type));
+        return true;
+    }
     return false;
 }
 
@@ -381,6 +393,21 @@ static bool sensor_read(SensorData& d) {
     d.valid = false;
 
     if (!dlms_connected) return false;
+
+    // Test rejimida va simulyatsiya hisoblagich serial bo'lsa, dummy ma'lumot generatsiya qilish
+    if (g_cfg.test_mode && strcmp(d.meter_serial, "202032000525") == 0) {
+        d.voltage_l1 = 218.5f + (random(0, 100) / 25.0f); // 218.5 - 222.5 V
+        d.current_l1 = 2.5f + (random(0, 100) / 20.0f);   // 2.5 - 7.5 A
+        d.power_w = d.voltage_l1 * d.current_l1 * 0.98f;
+        d.frequency = 49.95f + (random(0, 10) / 100.0f);   // 49.95 - 50.05 Hz
+        
+        static float sim_energy = 124.500f;
+        sim_energy += d.power_w / (1000.0f * 120.0f); // har o'qishda bir oz oshadi
+        d.energy_kwh = sim_energy;
+        d.pf = 0.98f;
+        d.valid = true;
+        return true;
+    }
 
     dlms_get_float(3, OBIS_VL1,    2, &d.voltage_l1);
     dlms_get_float(3, OBIS_IL1,    2, &d.current_l1);
@@ -413,6 +440,10 @@ static bool sensor_read(SensorData& d) {
 
 // Relay buyrug'i: method 1=off(disconnect), 2=on(reconnect)
 static bool sensor_relay(int method) {
+    if (g_cfg.test_mode && strcmp(g_sensor_meta.meter_serial, "202032000525") == 0) {
+        Serial.printf("[TEST MODE] Simulyatsiya qilingan rele %s qilindi!\n", method == 2 ? "ON" : "OFF");
+        return true;
+    }
     return dlms_action(70, OBIS_RELAY, (uint8_t)method);
 }
 
@@ -426,6 +457,7 @@ static String sensor_build_json(const char* device_id,
     doc["sensor_type"]  = d.sensor_type;   // "te71" | "te73"
     doc["meter_serial"] = d.meter_serial;
     doc["fw_version"]   = fw_version;
+    if (g_cfg.test_mode) doc["is_test_device"] = true;
 
     // Faqat valid qiymatlarni yozish (NaN = qo'shmaslik)
     if (!isnan(d.voltage_l1) && d.voltage_l1 > 0)
