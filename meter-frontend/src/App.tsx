@@ -17,6 +17,7 @@ const DashboardPage = lazy(() => loadPage('dashboard'))
 const BuildingsPage = lazy(() => loadPage('buildings'))
 const BuildingDetailPage = lazy(() => loadPage('buildingDetail'))
 const DevicesPage = lazy(() => loadPage('devices'))
+const TestDevicesPage = lazy(() => loadPage('testDevices'))
 const DeviceDetailPage = lazy(() => loadPage('deviceDetail'))
 const AlertsPage = lazy(() => loadPage('alerts'))
 const FirmwarePage = lazy(() => loadPage('firmware'))
@@ -85,6 +86,7 @@ export default function App() {
                     <Route path="/buildings" element={<ProtectedRoute><BuildingsPage /></ProtectedRoute>} />
                     <Route path="/buildings/:id" element={<ProtectedRoute><BuildingDetailPage /></ProtectedRoute>} />
                     <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
+                    <Route path="/devices/test" element={<ProtectedRoute requireAdmin><TestDevicesPage /></ProtectedRoute>} />
                     <Route path="/devices/:id" element={<ProtectedRoute><DeviceDetailPage /></ProtectedRoute>} />
                     <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
                     <Route path="/firmware" element={<ProtectedRoute><FirmwarePage /></ProtectedRoute>} />

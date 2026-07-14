@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { useDeviceById, useDeviceLatest, useDeviceHistory } from '@/hooks/queries'
+import { useDeviceById, useDeviceLatest, useDeviceHistory, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,6 +14,7 @@ import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Pagination } from '@/components/Pagination'
 
 type PendingCommand =
   | { type: 'reboot' }
@@ -27,6 +28,8 @@ export default function DeviceDetailPage() {
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
   const queryClient = useQueryClient()
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyPageSize, setHistoryPageSize] = useState(10)
   const {
     data: device,
     isLoading,
@@ -35,13 +38,19 @@ export default function DeviceDetailPage() {
     refetch,
   } = useDeviceById(id || '')
   const { data: latestReading } = useDeviceLatest(id || '')
-  const { data: historyData } = useDeviceHistory(id || '', 24)
+  const { data: chartHistoryData } = useDeviceHistory(id || '', 24, 1, 100)
+  const {
+    data: historyData,
+    isFetching: historyFetching,
+  } = useDeviceHistory(id || '', 24, historyPage, historyPageSize)
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [pendingCommand, setPendingCommand] = useState<PendingCommand | null>(null)
-
-  if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editUtilityType, setEditUtilityType] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
 
   const handleReboot = async () => {
     setLoadingAction('reboot')
@@ -72,23 +81,56 @@ export default function DeviceDetailPage() {
   }
 
   const handleToggleStatus = async () => {
-    if (!device) return
+    if (!device || !id) return
+    const deviceId = id
     setLoadingAction('status')
     setMsg(null)
     try {
       const nextStatus = !device.is_active
-      await apiClient.put(`/api/devices/${id}`, {
+      await apiClient.put(`/api/devices/${deviceId}`, {
         is_active: nextStatus,
         name: device.name || null,
         utility_type: device.utility_type,
       })
-      queryClient.invalidateQueries({ queryKey: ['device', id] })
+      queryClient.invalidateQueries({ queryKey: qk.deviceDetail(deviceId) })
+      queryClient.invalidateQueries({ queryKey: qk.devices() })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
       notifySuccess(`Qurilma statusi ${nextStatus ? 'faollashtirildi' : 'faolsizlantirildi'}`)
     } catch (err: any) {
       console.error(err)
       setMsg(getApiErrorMessage(err))
     } finally {
       setLoadingAction(null)
+    }
+  }
+
+  const openEdit = () => {
+    if (!device || !id) return
+    setEditName(device.name ?? '')
+    setEditUtilityType(device.utility_type)
+    setIsEditOpen(true)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!device || !id) return
+    const deviceId = id
+    setEditSubmitting(true)
+    try {
+      await apiClient.put(`/api/devices/${deviceId}`, {
+        name: editName.trim() || null,
+        utility_type: editUtilityType,
+        is_active: device.is_active,
+      })
+      queryClient.invalidateQueries({ queryKey: qk.deviceDetail(deviceId) })
+      queryClient.invalidateQueries({ queryKey: qk.devices() })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
+      setIsEditOpen(false)
+      notifySuccess('Qurilma yangilandi')
+    } catch (err: any) {
+      setMsg(getApiErrorMessage(err))
+    } finally {
+      setEditSubmitting(false)
     }
   }
 
@@ -106,9 +148,9 @@ export default function DeviceDetailPage() {
 
   // Chart data: convert historical readings to Recharts format
   const chartData = useMemo(() => {
-    if (!historyData?.readings) return []
+    if (!chartHistoryData?.readings) return []
     // Show older readings first
-    return [...historyData.readings]
+    return [...chartHistoryData.readings]
       .reverse()
       .map((r) => ({
         timestamp: new Date(r.ts * 1000).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
@@ -119,13 +161,15 @@ export default function DeviceDetailPage() {
             : (r.power_w ?? 0),
         voltage: r.voltage_l1 ?? 0,
       }))
-  }, [historyData, device?.utility_type])
+  }, [chartHistoryData, device?.utility_type])
 
   const chartMeta = device?.utility_type === 'water'
     ? { title: 'Suv bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim/flow o‘zgarishi', label: 'Bosim / Flow', color: '#06B6D4' }
     : device?.utility_type === 'gas'
       ? { title: 'Gaz bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim o‘zgarishi', label: 'Bosim', color: '#F59E0B' }
       : { title: 'Quvvat grafigi', subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi", label: 'Power W', color: '#10B981' }
+
+  if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
 
   return (
     <RootLayout>
@@ -198,14 +242,26 @@ export default function DeviceDetailPage() {
                         : '—'}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Tizim Faolligi</p>
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      device.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-550'
-                    }`}>
-                      {device.is_active ? 'Faol' : 'Faol emas'}
-                    </span>
-                  </div>
+	                  <div>
+	                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Tizim Faolligi</p>
+	                    <div className="flex flex-wrap gap-1.5">
+	                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+	                        device.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-550'
+	                      }`}>
+	                        {device.is_active ? 'Faol' : 'Faol emas'}
+	                      </span>
+	                      {device.is_test_device && (
+	                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-500">
+	                          Test
+	                        </span>
+	                      )}
+	                      {device.needs_rebind && (
+	                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-500/10 text-orange-500">
+	                          Qayta biriktirish kerak
+	                        </span>
+	                      )}
+	                    </div>
+	                  </div>
                   {device.meter_serial && (
                     <div>
                       <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Hisoblagich Seriali</p>
@@ -220,6 +276,16 @@ export default function DeviceDetailPage() {
                 <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100 border-b border-gray-300 dark:border-gray-800 pb-2">Boshqaruv paneli</h3>
                 {isAdmin ? (
                   <div className="flex flex-col gap-3">
+                    {/* Edit Button */}
+                    <button
+                      onClick={openEdit}
+                      disabled={loadingAction !== null}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Tahrirlash
+                    </button>
+
                     {/* Reboot Button */}
                     <button
                       onClick={() => setPendingCommand({ type: 'reboot' })}
@@ -431,12 +497,13 @@ export default function DeviceDetailPage() {
             )}
 
             {/* Historical table */}
-            {historyData?.readings && historyData.readings.length > 0 && (
-              <div className="glass-card data-table-card rounded-2xl overflow-hidden shadow-sm">
-                <div className="p-5 border-b border-gray-300 dark:border-gray-800">
-                  <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">O'lchovlar jurnali (Oxirgi 10 ta ko'rsatkich)</h3>
-                </div>
-                <div className="overflow-x-auto">
+	            {historyData?.readings && historyData.readings.length > 0 && (
+	              <div className="glass-card data-table-card rounded-2xl overflow-hidden shadow-sm">
+	                <div className="p-5 border-b border-gray-300 dark:border-gray-800 flex items-center justify-between gap-4">
+	                  <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">O'lchovlar jurnali</h3>
+	                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Oxirgi 24 soat</span>
+	                </div>
+	                <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead>
                       <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400">
@@ -446,10 +513,10 @@ export default function DeviceDetailPage() {
                         <th className="px-6 py-4 font-semibold">Quvvat (W)</th>
                         <th className="px-6 py-4 font-semibold">Energiya (kWh)</th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-300 dark:divide-gray-850 text-gray-750 dark:text-gray-300">
-                      {historyData.readings.slice(0, 10).map((r) => (
-                        <tr key={r.id} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/30 transition">
+	                    </thead>
+	                    <tbody className="divide-y divide-gray-300 dark:divide-gray-850 text-gray-750 dark:text-gray-300">
+	                      {historyData.readings.map((r) => (
+	                        <tr key={r.id} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/30 transition">
                           <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{new Date(r.ts * 1000).toLocaleString('uz-UZ')}</td>
                           <td className="px-6 py-3.5 font-mono">{r.voltage_l1 ?? '—'}</td>
                           <td className="px-6 py-3.5 font-mono">{r.current_l1 ?? '—'}</td>
@@ -457,16 +524,76 @@ export default function DeviceDetailPage() {
                           <td className="px-6 py-3.5 font-mono text-purple-650 dark:text-purple-400 font-bold">{r.energy_kwh ?? '—'}</td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+	                    </tbody>
+	                  </table>
+	                </div>
+	                <div className="p-4 border-t border-gray-300 dark:border-gray-800">
+	                  <Pagination
+	                    page={historyPage}
+	                    totalPages={historyData.pages ?? Math.max(1, Math.ceil((historyData.total ?? historyData.readings.length) / historyPageSize))}
+	                    total={historyData.total ?? historyData.readings.length}
+	                    pageSize={historyPageSize}
+	                    onPageChange={setHistoryPage}
+	                    onPageSizeChange={setHistoryPageSize}
+	                    pageSizeOptions={[10, 20, 50, 100]}
+	                    isLoading={historyFetching}
+	                  />
+	                </div>
+	              </div>
+	            )}
           </div>
         ) : (
           <EmptyBlock title="Qurilma topilmadi" message={translations.common.noData} />
         )}
       </div>
+      {isEditOpen && device && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="glass-card rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl relative animate-modal-pop">
+            <button onClick={() => setIsEditOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 dark:hover:text-white transition">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-xl font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-blue-500" />
+              Qurilmani tahrirlash
+            </h3>
+            <form onSubmit={handleEdit} className="space-y-4 text-sm">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Qurilma nomi</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Masalan: A bino, 3-qavat elektr"
+                  className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Datchik turi</label>
+                <select
+                  value={editUtilityType}
+                  onChange={(e) => setEditUtilityType(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                >
+                  <option value="electricity">Elektr</option>
+                  <option value="water">Suv</option>
+                  <option value="gas">Gaz</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setIsEditOpen(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition">
+                  Bekor qilish
+                </button>
+                <button type="submit" disabled={editSubmitting}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg transition font-semibold">
+                  {editSubmitting ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={pendingCommand !== null}
         title={

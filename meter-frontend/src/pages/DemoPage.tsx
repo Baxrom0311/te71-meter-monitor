@@ -225,7 +225,6 @@ export default function DemoPage() {
 
   const baseData = useMemo(
     () => CHARTS.map((cfg) => ({ key: cfg.key, points: cfg.getPoints() })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 

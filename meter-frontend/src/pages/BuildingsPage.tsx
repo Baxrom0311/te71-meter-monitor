@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Plus, X, Search, Home, Building2, MapPin, Layers, Navigation,
   ArrowRight, Download, LayoutGrid, Table2, Settings2, Check,
 } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { useBuildings } from '@/hooks/queries'
+import { useBuildings, qk } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
 import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,8 +14,11 @@ import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
 import type { Building } from '@/types/api'
+import { Pagination } from '@/components/Pagination'
 
 import { GoogleBuildingsMap } from '@/components/GoogleBuildingsMap'
+
+const PAGE_SIZE = 12
 
 function getBuildingStatus(b: Building): 'online' | 'offline' | 'unknown' {
   if (!b.is_active) return 'offline'
@@ -66,6 +69,7 @@ export default function BuildingsPage() {
   const queryClient = useQueryClient()
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
   const [selectedMapBuildingId, setSelectedMapBuildingId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
   const [mapMode, setMapMode] = useState<'2d' | '3d'>('3d')
@@ -87,7 +91,8 @@ export default function BuildingsPage() {
   const toggleCol = (key: ColKey) => {
     setVisibleCols(prev => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -96,7 +101,7 @@ export default function BuildingsPage() {
     setImporting(true)
     try {
       const res = await apiClient.post<{ created: number; skipped: number; total: number }>('/api/buildings/import-external')
-      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
       notifySuccess('Import tugadi', `${res.data.created} ta yangi bino qo'shildi, ${res.data.skipped} ta o'tkazib yuborildi.`)
     } catch (err: any) {
       setError(getApiErrorMessage(err))
@@ -115,7 +120,7 @@ export default function BuildingsPage() {
         name, address: address || null, maps_url: mapsUrl || null,
         floors, entrances_count: entrancesCount, description: description || null,
       })
-      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
       notifySuccess('Bino qo\'shildi', `${name} muvaffaqiyatli yaratildi.`)
       setIsModalOpen(false)
       setName(''); setAddress(''); setMapsUrl(''); setFloors(4); setEntrancesCount(3); setDescription('')
@@ -145,6 +150,14 @@ export default function BuildingsPage() {
     () => filteredBuildings.filter(b => b.latitude && b.longitude),
     [filteredBuildings],
   )
+
+  const totalPages = Math.max(1, Math.ceil(filteredBuildings.length / PAGE_SIZE))
+  const pagedBuildings = useMemo(
+    () => filteredBuildings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredBuildings, page],
+  )
+
+  useEffect(() => { setPage(1) }, [searchQuery])
 
   return (
     <RootLayout>
@@ -280,8 +293,9 @@ export default function BuildingsPage() {
           <EmptyBlock title={translations.common.noData} message="Ushbu filtrga mos binolar topilmadi" />
         ) : viewMode === 'card' ? (
           /* ─── CARD VIEW ─── */
+          <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredBuildings.map(building => {
+            {pagedBuildings.map(building => {
               const st = getBuildingStatus(building)
               return (
                 <Link key={building.id} to={`/buildings/${building.id}`}
@@ -328,6 +342,16 @@ export default function BuildingsPage() {
               )
             })}
           </div>
+          {filteredBuildings.length > PAGE_SIZE && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={filteredBuildings.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          )}
+          </div>
         ) : (
           /* ─── TABLE VIEW ─── */
           <div className="glass-card rounded-2xl overflow-hidden">
@@ -351,7 +375,7 @@ export default function BuildingsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/40">
-                  {filteredBuildings.map(b => {
+                  {pagedBuildings.map(b => {
                     const st = getBuildingStatus(b)
                     return (
                       <tr key={b.id} className="hover:bg-gray-800/30 transition-colors group">
@@ -404,6 +428,17 @@ export default function BuildingsPage() {
                 </tbody>
               </table>
             </div>
+            {filteredBuildings.length > PAGE_SIZE && (
+              <div className="border-t border-gray-800/40 px-4 py-3">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={filteredBuildings.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
           </div>
         )}
 

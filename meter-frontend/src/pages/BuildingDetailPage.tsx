@@ -2,23 +2,22 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Link2, Unlink, Plus, X, Smartphone, Home, Edit3, Trash2, ExternalLink } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { useBuildingById, useDevices } from '@/hooks/queries'
+import { useBuildingById, useDevices, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
-import { useTheme } from '@/contexts/ThemeContext'
 import apiClient from '@/lib/api'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { UtilityChartsPanel } from '@/components/UtilityChartsPanel'
 import { MapPanel } from '@/components/MapPanel'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 export default function BuildingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const { isDark } = useTheme()
   const queryClient = useQueryClient()
 
   const buildingIdInt = id ? parseInt(id) : 0
@@ -36,6 +35,10 @@ export default function BuildingDetailPage() {
     error: devicesQueryError,
     refetch: refetchDevices,
   } = useDevices(100)
+
+  type ConfirmAction = { type: 'unbind'; deviceId: string } | { type: 'delete' }
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
+  const [confirmPending, setConfirmPending] = useState(false)
 
   // Bind Device modal states
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -84,7 +87,9 @@ export default function BuildingDetailPage() {
           is_active: dev.is_active ?? true,
         })
       }
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.invalidateQueries({ queryKey: qk.devices() })
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
       setIsModalOpen(false)
       setSelectedDeviceId('')
       notifySuccess('Qurilma biriktirildi')
@@ -97,7 +102,7 @@ export default function BuildingDetailPage() {
   }
 
   const handleUnbindDevice = async (deviceId: string) => {
-    if (!confirm('Haqiqatdan ham ushbu qurilmani binodan uzmoqchisiz?')) return
+    setConfirmPending(true)
     try {
       const dev = devices?.find((d) => d.id === deviceId)
       if (dev) {
@@ -108,11 +113,15 @@ export default function BuildingDetailPage() {
           is_active: dev.is_active ?? true,
         })
       }
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.invalidateQueries({ queryKey: qk.devices() })
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
       notifySuccess('Qurilma binodan uzildi')
     } catch (err) {
-      console.error('Error unbinding device:', err)
       notifyError('Qurilmani uzishda xatolik', getApiErrorMessage(err))
+    } finally {
+      setConfirmPending(false)
+      setConfirmAction(null)
     }
   }
 
@@ -143,8 +152,8 @@ export default function BuildingDetailPage() {
         entrances_count: editEntrancesCount,
         description: editDescription || null,
       })
-      queryClient.invalidateQueries({ queryKey: ['building', id] })
-      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      queryClient.invalidateQueries({ queryKey: qk.buildingDetail(id!) })
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
       setIsEditModalOpen(false)
       notifySuccess('Bino yangilandi')
     } catch (err: any) {
@@ -156,15 +165,17 @@ export default function BuildingDetailPage() {
   }
 
   const handleDeleteBuilding = async () => {
-    if (!confirm('Haqiqatdan ham ushbu binoni butunlay o\'chirmoqchisiz? Barcha ulanishlar uziladi.')) return
+    setConfirmPending(true)
     try {
       await apiClient.delete(`/api/buildings/${buildingIdInt}`)
-      queryClient.invalidateQueries({ queryKey: ['buildings'] })
-      notifySuccess('Bino o‘chirildi')
+      queryClient.invalidateQueries({ queryKey: qk.buildings() })
+      notifySuccess("Bino o'chirildi")
       navigate('/buildings')
     } catch (err) {
-      console.error('Error deleting building:', err)
-      notifyError('Binoni o‘chirishda xatolik', getApiErrorMessage(err))
+      notifyError("Binoni o'chirishda xatolik", getApiErrorMessage(err))
+    } finally {
+      setConfirmPending(false)
+      setConfirmAction(null)
     }
   }
 
@@ -208,7 +219,7 @@ export default function BuildingDetailPage() {
                       Tahrirlash
                     </button>
                     <button
-                      onClick={handleDeleteBuilding}
+                      onClick={() => setConfirmAction({ type: 'delete' })}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/10 hover:bg-red-650 text-red-400 hover:text-white rounded-lg text-xs font-semibold border border-red-500/20 transition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -337,7 +348,7 @@ export default function BuildingDetailPage() {
                           {isAdmin && (
                             <td className="px-6 py-4 text-right">
                               <button
-                                onClick={() => handleUnbindDevice(device.id)}
+                                onClick={() => setConfirmAction({ type: 'unbind', deviceId: device.id })}
                                 title="Binodan uzish"
                                 className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded transition shadow-sm border border-red-500/10"
                               >
@@ -537,6 +548,24 @@ export default function BuildingDetailPage() {
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={confirmAction !== null}
+          title={confirmAction?.type === 'delete' ? "Binoni o'chirish" : 'Qurilmani uzish'}
+          message={
+            confirmAction?.type === 'delete'
+              ? "Bu bino va uning barcha ulanishlari o'chiriladi. Amalni davom ettirasizmi?"
+              : 'Qurilma binodan uziladi. Amalni davom ettirasizmi?'
+          }
+          confirmLabel={confirmAction?.type === 'delete' ? "O'chirish" : 'Uzish'}
+          tone="danger"
+          pending={confirmPending}
+          onConfirm={() => {
+            if (confirmAction?.type === 'delete') handleDeleteBuilding()
+            else if (confirmAction?.type === 'unbind') handleUnbindDevice(confirmAction.deviceId)
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
       </div>
     </RootLayout>
   )

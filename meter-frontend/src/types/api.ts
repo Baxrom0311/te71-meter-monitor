@@ -60,6 +60,11 @@ export interface Device {
   firmware_mode: string
   meter_type: string | null
   meter_serial: string | null
+  previous_meter_serial: string | null
+  meter_changed_at: number | null
+  needs_rebind: boolean
+  is_test_device: boolean
+  auto_cleanup_at: number | null
   software_version: string | null
   chip_model: string | null
   rssi: number | null
@@ -84,6 +89,7 @@ export interface Reading {
   ts: number
   utility_type: string
   sensor_type: string | null
+  meter_serial: string | null
   voltage_l1: number | null
   voltage_l2: number | null
   voltage_l3: number | null
@@ -107,6 +113,8 @@ export interface DeviceHistoryResponse {
   device_id?: string
   hours?: number
   total?: number
+  page?: number
+  pages?: number
   readings: Reading[]
 }
 

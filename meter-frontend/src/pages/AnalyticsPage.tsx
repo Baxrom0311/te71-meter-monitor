@@ -53,7 +53,7 @@ export default function AnalyticsPage() {
   const formattedData = useMemo(() => {
     if (!analyticsData?.data) return []
     return analyticsData.data.map((p) => {
-      let label = ''
+      let label: string
       try {
         const d = new Date(p.bucket_ts * 1000)
         if (granularity === 'hour') {

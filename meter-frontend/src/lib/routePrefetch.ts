@@ -4,6 +4,7 @@ type PageKey =
   | 'buildings'
   | 'buildingDetail'
   | 'devices'
+  | 'testDevices'
   | 'deviceDetail'
   | 'alerts'
   | 'firmware'
@@ -19,6 +20,7 @@ const pageLoaders = {
   buildings: () => import('@/pages/BuildingsPage'),
   buildingDetail: () => import('@/pages/BuildingDetailPage'),
   devices: () => import('@/pages/DevicesPage'),
+  testDevices: () => import('@/pages/TestDevicesPage'),
   deviceDetail: () => import('@/pages/DeviceDetailPage'),
   alerts: () => import('@/pages/AlertsPage'),
   firmware: () => import('@/pages/FirmwarePage'),
@@ -40,6 +42,7 @@ function routeToPageKey(path: string): PageKey {
   if (path === '/dashboard' || path === '/') return 'dashboard'
   if (path.startsWith('/buildings/')) return 'buildingDetail'
   if (path === '/buildings') return 'buildings'
+  if (path === '/devices/test') return 'testDevices'
   if (path.startsWith('/devices/')) return 'deviceDetail'
   if (path === '/devices') return 'devices'
   if (path === '/alerts') return 'alerts'

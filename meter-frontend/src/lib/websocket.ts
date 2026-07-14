@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { WebSocketMessage } from '@/types/api'
 import { getTokenFromStorage } from './auth'
 import { API_BASE_URL } from './env'

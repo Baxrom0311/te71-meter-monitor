@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { disconnectWebSocket, subscribe } from '@/lib/websocket'
 import { notify } from '@/lib/toast'
+import { qk } from '@/hooks/queries'
 import type { Alert, Device, Reading, WebSocketMessage } from '@/types/api'
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -30,12 +31,13 @@ export function RealtimeSync() {
 
     disconnectWebSocket()
 
+    // Patch a device in all caches that hold Device[] arrays (non-paginated)
     const updateDevice = (deviceId: string, patch: Partial<Device>) => {
-      queryClient.setQueriesData<Device[]>({ queryKey: ['devices'] }, (old) => {
+      queryClient.setQueriesData<Device[]>({ queryKey: qk.devicesAll() }, (old) => {
         if (!old) return old
         return old.map((device) => (device.id === deviceId ? { ...device, ...patch } : device))
       })
-      queryClient.setQueryData<Device>(['device', deviceId], (old) => (old ? { ...old, ...patch } : old))
+      queryClient.setQueryData<Device>(qk.deviceDetail(deviceId), (old) => (old ? { ...old, ...patch } : old))
     }
 
     const updateReading = (message: WebSocketMessage) => {
@@ -46,16 +48,16 @@ export function RealtimeSync() {
       const ts = typeof message.ts === 'number' ? message.ts : numberOrNull(data.ts)
       updateDevice(deviceId, { online: true, last_seen: ts ?? Math.floor(Date.now() / 1000) })
 
-      queryClient.setQueryData<Reading>(['device-latest', deviceId], (old) => ({
+      queryClient.setQueryData<Reading>(qk.deviceLatest(deviceId), (old) => ({
         ...(old ?? {}),
         ...data,
         device_id: deviceId,
         ts: ts ?? old?.ts ?? Math.floor(Date.now() / 1000),
       }) as Reading)
 
-      queryClient.invalidateQueries({ queryKey: ['device-history', deviceId] })
-      queryClient.invalidateQueries({ queryKey: ['hourly-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['summary'] })
+      queryClient.invalidateQueries({ queryKey: qk.deviceHistory(deviceId, 24) })
+      queryClient.invalidateQueries({ queryKey: qk.hourlyStats(24) })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
     }
 
     const notifyRealtime = (
@@ -75,21 +77,19 @@ export function RealtimeSync() {
         const devices = Array.isArray(data.devices) ? (data.devices as Device[]) : null
         const alerts = Array.isArray(data.alerts) ? (data.alerts as Alert[]) : null
         if (devices) {
-          queryClient.setQueriesData<Device[]>({ queryKey: ['devices'] }, (old) => old ?? devices)
+          queryClient.setQueriesData<Device[]>({ queryKey: qk.devicesAll() }, (old) => old ?? devices)
         }
         if (alerts) {
-          queryClient.setQueriesData<Alert[]>({ queryKey: ['alerts'] }, (old) => old ?? alerts)
+          queryClient.setQueriesData<Alert[]>({ queryKey: qk.alertsAll() }, (old) => old ?? alerts)
         }
-        queryClient.invalidateQueries({ queryKey: ['summary'] })
+        queryClient.invalidateQueries({ queryKey: qk.summary() })
         return
       }
 
       if (message.type === 'device_updated') {
-        if (message.device_id) {
-          queryClient.invalidateQueries({ queryKey: ['device', message.device_id] })
-        }
-        queryClient.invalidateQueries({ queryKey: ['devices'] })
-        queryClient.invalidateQueries({ queryKey: ['summary'] })
+        // Invalidating ['devices'] covers 'all', 'list', 'detail' etc.
+        queryClient.invalidateQueries({ queryKey: qk.devices() })
+        queryClient.invalidateQueries({ queryKey: qk.summary() })
         notifyRealtime(
           `device_updated:${message.device_id ?? 'unknown'}`,
           {
@@ -111,9 +111,11 @@ export function RealtimeSync() {
           last_seen: online ? Math.floor(Date.now() / 1000) : undefined,
         })
         if (message.event === 'created') {
-          queryClient.invalidateQueries({ queryKey: ['devices'] })
+          queryClient.invalidateQueries({ queryKey: qk.devices() })
         }
-        queryClient.invalidateQueries({ queryKey: ['summary'] })
+        // Invalidate paginated list so status badge updates
+        queryClient.invalidateQueries({ queryKey: ['devices', 'list'] })
+        queryClient.invalidateQueries({ queryKey: qk.summary() })
         notifyRealtime(
           `device:${deviceId}:${online ? 'online' : 'offline'}`,
           {
@@ -132,7 +134,7 @@ export function RealtimeSync() {
           'reading',
           {
             type: 'info',
-            title: 'Yangi o‘lchov keldi',
+            title: "Yangi o'lchov keldi",
             message: message.device_id ? `Qurilma: ${message.device_id}` : undefined,
           },
           30_000,
@@ -142,14 +144,14 @@ export function RealtimeSync() {
 
       if (message.type === 'readings_batch') {
         if (message.device_id) updateDevice(message.device_id, { online: true, last_seen: Math.floor(Date.now() / 1000) })
-        queryClient.invalidateQueries({ queryKey: ['devices'] })
-        queryClient.invalidateQueries({ queryKey: ['summary'] })
-        queryClient.invalidateQueries({ queryKey: ['hourly-stats'] })
+        queryClient.invalidateQueries({ queryKey: qk.devices() })
+        queryClient.invalidateQueries({ queryKey: qk.summary() })
+        queryClient.invalidateQueries({ queryKey: qk.hourlyStats(24) })
         notifyRealtime(
           'readings_batch',
           {
             type: 'info',
-            title: 'O‘lchovlar paketi qabul qilindi',
+            title: "O'lchovlar paketi qabul qilindi",
             message: message.device_id ? `Qurilma: ${message.device_id}` : undefined,
           },
           20_000,
@@ -158,8 +160,9 @@ export function RealtimeSync() {
       }
 
       if (message.type === 'alert' || message.type === 'alert_notification') {
-        queryClient.invalidateQueries({ queryKey: ['alerts'] })
-        queryClient.invalidateQueries({ queryKey: ['summary'] })
+        // Invalidating ['alerts'] covers 'all' and 'list'
+        queryClient.invalidateQueries({ queryKey: qk.alerts() })
+        queryClient.invalidateQueries({ queryKey: qk.summary() })
         const notification = asRecord(message.notification)
         const event = message.event
         const severity = stringOrNull(notification.severity) ?? stringOrNull(message.data?.severity)
@@ -177,8 +180,8 @@ export function RealtimeSync() {
       }
 
       if (message.type === 'ota_batch') {
-        queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
-        queryClient.invalidateQueries({ queryKey: ['firmware'] })
+        queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
+        queryClient.invalidateQueries({ queryKey: qk.firmware() })
         const eventLabels: Record<string, string> = {
           created: 'OTA batch yaratildi',
           processed: 'OTA batch ishga tushdi',
@@ -198,13 +201,13 @@ export function RealtimeSync() {
       }
 
       if (message.type === 'firmware') {
-        queryClient.invalidateQueries({ queryKey: ['firmware'] })
-        queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+        queryClient.invalidateQueries({ queryKey: qk.firmware() })
+        queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
         notifyRealtime(
           `firmware:${message.event ?? 'updated'}:${message.firmware_id ?? 'unknown'}`,
           {
             type: message.event === 'deleted' ? 'warning' : 'success',
-            title: message.event === 'deleted' ? 'Firmware o‘chirildi' : 'Firmware yangilandi',
+            title: message.event === 'deleted' ? "Firmware o'chirildi" : 'Firmware yangilandi',
             message: message.firmware_id ? `Firmware #${message.firmware_id}` : undefined,
           },
           6000,
@@ -213,11 +216,10 @@ export function RealtimeSync() {
       }
 
       if (message.type === 'ota_report') {
-        queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
-        queryClient.invalidateQueries({ queryKey: ['firmware'] })
+        queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
+        queryClient.invalidateQueries({ queryKey: qk.firmware() })
         if (message.device_id) {
-          queryClient.invalidateQueries({ queryKey: ['devices'] })
-          queryClient.invalidateQueries({ queryKey: ['device', message.device_id] })
+          queryClient.invalidateQueries({ queryKey: qk.devices() })
         }
         notifyRealtime(
           `ota_report:${message.device_id ?? 'unknown'}:${message.status ?? 'updated'}`,

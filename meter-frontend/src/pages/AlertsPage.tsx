@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { AlertCircle, Trash2, Check, ShieldAlert, Plus, X, ToggleLeft, ToggleRight, Search, Download } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { useAlerts, useAlertRules, useBuildings } from '@/hooks/queries'
+import { useAlerts, useAlertRules, useBuildings, qk } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
 import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
@@ -104,7 +104,7 @@ export default function AlertsPage() {
   const handleClearAlert = async (id: number) => {
     try {
       await apiClient.post(`/api/alerts/${id}/clear`)
-      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      queryClient.invalidateQueries({ queryKey: qk.alerts() })
       notifySuccess('Ogohlantirish tozalandi')
     } catch (err) {
       console.error('Error clearing alert:', err)
@@ -116,7 +116,7 @@ export default function AlertsPage() {
     setClearing(true)
     try {
       await apiClient.post('/api/alerts/clear-all')
-      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      queryClient.invalidateQueries({ queryKey: qk.alerts() })
       notifySuccess('Ogohlantirishlar tozalandi')
     } catch (err) {
       console.error('Error clearing all alerts:', err)
@@ -144,7 +144,7 @@ export default function AlertsPage() {
         message: message || null,
         enabled: true,
       })
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() })
       setIsModalOpen(false)
       // Reset form
       setKind('overvoltage')
@@ -167,7 +167,7 @@ export default function AlertsPage() {
   const handleDeleteRule = async (id: number) => {
     try {
       await apiClient.delete(`/api/alert-rules/${id}`)
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() })
       notifySuccess('Qoida o‘chirildi')
     } catch (err) {
       console.error('Error deleting rule:', err)
@@ -183,7 +183,7 @@ export default function AlertsPage() {
         ...rule,
         enabled: !rule.enabled,
       })
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() })
       notifySuccess(rule.enabled ? 'Qoida o‘chirildi' : 'Qoida yoqildi')
     } catch (err) {
       console.error('Error toggling rule status:', err)

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { MessageSquare, Trash, Send, Sparkles, Bot } from 'lucide-react'
@@ -46,15 +46,15 @@ export default function ChatPage() {
     setUserIsScrollingUp(!isAtBottom)
   }
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (!userIsScrollingUp && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }
+  }, [userIsScrollingUp])
 
   useEffect(() => {
     scrollToBottom()
-  }, [history, partialResponse, thoughts])
+  }, [history, partialResponse, thoughts, scrollToBottom])
 
   // Auto resize textarea height
   useEffect(() => {

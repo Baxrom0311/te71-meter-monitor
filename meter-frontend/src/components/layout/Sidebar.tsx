@@ -74,6 +74,12 @@ function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup
             icon: <Cpu className="w-5 h-5" />,
           },
           {
+            label: 'Test qurilmalar',
+            path: '/devices/test',
+            icon: <ShieldCheck className="w-5 h-5" />,
+            adminOnly: true,
+          },
+          {
             label: translations.nav.analytics,
             path: '/analytics',
             icon: <LineChart className="w-5 h-5" />,
@@ -135,7 +141,7 @@ function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup
 
 export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
   const { user, logout, isAdmin } = useAuth()
-  const { theme, toggleTheme, isDark } = useTheme()
+  const { toggleTheme, isDark } = useTheme()
   const { data: alerts } = useAlerts(false, 200)
   const [isOpen, setIsOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -145,7 +151,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
 
   const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
+  const isActive = (path: string) => location.pathname === path || (path !== '/devices' && location.pathname.startsWith(path + '/'))
 
   return (
     <>
@@ -422,7 +428,7 @@ export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps)
   const openAlertCount = alerts?.length ?? 0
   const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
   const navItems = visibleGroups.flatMap((group) => group.items)
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
+  const isActive = (path: string) => location.pathname === path || (path !== '/devices' && location.pathname.startsWith(path + '/'))
 
   return (
     <header className="hidden md:block fixed left-0 right-0 top-0 z-40 px-5 pt-4">

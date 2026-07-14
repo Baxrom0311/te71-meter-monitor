@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts'
-import { Zap, Droplets, Flame, Wifi, WifiOff, RefreshCw } from 'lucide-react'
+import { Zap, Droplets, Flame, RefreshCw } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/env'
 import type { HourlyUtilityStat } from '@/types/api'
 
@@ -194,7 +194,7 @@ export default function DisplayPage() {
 
       {/* Charts — 3 teng qism */}
       <div className="flex-1 grid grid-rows-3 gap-0 overflow-hidden">
-        {charts.map((cfg, i) => {
+        {charts.map((cfg) => {
           const Icon = cfg.icon
           const hasData = cfg.points.some((p) => p.value != null)
           const gradId = `grad_${cfg.key}`

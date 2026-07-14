@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react'
+import { Pagination } from '@/components/Pagination'
+
+const FW_PAGE_SIZE = 6
+const BATCH_PAGE_SIZE = 10
 import { Ban, Cpu, Layers, PlayCircle, RefreshCw, ShieldCheck, UploadCloud, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { useDevices, useFirmwareList, useOtaBatches } from '@/hooks/queries'
+import { useDevices, useFirmwareList, useOtaBatches, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import apiClient from '@/lib/api'
 import { Device, Firmware, OtaBatch } from '@/types/api'
@@ -49,6 +53,20 @@ export default function FirmwarePage() {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([])
   const [devicesPerHour, setDevicesPerHour] = useState(100)
   const [scheduledAt, setScheduledAt] = useState('')
+
+  const [fwPage, setFwPage] = useState(1)
+  const [batchPage, setBatchPage] = useState(1)
+
+  const fwTotalPages = Math.max(1, Math.ceil(firmwareList.length / FW_PAGE_SIZE))
+  const pagedFirmware = useMemo(
+    () => firmwareList.slice((fwPage - 1) * FW_PAGE_SIZE, fwPage * FW_PAGE_SIZE),
+    [firmwareList, fwPage],
+  )
+  const batchTotalPages = Math.max(1, Math.ceil(batches.length / BATCH_PAGE_SIZE))
+  const pagedBatches = useMemo(
+    () => batches.slice((batchPage - 1) * BATCH_PAGE_SIZE, batchPage * BATCH_PAGE_SIZE),
+    [batches, batchPage],
+  )
 
   const [submitting, setSubmitting] = useState(false)
   const [batchSubmitting, setBatchSubmitting] = useState(false)
@@ -105,7 +123,7 @@ export default function FirmwarePage() {
       await apiClient.post('/api/ota/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      await queryClient.invalidateQueries({ queryKey: ['firmware'] })
+      await queryClient.invalidateQueries({ queryKey: qk.firmware() })
       setIsUploadOpen(false)
       resetUploadForm()
       notifySuccess('Firmware yuklandi', `v${version.trim()} katalogga qo‘shildi.`)
@@ -145,7 +163,7 @@ export default function FirmwarePage() {
         devices_per_hour: devicesPerHour,
         scheduled_at: scheduledTs,
       })
-      await queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+      await queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
       setBatchName('')
       setSelectedFirmwareId('')
       setSelectedDeviceIds([])
@@ -163,7 +181,7 @@ export default function FirmwarePage() {
     setWorkingBatchId(batchId)
     try {
       await apiClient.post(`/api/ota/batches/${batchId}/process`)
-      await queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+      await queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
       notifySuccess('OTA batch ishga tushdi')
     } finally {
       setWorkingBatchId(null)
@@ -174,7 +192,7 @@ export default function FirmwarePage() {
     setWorkingBatchId(batchId)
     try {
       await apiClient.post(`/api/ota/batches/${batchId}/cancel`)
-      await queryClient.invalidateQueries({ queryKey: ['ota-batches'] })
+      await queryClient.invalidateQueries({ queryKey: qk.otaBatches() })
       notifySuccess('OTA batch bekor qilindi')
     } finally {
       setWorkingBatchId(null)
@@ -205,7 +223,7 @@ export default function FirmwarePage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-100">Firmware katalogi</h2>
               <button
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['firmware'] })}
+                onClick={() => queryClient.invalidateQueries({ queryKey: qk.firmware() })}
                 className="p-2 text-gray-400 hover:text-gray-100 hover:bg-gray-800 rounded-lg transition"
                 title="Yangilash"
               >
@@ -218,8 +236,9 @@ export default function FirmwarePage() {
             ) : isError ? (
               <ErrorBlock message={getApiErrorMessage(firmwareQueryError)} onRetry={() => refetchFirmware()} />
             ) : firmwareList.length > 0 ? (
+              <div className="space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {firmwareList.map((fw: Firmware) => (
+                {pagedFirmware.map((fw: Firmware) => (
                   <div
                     key={fw.id}
                     className="glass-card glass-card-hover rounded-xl p-5 space-y-4 shadow"
@@ -273,6 +292,16 @@ export default function FirmwarePage() {
                     )}
                   </div>
                 ))}
+              </div>
+              {firmwareList.length > FW_PAGE_SIZE && (
+                <Pagination
+                  page={fwPage}
+                  totalPages={fwTotalPages}
+                  total={firmwareList.length}
+                  pageSize={FW_PAGE_SIZE}
+                  onPageChange={setFwPage}
+                />
+              )}
               </div>
             ) : (
               <EmptyBlock title={translations.common.noData} message="Hozircha yuklangan firmware fayllari mavjud emas" />
@@ -405,7 +434,7 @@ export default function FirmwarePage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
             <h2 className="text-lg font-semibold text-gray-100">OTA batchlar</h2>
             <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['ota-batches'] })}
+              onClick={() => queryClient.invalidateQueries({ queryKey: qk.otaBatches() })}
               className="p-2 text-gray-400 hover:text-gray-100 hover:bg-gray-800 rounded-lg transition"
               title="Yangilash"
             >
@@ -422,6 +451,7 @@ export default function FirmwarePage() {
                 <ErrorBlock message={getApiErrorMessage(batchesQueryError)} onRetry={() => refetchBatches()} />
               </div>
             ) : batches.length > 0 ? (
+              <>
               <table className="w-full text-sm">
                 <thead className="bg-gray-100/50 dark:bg-gray-800/30 border-b border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400">
                   <tr>
@@ -434,7 +464,7 @@ export default function FirmwarePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-300 dark:divide-gray-850 text-gray-750 dark:text-gray-300">
-                  {batches.map((batch: OtaBatch) => (
+                  {pagedBatches.map((batch: OtaBatch) => (
                     <tr key={batch.id} className="hover:bg-gray-100/30 dark:hover:bg-gray-800/40 transition">
                       <td className="px-5 py-4">
                         <p className="font-bold text-gray-950 dark:text-gray-100">{batch.name}</p>
@@ -487,6 +517,18 @@ export default function FirmwarePage() {
                   ))}
                 </tbody>
               </table>
+              {batches.length > BATCH_PAGE_SIZE && (
+                <div className="border-t border-gray-300 dark:border-gray-800 px-4 py-3">
+                  <Pagination
+                    page={batchPage}
+                    totalPages={batchTotalPages}
+                    total={batches.length}
+                    pageSize={BATCH_PAGE_SIZE}
+                    onPageChange={setBatchPage}
+                  />
+                </div>
+              )}
+              </>
             ) : (
               <div className="p-5">
                 <EmptyBlock title="OTA batchlar mavjud emas" message="Hozircha hech qanday rollout batch yaratilmagan." />

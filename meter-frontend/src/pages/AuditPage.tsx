@@ -11,6 +11,7 @@ import { TableSkeleton } from '@/components/Skeleton'
 import { notifySuccess } from '@/lib/toast'
 import { TableColumnsMenu } from '@/components/TableColumnsMenu'
 import { downloadCsv, TableColumn, useColumnVisibility } from '@/lib/table'
+import { Pagination } from '@/components/Pagination'
 
 const PAGE_SIZE = 50
 
@@ -36,7 +37,6 @@ export default function AuditPage() {
     entityFilter ? { entity_type: entityFilter } : undefined,
   )
 
-  const auditLogs = data?.audit_logs ?? []
   const totalPages = data?.pages ?? 1
   const total = data?.total ?? 0
 
@@ -48,6 +48,7 @@ export default function AuditPage() {
   ]
 
   const displayedLogs = useMemo(() => {
+    const auditLogs = data?.audit_logs ?? []
     if (!searchQuery.trim()) return auditLogs
     const q = searchQuery.toLowerCase().trim()
     return auditLogs.filter((log) => {
@@ -58,7 +59,7 @@ export default function AuditPage() {
         (log.entity_type ?? '').toLowerCase().includes(q)
       )
     })
-  }, [auditLogs, searchQuery])
+  }, [data?.audit_logs, searchQuery])
 
   const handleEntityChange = (value: string) => {
     setSelectedEntity(value)
@@ -141,27 +142,6 @@ export default function AuditPage() {
           <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : displayedLogs.length > 0 ? (
           <div className="glass-card rounded-xl overflow-hidden shadow-lg">
-            <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                {total} ta yozuv · {page}/{totalPages} sahifa
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={page === 1}
-                  className="surface-button px-3 py-1.5 text-xs font-bold"
-                >
-                  Oldingi
-                </button>
-                <button
-                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={page === totalPages}
-                  className="surface-button px-3 py-1.5 text-xs font-bold"
-                >
-                  Keyingi
-                </button>
-              </div>
-            </div>
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -267,6 +247,16 @@ export default function AuditPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="border-t border-gray-300 dark:border-gray-800 px-4 py-3">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+                isLoading={isLoading}
+              />
             </div>
           </div>
         ) : (
