@@ -26,6 +26,7 @@ class FlashWorker(QThread):
         self.device_token = ""
         self.wifi_ssid = ""
         self.wifi_pass = ""
+        self.test_mode = False
         self.build_only = False
         self._cancelled = False
 
@@ -56,12 +57,20 @@ class FlashWorker(QThread):
 
         # Build flags (server, token, wifi)
         build_flags = FlashService.make_build_flags(
-            self.firmware_env, self.server_url, self.device_token, self.wifi_ssid, self.wifi_pass
+            self.firmware_env,
+            self.server_url,
+            self.device_token,
+            self.wifi_ssid,
+            self.wifi_pass,
+            self.test_mode,
         )
         self.log_line.emit("Build flags:", "#94a3b8")
         for f in build_flags.splitlines():
             if f.strip():
-                self.log_line.emit(f"  {f.strip()}", "#64748b")
+                display_flag = f.strip()
+                if "DEFAULT_DEVICE_TOKEN" in display_flag:
+                    display_flag = "'-DDEFAULT_DEVICE_TOKEN=\"***\"'"
+                self.log_line.emit(f"  {display_flag}", "#64748b")
         self.log_line.emit("─" * 60, "#334155")
 
         # PlatformIO command
@@ -214,7 +223,17 @@ class FlashController(QObject):
     def is_monitoring(self) -> bool:
         return self._monitor_worker.isRunning()
 
-    def start_flash(self, env: str, port: str, build_only: bool, server: str, token: str, ssid: str, wifi_pass: str):
+    def start_flash(
+        self,
+        env: str,
+        port: str,
+        build_only: bool,
+        server: str,
+        token: str,
+        ssid: str,
+        wifi_pass: str,
+        test_mode: bool = False,
+    ):
         if self._flash_worker.isRunning():
             return
         self._flash_worker.firmware_env = env
@@ -224,6 +243,7 @@ class FlashController(QObject):
         self._flash_worker.device_token = token
         self._flash_worker.wifi_ssid = ssid
         self._flash_worker.wifi_pass = wifi_pass
+        self._flash_worker.test_mode = test_mode
         self._flash_worker.start()
 
     def cancel_flash(self):

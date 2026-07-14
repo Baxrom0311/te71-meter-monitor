@@ -23,7 +23,7 @@ FIRMWARE_TYPES = [
     ("gas",         "🔥  Gaz",        "1x analog bosim sensori"),
 ]
 
-DEFAULT_SERVER  = "http://67.205.171.93"
+DEFAULT_SERVER  = "https://ss.boos.uz"
 DEFAULT_TOKEN   = "T30gwzZJ6YTvQeLRMCZyTi-GBAYogsQV"
 DEFAULT_WIFI_SSID = "12"
 DEFAULT_WIFI_PASS = "12345678"
@@ -116,6 +116,10 @@ class FlashWindow(QMainWindow):
         self.txt_token = QLineEdit(DEFAULT_TOKEN)
         self.txt_token.setMinimumHeight(34)
         left_layout.addWidget(self.txt_token)
+
+        self.chk_test_mode = QCheckBox("Test mode (productionga aralashmaydi)")
+        self.chk_test_mode.setToolTip("Yoqilsa firmware register paytida is_test_device=true yuboradi. Token maydoniga TEST_DEVICE_API_TOKEN kiriting.")
+        left_layout.addWidget(self.chk_test_mode)
 
         # WiFi
         left_layout.addWidget(self._section("WiFi sozlamalari"))
@@ -358,6 +362,7 @@ class FlashWindow(QMainWindow):
             token=self.txt_token.text().strip() or DEFAULT_TOKEN,
             ssid=self.txt_ssid.text().strip() or DEFAULT_WIFI_SSID,
             wifi_pass=self.txt_wifi_pass.text() or DEFAULT_WIFI_PASS,
+            test_mode=self.chk_test_mode.isChecked(),
         )
 
     def _cancel(self):

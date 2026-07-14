@@ -55,7 +55,14 @@ class FlashService:
         return None
 
     @staticmethod
-    def make_build_flags(firmware_env: str, server_url: str, device_token: str, wifi_ssid: str, wifi_pass: str) -> str:
+    def make_build_flags(
+        firmware_env: str,
+        server_url: str,
+        device_token: str,
+        wifi_ssid: str,
+        wifi_pass: str,
+        test_mode: bool = False,
+    ) -> str:
         """Barcha build flaglarini PlatformIO ini formatida yig'adi."""
         sensor_flag = f"-DSENSOR_{firmware_env.upper()}"
         # Escape any single quotes inside values (edge case)
@@ -72,5 +79,6 @@ class FlashService:
             f"""'-DDEFAULT_DEVICE_TOKEN="{token}"'""",
             f"""'-DDEFAULT_WIFI_SSID="{ssid}"'""",
             f"""'-DDEFAULT_WIFI_PASS="{pwd}"'""",
+            f"-DDEFAULT_TEST_MODE={1 if test_mode else 0}",
         ]
         return "\n".join(lines)
