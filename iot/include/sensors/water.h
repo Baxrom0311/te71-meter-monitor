@@ -39,6 +39,26 @@
 #define SENSOR_ADC_SAMPLES    16   // Shovqun kamaytirish uchun o'rtacha namuna soni
 
 // ─── SensorData (suv) ─────────────────────────────────────────────────────────
+// ─── Pulse sensor setting ───────────────────────────────────────────────────
+#define PIN_WATER_PULSE       25     // GPIO25 water flow pulse input
+#define WATER_LITERS_PER_PULSE  10.0f  // 10 litr per pulse (o'zgartirish mumkin)
+#define DEBOUNCE_DELAY_MS     50     // Shovqindan saqlash millisoniyalari
+
+static volatile unsigned long g_water_pulse_count = 0;
+static volatile unsigned long g_last_water_pulse_ms = 0;
+static float g_initial_volume_m3 = 0.0f;
+static unsigned long g_last_read_pulses = 0;
+static unsigned long g_last_read_time_ms = 0;
+
+static void IRAM_ATTR water_pulse_isr() {
+    unsigned long now = millis();
+    if (now - g_last_water_pulse_ms > DEBOUNCE_DELAY_MS) {
+        g_water_pulse_count++;
+        g_last_water_pulse_ms = now;
+    }
+}
+
+// ─── SensorData (suv) ─────────────────────────────────────────────────────────
 struct SensorData {
     float pressure_bottom_bar;  // Kirish joyi (pastki) bosimi, bar
     float pressure_top_bar;     // Yuqori qavat bosimi, bar
@@ -66,18 +86,31 @@ static void sensor_init() {
     analogSetAttenuation(ADC_11db);  // 0–3.3V diapazon
     pinMode(PIN_PRESSURE_BOTTOM, INPUT);
     pinMode(PIN_PRESSURE_TOP,    INPUT);
-    // Birinchi ADC o'qish odatda noto'g'ri — isitib olish
+
+    // Pulse sensor
+    pinMode(PIN_WATER_PULSE, INPUT_PULLUP);
+    
+    // Preferencesdan yuklash
+    Preferences prefs;
+    prefs.begin("water", false);
+    g_water_pulse_count = prefs.getULong("pulses", 0);
+    g_initial_volume_m3 = prefs.getFloat("base_vol", 0.0f);
+    prefs.end();
+
+    attachInterrupt(digitalPinToInterrupt(PIN_WATER_PULSE), water_pulse_isr, FALLING);
+    g_last_read_pulses = g_water_pulse_count;
+    g_last_read_time_ms = millis();
+
+    // Birinchi ADC o'qish
     analogRead(PIN_PRESSURE_BOTTOM);
     analogRead(PIN_PRESSURE_TOP);
     delay(100);
-    Serial.println("Suv bosim sensorlari tayyor");
-    Serial.printf("  Pastki: GPIO%d | Yuqori: GPIO%d\n",
-                  PIN_PRESSURE_BOTTOM, PIN_PRESSURE_TOP);
-    Serial.printf("  Max bosim: %.1f bar\n", SENSOR_MAX_BAR);
+    Serial.println("Suv bosim va impuls sensorlari tayyor");
+    Serial.printf("  Pastki: GPIO%d | Yuqori: GPIO%d | Impuls: GPIO%d\n",
+                  PIN_PRESSURE_BOTTOM, PIN_PRESSURE_TOP, PIN_WATER_PULSE);
 }
 
 static bool sensor_connect() {
-    // Analog sensor — har doim tayyor
     return true;
 }
 
@@ -93,25 +126,55 @@ static bool sensor_read(SensorData& d) {
         d.temperature_c       = 18.5f + (random(0, 10) / 10.0f);   // 18.5 - 19.5 C
         d.valid = true;
         
-        Serial.printf("[TEST MODE] Suv datchigi: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | hajm=%.3f m3\n",
+        Serial.printf("[TEST MODE] Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | hajm=%.3f m3\n",
                       d.pressure_bottom_bar, d.pressure_top_bar, d.flow_rate, d.volume_m3);
         return true;
     }
 
+    // Real rejimda o'qish
+    unsigned long current_pulses = g_water_pulse_count;
+    unsigned long time_now = millis();
+    unsigned long time_diff_ms = time_now - g_last_read_time_ms;
+    unsigned long pulse_diff = current_pulses - g_last_read_pulses;
+
     d.pressure_bottom_bar = _adc_to_bar(PIN_PRESSURE_BOTTOM);
     d.pressure_top_bar    = _adc_to_bar(PIN_PRESSURE_TOP);
-    d.flow_rate           = NAN;
-    d.volume_m3           = NAN;
-    d.temperature_c       = NAN;
+
+    // Oqim tezligi: L/min
+    if (time_diff_ms > 0) {
+        float liters = pulse_diff * WATER_LITERS_PER_PULSE;
+        d.flow_rate = (liters / (float)time_diff_ms) * 60000.0f;
+    } else {
+        d.flow_rate = 0.0f;
+    }
+
+    // Jami hajm: m3
+    d.volume_m3 = g_initial_volume_m3 + ((float)current_pulses * WATER_LITERS_PER_PULSE / 1000.0f);
+    d.temperature_c = NAN; // Ichki analog harorat mavjud emas
     d.valid = true;
 
-    Serial.printf("Suv bosim: pastki=%.3f bar | yuqori=%.3f bar\n",
-                  d.pressure_bottom_bar, d.pressure_top_bar);
+    g_last_read_pulses = current_pulses;
+    g_last_read_time_ms = time_now;
+
+    // Har 10 impulsda yoki 5 daqiqada Preferences-ga saqlaymiz (flash-ni asrash uchun)
+    static unsigned long last_saved_pulses = 0;
+    static unsigned long last_saved_time_ms = 0;
+    if (current_pulses - last_saved_pulses >= 10 || (time_now - last_saved_time_ms > 300000UL)) {
+        Preferences prefs;
+        prefs.begin("water", false);
+        prefs.putULong("pulses", current_pulses);
+        prefs.end();
+        last_saved_pulses = current_pulses;
+        last_saved_time_ms = time_now;
+    }
+
+    Serial.printf("Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | jami=%.3f m3 (pulses=%lu)\n",
+                  d.pressure_bottom_bar, d.pressure_top_bar, d.flow_rate, d.volume_m3, current_pulses);
     return true;
 }
 
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
-    const char* s_type = g_cfg.test_mode ? "water_pulse_flow" : "water_pressure";
+    const char* s_type = "water_pulse_flow";
     return app_register(device_id, "water", s_type, "", fw_version, 0);
 }
 
@@ -121,7 +184,7 @@ static String sensor_build_json(const char* device_id,
     StaticJsonDocument<384> doc;
     doc["device_id"]    = device_id;
     doc["utility_type"] = "water";
-    doc["sensor_type"]  = g_cfg.test_mode ? "water_pulse_flow" : "water_pressure";
+    doc["sensor_type"]  = "water_pulse_flow";
     doc["fw_version"]   = fw_ver;
     if (g_cfg.test_mode) doc["is_test_device"] = true;
 
@@ -134,4 +197,17 @@ static String sensor_build_json(const char* device_id,
     String out;
     serializeJson(doc, out);
     return out;
+}
+
+void sensor_set_volume(float val) {
+    Preferences prefs;
+    prefs.begin("water", false);
+    prefs.putFloat("base_vol", val);
+    prefs.putULong("pulses", 0);
+    prefs.end();
+
+    g_water_pulse_count = 0;
+    g_initial_volume_m3 = val;
+    g_last_read_pulses = 0;
+    Serial.printf("Suv base hajmi %.3f m3 qilib o'rnatildi\n", val);
 }
