@@ -31,6 +31,7 @@
 struct AppConfig {
     char server_url[CFG_SERVER_LEN];
     char device_token[CFG_TOKEN_LEN];
+    char provisioning_token[CFG_TOKEN_LEN];
     char meter_serial[CFG_SERIAL_LEN];  // Oxirgi ma'lum seriya — WiFiManager da ko'rsatish uchun
     bool test_mode;
 };
@@ -60,6 +61,7 @@ static void cfg_load() {
 #else
     g_cfg.device_token[0] = '\0';
 #endif
+    g_cfg.provisioning_token[0] = '\0';
     g_cfg.meter_serial[0] = '\0';
 #ifdef DEFAULT_TEST_MODE
     g_cfg.test_mode = DEFAULT_TEST_MODE;
@@ -69,9 +71,10 @@ static void cfg_load() {
 
     // NVS dan yuklash (WiFiManager orqali saqlangan qiymatlar ustunlik qiladi)
     g_prefs.begin("app", true);
-    g_prefs.getString("srv", g_cfg.server_url,    CFG_SERVER_LEN);
-    g_prefs.getString("tok", g_cfg.device_token,  CFG_TOKEN_LEN);
-    g_prefs.getString("msr", g_cfg.meter_serial,  CFG_SERIAL_LEN);
+    g_prefs.getString("srv", g_cfg.server_url,          CFG_SERVER_LEN);
+    g_prefs.getString("tok", g_cfg.device_token,        CFG_TOKEN_LEN);
+    g_prefs.getString("prv", g_cfg.provisioning_token,   CFG_TOKEN_LEN);
+    g_prefs.getString("msr", g_cfg.meter_serial,        CFG_SERIAL_LEN);
     g_cfg.test_mode = g_prefs.getBool("test", g_cfg.test_mode);
     g_prefs.end();
 
@@ -94,17 +97,23 @@ static bool cfg_parse_test_mode(const char* mode) {
            strcasecmp(mode, "yes") == 0;
 }
 
-static void cfg_save(const char* srv, const char* tok, const char* mode) {
+static void cfg_save(const char* srv, const char* tok, const char* mode, const char* prv) {
     if (srv && srv[0]) strncpy(g_cfg.server_url,   srv, CFG_SERVER_LEN - 1);
     if (tok) {
         strncpy(g_cfg.device_token, tok, CFG_TOKEN_LEN - 1);
         g_cfg.device_token[CFG_TOKEN_LEN - 1] = '\0';
+    }
+    if (prv) {
+        strncpy(g_cfg.provisioning_token, prv, CFG_TOKEN_LEN - 1);
+        g_cfg.provisioning_token[CFG_TOKEN_LEN - 1] = '\0';
     }
     g_cfg.test_mode = cfg_parse_test_mode(mode);
     g_prefs.begin("app", false);
     g_prefs.putString("srv", g_cfg.server_url);
     if (g_cfg.device_token[0]) g_prefs.putString("tok", g_cfg.device_token);
     else g_prefs.remove("tok");
+    if (g_cfg.provisioning_token[0]) g_prefs.putString("prv", g_cfg.provisioning_token);
+    else g_prefs.remove("prv");
     g_prefs.putBool("test", g_cfg.test_mode);
     g_prefs.end();
 }
@@ -180,8 +189,11 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
         "Server manzili (masalan: http://67.205.171.93)",
         g_cfg.server_url, 99);
     WiFiManagerParameter p_tok("token",
-        "API token (admin beradi — bo'sh qoldirsa ochiq rejim)",
+        "API token (bo'sh bo'lsa, provisioning token ishlating)",
         g_cfg.device_token, 63);
+    WiFiManagerParameter p_prov("prov_token",
+        "Bir martalik Provisioning Token (yangi qurilma uchun)",
+        g_cfg.provisioning_token, 63);
     WiFiManagerParameter p_mode("mode",
         "Rejim: prod yoki test",
         g_cfg.test_mode ? "test" : "prod", 8);
@@ -191,11 +203,12 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
     wm.addParameter(&p_info);
     wm.addParameter(&p_srv);
     wm.addParameter(&p_tok);
+    wm.addParameter(&p_prov);
     wm.addParameter(&p_mode);
     wm.setConnectTimeout(20);
     wm.setConfigPortalTimeout(180);
     wm.setSaveConfigCallback([&]() {
-        cfg_save(p_srv.getValue(), p_tok.getValue(), p_mode.getValue());
+        cfg_save(p_srv.getValue(), p_tok.getValue(), p_mode.getValue(), p_prov.getValue());
         Serial.printf("Config saqlandi: %s (%s)\n", g_cfg.server_url, g_cfg.test_mode ? "TEST" : "PROD");
     });
 
@@ -336,6 +349,9 @@ static bool app_register(const char* device_id,
     doc["rssi"]             = WiFi.RSSI();
     doc["chip_model"]       = "ESP32";
     if (g_cfg.test_mode) doc["is_test_device"] = true;
+    if (g_cfg.provisioning_token[0]) {
+        doc["provisioning_token"] = g_cfg.provisioning_token;
+    }
     String body;
     serializeJson(doc, body);
 
@@ -355,7 +371,17 @@ static bool app_register(const char* device_id,
         StaticJsonDocument<256> resp;
         if (!deserializeJson(resp, http.getString())) {
             const char* new_tok = resp["device_token"];
-            if (new_tok && new_tok[0]) cfg_save_token(new_tok);
+            if (new_tok && new_tok[0]) {
+                cfg_save_token(new_tok);
+                // Muvaffaqiyatli registerdan keyin provisioning token-ni o'chirish (bir martalik)
+                if (g_cfg.provisioning_token[0]) {
+                    g_cfg.provisioning_token[0] = '\0';
+                    g_prefs.begin("app", false);
+                    g_prefs.remove("prv");
+                    g_prefs.end();
+                    Serial.println("Provisioning token muvaffaqiyatli foydalanildi va o'chirildi");
+                }
+            }
         }
         Serial.printf("Ro'yxatdan o'tildi: %s (%s)\n", device_id, meter_type);
     } else {
