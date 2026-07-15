@@ -114,26 +114,26 @@ void setup() {
     snprintf(device_id, sizeof(device_id), "%02X%02X%02X%02X%02X%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-    Serial.println();
-    Serial.println("╔══════════════════════════════════════════╗");
-    Serial.println("║       Meter Monitor v" FW_VERSION "            ║");
+    LOG_PRINTLN();
+    LOG_PRINTLN("╔══════════════════════════════════════════╗");
+    LOG_PRINTLN("║       Meter Monitor v" FW_VERSION "            ║");
 
 #ifdef SENSOR_ELECTRICITY
-    Serial.println("║       Sensor: Elektr (TE71/TE73)         ║");
+    LOG_PRINTLN("║       Sensor: Elektr (TE71/TE73)         ║");
 #elif defined(SENSOR_WATER)
-    Serial.println("║       Sensor: Suv bosimi (2x ADC)        ║");
+    LOG_PRINTLN("║       Sensor: Suv bosimi (2x ADC)        ║");
 #elif defined(SENSOR_GAS)
-    Serial.println("║       Sensor: Gaz bosimi (1x ADC)        ║");
+    LOG_PRINTLN("║       Sensor: Gaz bosimi (1x ADC)        ║");
 #endif
 
-    Serial.println("╚══════════════════════════════════════════╝");
-    Serial.printf("Qurilma ID : %s\n", device_id);
+    LOG_PRINTLN("╚══════════════════════════════════════════╝");
+    LOG_PRINTF("Qurilma ID : %s\n", device_id);
 
     // NVS dan config yuklash
     cfg_load();
-    Serial.printf("Server     : %s\n", g_cfg.server_url);
-    Serial.printf("Rejim      : %s\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
-    Serial.printf("Token      : %s\n",
+    LOG_PRINTF("Server     : %s\n", g_cfg.server_url);
+    LOG_PRINTF("Rejim      : %s\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
+    LOG_PRINTF("Token      : %s\n",
         g_cfg.device_token[0] ? "✓ sozlangan" : "✗ YO'Q — WiFiManager da kiriting!");
 
     // BOOT tugmasi (GPIO0) 3s bosilsa → WiFi reset
@@ -204,19 +204,19 @@ void setup() {
     }
 
     // ── Serial monitor xulosa ───────────────────────────────────────────────
-    Serial.println();
-    Serial.println("┌──────────────────────────────────────────────┐");
-    Serial.printf( "│  Qurilma ID : %-30s│\n", device_id);
+    LOG_PRINTLN();
+    LOG_PRINTLN("┌──────────────────────────────────────────────┐");
+    LOG_PRINTF( "│  Qurilma ID : %-30s│\n", device_id);
 #ifdef SENSOR_ELECTRICITY
-    Serial.printf( "│  Hisoblagich: %-30s│\n",
+    LOG_PRINTF( "│  Hisoblagich: %-30s│\n",
         g_sensor_meta.meter_serial[0] ? g_sensor_meta.meter_serial : "topilmadi");
-    Serial.printf( "│  Tur        : %-30s│\n",
+    LOG_PRINTF( "│  Tur        : %-30s│\n",
         g_sensor_meta.sensor_type[0]  ? g_sensor_meta.sensor_type  : "aniqlanmadi");
 #endif
-    Serial.printf( "│  Server     : %-30s│\n", g_cfg.server_url);
-    Serial.printf( "│  Rejim      : %-30s│\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
-    Serial.println("└──────────────────────────────────────────────┘");
-    Serial.println("Tayyor!\n");
+    LOG_PRINTF( "│  Server     : %-30s│\n", g_cfg.server_url);
+    LOG_PRINTF( "│  Rejim      : %-30s│\n", g_cfg.test_mode ? "TEST" : "PRODUCTION");
+    LOG_PRINTLN("└──────────────────────────────────────────────┘");
+    LOG_PRINTLN("Tayyor!\n");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
