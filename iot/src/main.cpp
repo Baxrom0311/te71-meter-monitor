@@ -105,8 +105,10 @@ static bool do_register() {
 // Setup
 // ═══════════════════════════════════════════════════════════════════════════════
 void setup() {
+#if CORE_DEBUG_LEVEL > 0 || defined(APP_DEBUG)
     Serial.begin(115200);
     delay(200);
+#endif
 
     // Device ID = WiFi MAC
     uint8_t mac[6];
