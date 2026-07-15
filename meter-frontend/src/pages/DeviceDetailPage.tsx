@@ -149,25 +149,24 @@ export default function DeviceDetailPage() {
   // Chart data: convert historical readings to Recharts format
   const chartData = useMemo(() => {
     if (!chartHistoryData?.readings) return []
-    // Show older readings first
     return [...chartHistoryData.readings]
       .reverse()
       .map((r) => ({
         timestamp: new Date(r.ts * 1000).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-        metric: device?.utility_type === 'water'
-          ? (r.pressure_top_bar ?? r.pressure_bottom_bar ?? r.flow_rate ?? 0)
-          : device?.utility_type === 'gas'
-            ? (r.pressure_bar ?? r.flow_rate ?? 0)
-            : (r.power_w ?? 0),
+        power: r.power_w ?? 0,
         voltage: r.voltage_l1 ?? 0,
+        pressure: r.pressure_bar ?? r.pressure_bottom_bar ?? 0,
+        pressureTop: r.pressure_top_bar ?? 0,
+        flow: r.flow_rate ?? 0,
+        volume: r.volume_m3 ?? 0,
       }))
-  }, [chartHistoryData, device?.utility_type])
+  }, [chartHistoryData])
 
   const chartMeta = device?.utility_type === 'water'
-    ? { title: 'Suv bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim/flow o‘zgarishi', label: 'Bosim / Flow', color: '#06B6D4' }
+    ? { title: 'Suv ko‘rsatkichlari grafigi', subtitle: 'Oxirgi 24 soatdagi bosim va oqim o‘zgarishi' }
     : device?.utility_type === 'gas'
-      ? { title: 'Gaz bosimi grafigi', subtitle: 'Oxirgi 24 soatdagi bosim o‘zgarishi', label: 'Bosim', color: '#F59E0B' }
-      : { title: 'Quvvat grafigi', subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi", label: 'Power W', color: '#10B981' }
+      ? { title: 'Gaz ko‘rsatkichlari grafigi', subtitle: 'Oxirgi 24 soatdagi bosim va oqim o‘zgarishi' }
+      : { title: 'Elektr quvvati grafigi', subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
 
   if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
 
@@ -476,9 +475,17 @@ export default function DeviceDetailPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <defs>
-                        <linearGradient id="powerGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={chartMeta.color} stopOpacity={0.2} />
-                          <stop offset="95%" stopColor={chartMeta.color} stopOpacity={0} />
+                        <linearGradient id="chartGradBlue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="chartGradEmerald" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="chartGradOrange" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
@@ -489,7 +496,29 @@ export default function DeviceDetailPage() {
                         labelStyle={{ color: chart.label, fontWeight: 800 }}
                         cursor={chart.cursor}
                       />
-                      <Area type="monotone" dataKey="metric" name={chartMeta.label} stroke={chartMeta.color} fillOpacity={1} fill="url(#powerGrad)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+                      {device?.utility_type === 'electricity' && (
+                        <>
+                          <Area type="monotone" dataKey="power" name="Power (W)" stroke="#10B981" fillOpacity={1} fill="url(#chartGradEmerald)" strokeWidth={3} dot={false} />
+                          <Area type="monotone" dataKey="voltage" name="Voltage (V)" stroke="#3B82F6" fillOpacity={1} fill="url(#chartGradBlue)" strokeWidth={2} dot={false} />
+                        </>
+                      )}
+                      {device?.utility_type === 'water' && (
+                        <>
+                          <Area type="monotone" dataKey="pressure" name="Pastki bosim (bar)" stroke="#06B6D4" fillOpacity={1} fill="url(#chartGradBlue)" strokeWidth={3} dot={false} />
+                          <Area type="monotone" dataKey="pressureTop" name="Yuqori bosim (bar)" stroke="#8B5CF6" fillOpacity={1} fill="url(#chartGradOrange)" strokeWidth={2} dot={false} />
+                          {chartData.some(d => d.flow > 0) && (
+                            <Area type="monotone" dataKey="flow" name="Suv oqimi (L/min)" stroke="#3B82F6" fillOpacity={1} fill="url(#chartGradBlue)" strokeWidth={2} dot={false} />
+                          )}
+                        </>
+                      )}
+                      {device?.utility_type === 'gas' && (
+                        <>
+                          <Area type="monotone" dataKey="pressure" name="Bosim (bar)" stroke="#06B6D4" fillOpacity={1} fill="url(#chartGradBlue)" strokeWidth={3} dot={false} />
+                          {chartData.some(d => d.flow > 0) && (
+                            <Area type="monotone" dataKey="flow" name="Gaz oqimi (m³/h)" stroke="#F59E0B" fillOpacity={1} fill="url(#chartGradOrange)" strokeWidth={2} dot={false} />
+                          )}
+                        </>
+                      )}
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -508,20 +537,56 @@ export default function DeviceDetailPage() {
                     <thead>
                       <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400">
                         <th className="px-6 py-4 font-semibold">Vaqt</th>
-                        <th className="px-6 py-4 font-semibold">Kuchlanish (V)</th>
-                        <th className="px-6 py-4 font-semibold">Tok kuchi (A)</th>
-                        <th className="px-6 py-4 font-semibold">Quvvat (W)</th>
-                        <th className="px-6 py-4 font-semibold">Energiya (kWh)</th>
+                        {device?.utility_type === 'electricity' ? (
+                          <>
+                            <th className="px-6 py-4 font-semibold">Kuchlanish (V)</th>
+                            <th className="px-6 py-4 font-semibold">Tok kuchi (A)</th>
+                            <th className="px-6 py-4 font-semibold">Quvvat (W)</th>
+                            <th className="px-6 py-4 font-semibold">Energiya (kWh)</th>
+                          </>
+                        ) : device?.utility_type === 'water' ? (
+                          <>
+                            <th className="px-6 py-4 font-semibold">Pastki bosim (bar)</th>
+                            <th className="px-6 py-4 font-semibold">Yuqori bosim (bar)</th>
+                            <th className="px-6 py-4 font-semibold">Oqim (L/min)</th>
+                            <th className="px-6 py-4 font-semibold">Jami hajm (m³)</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-6 py-4 font-semibold">Bosim (bar)</th>
+                            <th className="px-6 py-4 font-semibold">Oqim (m³/h)</th>
+                            <th className="px-6 py-4 font-semibold">Jami hajm (m³)</th>
+                            <th className="px-6 py-4 font-semibold">Harorat (°C)</th>
+                          </>
+                        )}
                       </tr>
 	                    </thead>
 	                    <tbody className="divide-y divide-gray-300 dark:divide-gray-850 text-gray-750 dark:text-gray-300">
 	                      {historyData.readings.map((r) => (
 	                        <tr key={r.id} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/30 transition">
                           <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{new Date(r.ts * 1000).toLocaleString('uz-UZ')}</td>
-                          <td className="px-6 py-3.5 font-mono">{r.voltage_l1 ?? '—'}</td>
-                          <td className="px-6 py-3.5 font-mono">{r.current_l1 ?? '—'}</td>
-                          <td className="px-6 py-3.5 font-mono text-green-650 dark:text-green-400 font-bold">{r.power_w ?? '—'}</td>
-                          <td className="px-6 py-3.5 font-mono text-purple-650 dark:text-purple-400 font-bold">{r.energy_kwh ?? '—'}</td>
+                          {device?.utility_type === 'electricity' ? (
+                            <>
+                              <td className="px-6 py-3.5 font-mono">{r.voltage_l1 ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono">{r.current_l1 ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-green-650 dark:text-green-400 font-bold">{r.power_w ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-purple-650 dark:text-purple-400 font-bold">{r.energy_kwh ?? '—'}</td>
+                            </>
+                          ) : device?.utility_type === 'water' ? (
+                            <>
+                              <td className="px-6 py-3.5 font-mono text-cyan-600 dark:text-cyan-400 font-bold">{r.pressure_bottom_bar ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-purple-600 dark:text-purple-400 font-bold">{r.pressure_top_bar ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-blue-600 dark:text-blue-400 font-bold">{r.flow_rate ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-pink-650 dark:text-pink-400 font-bold">{r.volume_m3 ?? '—'}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-6 py-3.5 font-mono text-cyan-600 dark:text-cyan-400 font-bold">{r.pressure_bar ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-amber-600 dark:text-amber-400 font-bold">{r.flow_rate ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-emerald-600 dark:text-emerald-450 font-bold">{r.volume_m3 ?? '—'}</td>
+                              <td className="px-6 py-3.5 font-mono text-purple-650 dark:text-purple-450">{r.temperature_c ?? '—'}</td>
+                            </>
+                          )}
                         </tr>
                       ))}
 	                    </tbody>

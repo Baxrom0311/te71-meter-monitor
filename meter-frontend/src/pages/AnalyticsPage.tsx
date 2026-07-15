@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { TrendingUp, Download, Calendar, Filter } from 'lucide-react'
+import { TrendingUp, Download, Calendar, Filter, Printer } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useEnergyAnalytics, useBuildings, useHourlyStats } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
@@ -87,6 +87,7 @@ export default function AnalyticsPage() {
       pressure: number
       pressureTop: number
       flow: number
+      volume: number
       samples: number
     }>()
 
@@ -99,6 +100,7 @@ export default function AnalyticsPage() {
         pressure: 0,
         pressureTop: 0,
         flow: 0,
+        volume: 0,
         samples: 0,
       }
       const samples = Math.max(row.samples || 1, 1)
@@ -107,6 +109,7 @@ export default function AnalyticsPage() {
       current.pressure += (row.avg_pressure_bottom_bar ?? row.avg_pressure_bar ?? 0) * samples
       current.pressureTop += (row.avg_pressure_top_bar ?? 0) * samples
       current.flow += (row.avg_flow_rate ?? 0) * samples
+      current.volume = Math.max(current.volume, row.max_volume_m3 ?? 0)
       current.samples += samples
       buckets.set(row.bucket_ts, current)
     })
@@ -118,58 +121,122 @@ export default function AnalyticsPage() {
       pressure: row.samples ? Number((row.pressure / row.samples).toFixed(3)) : 0,
       pressureTop: row.samples ? Number((row.pressureTop / row.samples).toFixed(3)) : 0,
       flow: row.samples ? Number((row.flow / row.samples).toFixed(3)) : 0,
+      volume: Number(row.volume.toFixed(3)),
     }))
   }, [hourlyStats])
 
-  // CSV Data Export
+  // CSV Data Export (Dynamic based on selected utility type)
   const handleExportCSV = () => {
-    if (formattedData.length === 0) return
-    const headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Energiya sarfi (kWh)', 'O\'rtacha Quvvat (W)', 'O\'lchovlar soni']
-    const csvRows = [headers.join(',')]
+    let headers: string[] = []
+    let rows: any[] = []
 
-    formattedData.forEach((row) => {
-      const values = [
-        row.timestamp,
+    if (utilityType === 'electricity') {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Energiya sarfi (kWh)', 'O\'rtacha Quvvat (W)', 'Kuchlanish L1 (V)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => {
+        const energyRow = formattedData.find(e => Math.abs(e.timestamp - row.bucket_ts) < 1800)
+        return [
+          row.bucket_ts,
+          `"${row.label}"`,
+          energyRow ? energyRow.energy.toFixed(2) : '0.00',
+          row.power.toFixed(1),
+          row.voltage.toFixed(1),
+          row.samples
+        ]
+      })
+    } else if (utilityType === 'water') {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Pastki bosim (bar)', 'Yuqori bosim (bar)', 'Oqim (L/min)', 'Jami hajm (m³)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => [
+        row.bucket_ts,
         `"${row.label}"`,
-        row.energy,
-        row.power,
-        row.samples,
-      ]
+        row.pressure.toFixed(3),
+        row.pressureTop.toFixed(3),
+        row.flow.toFixed(3),
+        row.volume.toFixed(3),
+        row.samples
+      ])
+    } else if (utilityType === 'gas') {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Bosim (bar)', 'Oqim (m³/soat)', 'Jami hajm (m³)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => [
+        row.bucket_ts,
+        `"${row.label}"`,
+        row.pressure.toFixed(3),
+        row.flow.toFixed(3),
+        row.volume.toFixed(3),
+        row.samples
+      ])
+    } else {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Quvvat (W)', 'Kuchlanish (V)', 'Suv pastki bosim (bar)', 'Suv yuqori bosim (bar)', 'Suv/Gaz oqimi', 'Jami hajm (m³)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => [
+        row.bucket_ts,
+        `"${row.label}"`,
+        row.power.toFixed(1),
+        row.voltage.toFixed(1),
+        row.pressure.toFixed(3),
+        row.pressureTop.toFixed(3),
+        row.flow.toFixed(3),
+        row.volume.toFixed(3),
+        row.samples
+      ])
+    }
+
+    if (rows.length === 0) return
+    const csvRows = [headers.join(',')]
+    rows.forEach(values => {
       csvRows.push(values.join(','))
     })
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + csvRows.join('\n')
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + csvRows.join('\n')
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
     link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `energy_analytics_${buildingId || 'all'}_${granularity}.csv`)
+    link.setAttribute('download', `analytics_report_${buildingId || 'all'}_${utilityType}_${dateRange}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    notifySuccess('CSV eksport qilindi')
+    notifySuccess('CSV hisoboti muvaffaqiyatli eksport qilindi')
   }
 
   return (
     <RootLayout>
       <div className="space-y-6">
+        {/* Print Only Header */}
+        <div className="hidden print-header">
+          <h1>METER MONITOR — KOMMUNAL HISOBOT</h1>
+          <div className="text-sm text-gray-800 mt-2 flex justify-between">
+            <span><strong>Bino:</strong> {buildingId ? buildings?.find(b => b.id.toString() === buildingId)?.name : 'Barcha binolar'}</span>
+            <span><strong>Sana:</strong> {new Date().toLocaleDateString('uz-UZ')}</span>
+            <span><strong>Kommunal filtr:</strong> {utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : 'Gaz'}</span>
+          </div>
+        </div>
+
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 no-print">
           <div className="flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-blue-500" />
-            <h1 className="text-3xl font-bold text-gray-100">Energiya Sarfi Tahlili</h1>
+            <h1 className="text-3xl font-bold text-gray-100">Kommunal Sarf Tahlili</h1>
           </div>
-          <button
-            onClick={handleExportCSV}
-            disabled={formattedData.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 border border-gray-700 rounded-lg transition text-sm font-semibold shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            Eksport (CSV)
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              disabled={hourlyChartData.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              Chop etish (PDF)
+            </button>
+            <button
+              onClick={handleExportCSV}
+              disabled={hourlyChartData.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 border border-gray-700 rounded-lg transition text-sm font-semibold shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              Eksport (CSV)
+            </button>
+          </div>
         </div>
 
         {/* Filter Toolbar */}
-        <div className="glass-card rounded-xl p-5 grid grid-cols-1 md:grid-cols-5 gap-4 shadow">
+        <div className="glass-card rounded-xl p-5 grid grid-cols-1 md:grid-cols-5 gap-4 shadow no-print">
           {/* Building Selector */}
           <div>
             <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Bino</label>
@@ -237,7 +304,7 @@ export default function AnalyticsPage() {
 
         {/* Custom Dates (Conditional) */}
         {dateRange === 'custom' && (
-          <div className="glass-card rounded-xl p-5 flex flex-wrap gap-4 shadow">
+          <div className="glass-card rounded-xl p-5 flex flex-wrap gap-4 shadow no-print">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-300">Boshlanish:</span>
@@ -359,12 +426,18 @@ export default function AnalyticsPage() {
                       )}
                       {(utilityType === 'all' || utilityType === 'water') && (
                         <>
-                          <Line type="monotone" dataKey="pressure" name="Past bosim (bar)" stroke="#06B6D4" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="pressure" name="Pastki bosim (bar)" stroke="#06B6D4" strokeWidth={2.5} dot={false} />
                           <Line type="monotone" dataKey="pressureTop" name="Yuqori bosim (bar)" stroke="#8B5CF6" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="flow" name="Suv oqimi (L/min)" stroke="#3B82F6" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="volume" name="Suv hajmi (m³)" stroke="#EC4899" strokeWidth={2.5} dot={false} />
                         </>
                       )}
                       {(utilityType === 'all' || utilityType === 'gas') && (
-                        <Line type="monotone" dataKey="flow" name="Flow" stroke="#F59E0B" strokeWidth={2.5} dot={false} />
+                        <>
+                          <Line type="monotone" dataKey="pressure" name="Gaz bosimi (bar)" stroke="#06B6D4" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="flow" name="Gaz oqimi (m³/h)" stroke="#F59E0B" strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="volume" name="Gaz hajmi (m³)" stroke="#10B981" strokeWidth={2.5} dot={false} />
+                        </>
                       )}
                     </LineChart>
                   </ResponsiveContainer>
@@ -376,49 +449,150 @@ export default function AnalyticsPage() {
 
             {/* Data table */}
             <div className="glass-card data-table-card rounded-xl overflow-hidden shadow-sm">
-              <div className="p-5 border-b border-gray-300 dark:border-gray-800">
+              <div className="p-5 border-b border-gray-300 dark:border-gray-800 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">Tahliliy hisobot jadvali</h3>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Jami: {utilityType === 'water' || utilityType === 'gas' ? hourlyChartData.length : formattedData.length} ta yozuv</span>
               </div>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
-                      <th className="px-6 py-4">Sana / Vaqt</th>
-                      <th className="px-6 py-4 text-right">Sarflangan Energiya (kWh)</th>
-                      <th className="px-6 py-4 text-right">O'rtacha yuklama (W)</th>
-                      <th className="px-6 py-4 text-right">O'lchovlar soni</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
-                    {formattedData.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
-                        <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
-                        <td className="px-6 py-3.5 text-right font-mono text-blue-650 dark:text-blue-400 font-bold">{row.energy.toFixed(2)}</td>
-                        <td className="px-6 py-3.5 text-right font-mono text-green-650 dark:text-green-400 font-bold">{row.power.toFixed(1)}</td>
-                        <td className="px-6 py-3.5 text-right font-mono text-gray-600 dark:text-gray-450">{row.samples}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  {utilityType === 'electricity' || utilityType === 'all' ? (
+                    <>
+                      <thead>
+                        <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
+                          <th className="px-6 py-4">Sana / Vaqt</th>
+                          <th className="px-6 py-4 text-right">Sarflangan Energiya (kWh)</th>
+                          <th className="px-6 py-4 text-right">O'rtacha yuklama (W)</th>
+                          <th className="px-6 py-4 text-right">O'lchovlar soni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
+                        {formattedData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
+                            <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-blue-650 dark:text-blue-400 font-bold">{row.energy.toFixed(2)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-green-650 dark:text-green-400 font-bold">{row.power.toFixed(1)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-gray-600 dark:text-gray-450">{row.samples}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  ) : utilityType === 'water' ? (
+                    <>
+                      <thead>
+                        <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
+                          <th className="px-6 py-4">Sana / Vaqt</th>
+                          <th className="px-6 py-4 text-right">Pastki bosim (bar)</th>
+                          <th className="px-6 py-4 text-right">Yuqori bosim (bar)</th>
+                          <th className="px-6 py-4 text-right">Suv oqimi (L/min)</th>
+                          <th className="px-6 py-4 text-right">Jami hajm (m³)</th>
+                          <th className="px-6 py-4 text-right">O'lchovlar soni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
+                        {hourlyChartData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
+                            <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-cyan-600 dark:text-cyan-400 font-bold">{row.pressure.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-purple-600 dark:text-purple-400 font-bold">{row.pressureTop.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-blue-600 dark:text-blue-400 font-bold">{row.flow.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-pink-650 dark:text-pink-400 font-bold">{row.volume.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  ) : (
+                    <>
+                      <thead>
+                        <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
+                          <th className="px-6 py-4">Sana / Vaqt</th>
+                          <th className="px-6 py-4 text-right">Gaz bosimi (bar)</th>
+                          <th className="px-6 py-4 text-right">Gaz oqimi (m³/h)</th>
+                          <th className="px-6 py-4 text-right">Jami hajm (m³)</th>
+                          <th className="px-6 py-4 text-right">O'lchovlar soni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
+                        {hourlyChartData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
+                            <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-cyan-600 dark:text-cyan-400 font-bold">{row.pressure.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-amber-600 dark:text-amber-400 font-bold">{row.flow.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-emerald-600 dark:text-emerald-450 font-bold">{row.volume.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  )}
                 </table>
               </div>
               <div className="md:hidden mobile-card-list p-3">
-                {formattedData.map((row) => (
-                  <div key={row.timestamp} className="mobile-data-card">
-                    <p className="font-bold text-gray-950 dark:text-gray-100">{row.label}</p>
-                    <div className="mobile-data-row">
-                      <span className="mobile-data-label">Energiya</span>
-                      <span className="mobile-data-value font-mono">{row.energy.toFixed(2)} kWh</span>
-                    </div>
-                    <div className="mobile-data-row">
-                      <span className="mobile-data-label">Quvvat</span>
-                      <span className="mobile-data-value font-mono">{row.power.toFixed(1)} W</span>
-                    </div>
-                    <div className="mobile-data-row">
-                      <span className="mobile-data-label">Samples</span>
-                      <span className="mobile-data-value font-mono">{row.samples}</span>
-                    </div>
-                  </div>
-                ))}
+                {utilityType === 'electricity' || utilityType === 'all'
+                  ? formattedData.map((row) => (
+                      <div key={row.timestamp} className="mobile-data-card">
+                        <p className="font-bold text-gray-950 dark:text-gray-100">{row.label}</p>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Energiya</span>
+                          <span className="mobile-data-value font-mono">{row.energy.toFixed(2)} kWh</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Quvvat</span>
+                          <span className="mobile-data-value font-mono">{row.power.toFixed(1)} W</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Samples</span>
+                          <span className="mobile-data-value font-mono">{row.samples}</span>
+                        </div>
+                      </div>
+                    ))
+                  : utilityType === 'water'
+                  ? hourlyChartData.map((row) => (
+                      <div key={row.bucket_ts} className="mobile-data-card">
+                        <p className="font-bold text-gray-950 dark:text-gray-100">{row.label}</p>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Pastki bosim</span>
+                          <span className="mobile-data-value font-mono">{row.pressure.toFixed(3)} bar</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Yuqori bosim</span>
+                          <span className="mobile-data-value font-mono">{row.pressureTop.toFixed(3)} bar</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Oqim</span>
+                          <span className="mobile-data-value font-mono">{row.flow.toFixed(3)} L/min</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Hajm</span>
+                          <span className="mobile-data-value font-mono">{row.volume.toFixed(3)} m³</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Samples</span>
+                          <span className="mobile-data-value font-mono">{row.samples}</span>
+                        </div>
+                      </div>
+                    ))
+                  : hourlyChartData.map((row) => (
+                      <div key={row.bucket_ts} className="mobile-data-card">
+                        <p className="font-bold text-gray-950 dark:text-gray-100">{row.label}</p>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Bosim</span>
+                          <span className="mobile-data-value font-mono">{row.pressure.toFixed(3)} bar</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Oqim</span>
+                          <span className="mobile-data-value font-mono">{row.flow.toFixed(3)} m³/h</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Hajm</span>
+                          <span className="mobile-data-value font-mono">{row.volume.toFixed(3)} m³</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Samples</span>
+                          <span className="mobile-data-value font-mono">{row.samples}</span>
+                        </div>
+                      </div>
+                    ))}
               </div>
             </div>
           </div>

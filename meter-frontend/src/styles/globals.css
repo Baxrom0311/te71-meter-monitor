@@ -778,3 +778,77 @@
     }
   }
 }
+
+/* ─── Print Media CSS for Reports ─── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+  
+  /* Hide sidebar, navigation, filters, buttons and other non-printable components */
+  aside, nav, header, button, select, input, .no-print, [role="navigation"], .toast-container, .alert-banner {
+    display: none !important;
+  }
+  
+  /* Expand content to full width */
+  main, .main-content, .content-container, #root {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  
+  /* Premium report header */
+  .print-header {
+    display: block !important;
+    margin-bottom: 2rem !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    padding-bottom: 1rem !important;
+  }
+  
+  .print-header h1 {
+    font-size: 22pt !important;
+    font-weight: bold !important;
+    color: #1e3a8a !important;
+    margin: 0 !important;
+  }
+  
+  /* Glass card styling for print */
+  .glass-card, .chart-panel, .data-table-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+    page-break-inside: avoid !important;
+    border-radius: 8px !important;
+    padding: 1.25rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .text-gray-100, .text-gray-250, .text-gray-300, .text-gray-400, .text-gray-950, .text-gray-850, .text-gray-150 {
+    color: #0f172a !important;
+  }
+
+  /* Table styling for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 8px 12px !important;
+    color: #0f172a !important;
+    background: transparent !important;
+  }
+  
+  th {
+    background: #f8fafc !important;
+    font-weight: bold !important;
+  }
+}
+
