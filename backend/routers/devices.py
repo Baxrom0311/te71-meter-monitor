@@ -131,6 +131,13 @@ async def update_device(device_id: str, body: DeviceUpdate, admin: dict = Depend
     return result
 
 
+@router.delete("/devices/{device_id}")
+async def delete_device(device_id: str, admin: dict = Depends(require_admin)):
+    result = await device_service.delete_device(device_id)
+    await audit.record(admin, "device.delete", "device", device_id)
+    return result
+
+
 @router.post("/devices/{device_id}/token", response_model=DeviceTokenResponse)
 async def rotate_device_token(device_id: str, admin: dict = Depends(require_admin)):
     result = await device_service.rotate_device_token(device_id)

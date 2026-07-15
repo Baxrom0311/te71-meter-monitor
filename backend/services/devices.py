@@ -455,6 +455,17 @@ async def revoke_device_token(device_id: str, admin: dict) -> dict:
     return {"ok": True, "device_id": device_id, "token_revoked_at": ts}
 
 
+async def delete_device(device_id: str) -> dict:
+    async with SessionLocal() as session:
+        device = await DeviceRepository(session).get(device_id)
+        if not device:
+            raise HTTPException(404, "Qurilma topilmadi")
+        await session.delete(device)
+        await session.commit()
+    await ws_manager.broadcast({"type": "device_deleted", "device_id": device_id})
+    return {"ok": True, "device_id": device_id}
+
+
 async def create_provisioning_token(body: DeviceProvisioningTokenCreate, admin: dict) -> dict:
     token = generate_secret_token()
     ts = now_ts()

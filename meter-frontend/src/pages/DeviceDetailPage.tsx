@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X, Trash2 } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDeviceById, useDeviceLatest, useDeviceHistory, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
@@ -20,6 +20,7 @@ type PendingCommand =
   | { type: 'reboot' }
   | { type: 'relay'; action: 'on' | 'off' }
   | { type: 'status' }
+  | { type: 'delete' }
 
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -104,6 +105,24 @@ export default function DeviceDetailPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!id) return
+    setLoadingAction('delete')
+    setMsg(null)
+    try {
+      await apiClient.delete(`/api/devices/${id}`)
+      queryClient.invalidateQueries({ queryKey: qk.devices() })
+      queryClient.invalidateQueries({ queryKey: qk.summary() })
+      notifySuccess('Qurilma o'chirildi')
+      navigate(-1)
+    } catch (err: any) {
+      console.error(err)
+      setMsg(getApiErrorMessage(err))
+    } finally {
+      setLoadingAction(null)
+    }
+  }
+
   const openEdit = () => {
     if (!device || !id) return
     setEditName(device.name ?? '')
@@ -140,6 +159,8 @@ export default function DeviceDetailPage() {
       handleReboot()
     } else if (pendingCommand.type === 'relay') {
       handleRelay(pendingCommand.action)
+    } else if (pendingCommand.type === 'delete') {
+      handleDelete()
     } else {
       handleToggleStatus()
     }
@@ -353,6 +374,16 @@ export default function DeviceDetailPage() {
                           Faollashtirish
                         </>
                       )}
+                    </button>
+
+                    {/* Hard Delete Button */}
+                    <button
+                      onClick={() => setPendingCommand({ type: 'delete' })}
+                      disabled={loadingAction !== null}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm mt-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Qurilmani o'chirish
                     </button>
                   </div>
                 ) : (
@@ -683,21 +714,25 @@ export default function DeviceDetailPage() {
       <ConfirmDialog
         open={pendingCommand !== null}
         title={
-          pendingCommand?.type === 'reboot'
-            ? 'Qurilmani reboot qilish'
-            : pendingCommand?.type === 'relay'
-              ? `Releni ${pendingCommand.action === 'on' ? 'yoqish' : 'o‘chirish'}`
-              : 'Qurilma statusini o‘zgartirish'
+          pendingCommand?.type === ‘reboot’
+            ? ‘Qurilmani reboot qilish’
+            : pendingCommand?.type === ‘relay’
+              ? `Releni ${pendingCommand.action === ‘on’ ? ‘yoqish’ : ‘o’chirish’}`
+              : pendingCommand?.type === ‘delete’
+                ? ‘Qurilmani butunlay o’chirish’
+                : ‘Qurilma statusini o’zgartirish’
         }
         message={
-          pendingCommand?.type === 'reboot'
-            ? 'Bu buyruq ESP32 qurilmasini qayta yuklaydi. Amalni davom ettirasizmi?'
-            : pendingCommand?.type === 'relay'
-              ? 'Bu buyruq qurilma relesiga darhol yuboriladi. Amalni tasdiqlang.'
-              : 'Qurilmaning faol/faol emas holati o‘zgartiriladi.'
+          pendingCommand?.type === ‘reboot’
+            ? ‘Bu buyruq ESP32 qurilmasini qayta yuklaydi. Amalni davom ettirasizmi?’
+            : pendingCommand?.type === ‘relay’
+              ? ‘Bu buyruq qurilma relesiga darhol yuboriladi. Amalni tasdiqlang.’
+              : pendingCommand?.type === ‘delete’
+                ? ‘Qurilma va uning barcha o’lchov ma’lumotlari bazadan butunlay o’chiriladi. Bu amalni qaytarib bo’lmaydi!’
+                : ‘Qurilmaning faol/faol emas holati o’zgartiriladi.’
         }
-        confirmLabel="Buyruq yuborish"
-        tone={pendingCommand?.type === 'relay' && pendingCommand.action === 'off' ? 'danger' : 'default'}
+        confirmLabel={pendingCommand?.type === ‘delete’ ? ‘Ha, o’chirib yuborish’ : ‘Buyruq yuborish’}
+        tone={pendingCommand?.type === ‘delete’ || (pendingCommand?.type === ‘relay’ && pendingCommand.action === ‘off’) ? ‘danger’ : ‘default’}
         pending={loadingAction !== null}
         onConfirm={executePendingCommand}
         onCancel={() => setPendingCommand(null)}
