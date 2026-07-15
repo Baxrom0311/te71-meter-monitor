@@ -3,14 +3,14 @@ import { Pagination } from '@/components/Pagination'
 
 const FW_PAGE_SIZE = 6
 const BATCH_PAGE_SIZE = 10
-import { Ban, Cpu, Layers, PlayCircle, RefreshCw, ShieldCheck, UploadCloud, X } from 'lucide-react'
+import { Ban, Cpu, Key, Layers, PlayCircle, RefreshCw, ShieldCheck, UploadCloud, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { useDevices, useFirmwareList, useOtaBatches, qk } from '@/hooks/queries'
+import { useDevices, useFirmwareList, useOtaBatches, useProvisioningTokens, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import apiClient from '@/lib/api'
-import { Device, Firmware, OtaBatch } from '@/types/api'
+import { Device, Firmware, OtaBatch, ProvisioningToken } from '@/types/api'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/StateBlock'
 import { getApiErrorMessage } from '@/lib/errors'
 import { notifySuccess } from '@/lib/toast'
@@ -32,6 +32,8 @@ export default function FirmwarePage() {
   const { isAdmin } = useAuth()
   const { data: batches = [], isLoading: batchesLoading, isError: batchesError, error: batchesQueryError, refetch: refetchBatches } = useOtaBatches(isAdmin)
   const { data: devices = [] } = useDevices()
+  const { data: provTokenData, refetch: refetchProvTokens } = useProvisioningTokens(false)
+  const provTokens: ProvisioningToken[] = provTokenData?.tokens ?? []
   const queryClient = useQueryClient()
 
   const [isUploadOpen, setIsUploadOpen] = useState(false)
@@ -56,6 +58,16 @@ export default function FirmwarePage() {
 
   const [fwPage, setFwPage] = useState(1)
   const [batchPage, setBatchPage] = useState(1)
+
+  // Provisioning token state
+  const [isProvTokenOpen, setIsProvTokenOpen] = useState(false)
+  const [provUtility, setProvUtility] = useState('electricity')
+  const [provTtlDays, setProvTtlDays] = useState(1)
+  const [provCreating, setProvCreating] = useState(false)
+  const [newTokenValue, setNewTokenValue] = useState('')
+  const [provError, setProvError] = useState('')
+  const [revokingId, setRevokingId] = useState<number | null>(null)
+  const [showAllProvTokens, setShowAllProvTokens] = useState(false)
 
   const fwTotalPages = Math.max(1, Math.ceil(firmwareList.length / FW_PAGE_SIZE))
   const pagedFirmware = useMemo(
@@ -196,6 +208,38 @@ export default function FirmwarePage() {
       notifySuccess('OTA batch bekor qilindi')
     } finally {
       setWorkingBatchId(null)
+    }
+  }
+
+  const createProvToken = async () => {
+    setProvCreating(true)
+    setProvError('')
+    setNewTokenValue('')
+    try {
+      const { data } = await apiClient.post('/api/devices/provisioning-tokens', {
+        utility_type: provUtility || null,
+        ttl_sec: provTtlDays * 86400,
+      })
+      setNewTokenValue(data.provisioning_token)
+      await refetchProvTokens()
+      notifySuccess('Provisioning token yaratildi')
+    } catch (e: unknown) {
+      setProvError(getApiErrorMessage(e))
+    } finally {
+      setProvCreating(false)
+    }
+  }
+
+  const revokeProvToken = async (tokenId: number) => {
+    setRevokingId(tokenId)
+    try {
+      await apiClient.delete(`/api/devices/provisioning-tokens/${tokenId}`)
+      await refetchProvTokens()
+      notifySuccess('Token bekor qilindi')
+    } catch (e: unknown) {
+      setProvError(getApiErrorMessage(e))
+    } finally {
+      setRevokingId(null)
     }
   }
 
@@ -536,6 +580,188 @@ export default function FirmwarePage() {
             )}
           </div>
         </section>
+
+        {/* ── Provisioning Tokens ─────────────────────────────────────────── */}
+        {isAdmin && (
+          <section className="glass-card rounded-xl p-5 shadow space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-purple-400" />
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Provisioning Tokenlar</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-medium">
+                  {provTokens.filter(t => !t.revoked_at && !t.used_at && t.expires_at > Date.now() / 1000).length} faol
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAllProvTokens(v => !v)}
+                  className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline transition"
+                >
+                  {showAllProvTokens ? 'Faqat faollarni ko\'rsat' : 'Barchasini ko\'rsat'}
+                </button>
+                <button
+                  onClick={() => { setIsProvTokenOpen(true); setNewTokenValue(''); setProvError('') }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  Yangi token
+                </button>
+              </div>
+            </div>
+
+            {provError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">{provError}</div>
+            )}
+
+            {provTokens.length === 0 ? (
+              <EmptyBlock title="Tokenlar yo'q" message="Hali hech qanday provisioning token yaratilmagan." />
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs text-gray-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-3">ID</th>
+                      <th className="px-4 py-3">Muddati</th>
+                      <th className="px-4 py-3">Tur</th>
+                      <th className="px-4 py-3">Holat</th>
+                      <th className="px-4 py-3">Yaratuvchi</th>
+                      <th className="px-4 py-3 text-right">Amal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                    {provTokens
+                      .filter(t => showAllProvTokens || (!t.revoked_at && !t.used_at && t.expires_at > Date.now() / 1000))
+                      .map(t => {
+                        const now = Date.now() / 1000
+                        const isUsed = !!t.used_at
+                        const isRevoked = !!t.revoked_at
+                        const isExpired = t.expires_at < now
+                        const isActive = !isUsed && !isRevoked && !isExpired
+                        return (
+                          <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition">
+                            <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">#{t.id}</td>
+                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              {new Date(t.expires_at * 1000).toLocaleString('uz-UZ')}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                {t.utility_type ?? 'barcha'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {isRevoked ? (
+                                <span className="px-2 py-0.5 rounded text-xs bg-gray-500/10 text-gray-400 border border-gray-500/20">Bekor qilingan</span>
+                              ) : isUsed ? (
+                                <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 border border-green-500/20">
+                                  Ishlatildi → {t.used_by_device_id}
+                                </span>
+                              ) : isExpired ? (
+                                <span className="px-2 py-0.5 rounded text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20">Muddati o'tgan</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">Faol</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{t.created_by_username ?? '—'}</td>
+                            <td className="px-4 py-3 text-right">
+                              {isActive && (
+                                <button
+                                  onClick={() => revokeProvToken(t.id)}
+                                  disabled={revokingId === t.id}
+                                  className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-40 rounded-lg transition"
+                                  title="Bekor qilish"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {isProvTokenOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="glass-card rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl relative animate-modal-pop">
+              <button
+                onClick={() => setIsProvTokenOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  <Key className="w-5 h-5" />
+                </div>
+                Yangi Provisioning Token
+              </h3>
+
+              {newTokenValue ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Token muvaffaqiyatli yaratildi. Uni ESP32 WiFiManager sahifasida kiriting:</p>
+                  <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-300 dark:border-gray-700">
+                    <code className="flex-1 font-mono text-sm text-purple-400 break-all">{newTokenValue}</code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(newTokenValue); notifySuccess('Nusxalandi!') }}
+                      className="shrink-0 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition"
+                    >
+                      Nusxa
+                    </button>
+                  </div>
+                  <p className="text-xs text-orange-400">⚠ Bu token faqat bir marta ko'rsatiladi — saqlang!</p>
+                  <button
+                    onClick={() => setIsProvTokenOpen(false)}
+                    className="w-full py-2 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition"
+                  >
+                    Yopish
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 text-sm">
+                  {provError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">{provError}</div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Qurilma turi</label>
+                    <select
+                      value={provUtility}
+                      onChange={e => setProvUtility(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                    >
+                      <option value="electricity">⚡ Elektr</option>
+                      <option value="water">💧 Suv</option>
+                      <option value="gas">🔥 Gaz</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Amal qilish muddati: <span className="text-purple-400 font-bold">{provTtlDays} kun</span>
+                    </label>
+                    <input
+                      type="range" min={1} max={30} value={provTtlDays}
+                      onChange={e => setProvTtlDays(Number(e.target.value))}
+                      className="w-full accent-purple-500"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>1 kun</span><span>30 kun</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={createProvToken}
+                    disabled={provCreating}
+                    className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg font-semibold transition"
+                  >
+                    {provCreating ? 'Yaratilmoqda...' : 'Token yaratish'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {isUploadOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
