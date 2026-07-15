@@ -21,6 +21,8 @@
 #include <esp_wifi.h>
 #include <strings.h>
 
+extern void sensor_set_volume(float val);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // NVS Config
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -441,6 +443,11 @@ static void app_poll_commands(const char* device_id, int* pending_relay) {
             *pending_relay = 1;
             http_post(ack, "{}");
             Serial.println("Cmd: relay_off navbatga olindi");
+        } else if (strcmp(action, "set_volume") == 0) {
+            float val = cmd["params"]["volume"].as<float>();
+            sensor_set_volume(val);
+            http_post(ack, "{\"ok\":true}");
+            Serial.printf("Cmd: set_volume %.3f\n", val);
         } else {
             // Noma'lum command — ack qilib o'tkazib yuborish
             http_post(ack, "{}");

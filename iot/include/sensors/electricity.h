@@ -497,3 +497,7 @@ static bool sensor_do_register(const char* device_id, const char* fw_version) {
         g_sensor_meta.meter_baud
     );
 }
+
+void sensor_set_volume(float val) {
+    // Electricity does not use pulse counters
+}
