@@ -407,13 +407,20 @@ static bool app_register(const char* device_id,
     } else {
         String err = http.getString();
         LOG_PRINTF("Register xato: HTTP %d %s\n", code, err.c_str());
-        // Muddati o'tgan yoki ishlatilgan provisioning token — NVS dan tozalash
-        if (code == 401 && g_cfg.provisioning_token[0]) {
-            g_cfg.provisioning_token[0] = '\0';
+        if (code == 401) {
+            // Per-device token noto'g'ri yoki device o'chirilgan
+            // → default global tokenge qaytish, keyingi urinishda qayta register bo'ladi
+            strncpy(g_cfg.device_token, DEFAULT_DEVICE_TOKEN, CFG_TOKEN_LEN - 1);
+            g_cfg.device_token[CFG_TOKEN_LEN - 1] = '\0';
             g_prefs.begin("app", false);
-            g_prefs.remove("prv");
+            g_prefs.remove("tok");
+            if (g_cfg.provisioning_token[0]) {
+                g_cfg.provisioning_token[0] = '\0';
+                g_prefs.remove("prv");
+                LOG_PRINTLN("Provisioning token muddati tugagan — NVS dan o'chirildi");
+            }
             g_prefs.end();
-            LOG_PRINTLN("Provisioning token muddati tugagan — NVS dan o'chirildi");
+            LOG_PRINTLN("Token noto'g'ri — DEFAULT tokenge qaytildi, keyingi urinishda qayta register");
         }
     }
     http.end();
