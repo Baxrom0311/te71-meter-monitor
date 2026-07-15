@@ -23,6 +23,17 @@
 
 extern void sensor_set_volume(float val);
 
+// ─── Debug logging macro ──────────────────────────────────────────────────────
+#if CORE_DEBUG_LEVEL > 0 || defined(APP_DEBUG)
+  #define LOG_PRINT(x)       Serial.print(x)
+  #define LOG_PRINTLN(x)     Serial.println(x)
+  #define LOG_PRINTF(x, ...) Serial.printf(x, ##__VA_ARGS__)
+#else
+  #define LOG_PRINT(x)
+  #define LOG_PRINTLN(x)
+  #define LOG_PRINTF(x, ...)
+#endif
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // NVS Config
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -127,7 +138,7 @@ static void cfg_save_token(const char* tok) {
     g_prefs.begin("app", false);
     g_prefs.putString("tok", tok);
     g_prefs.end();
-    Serial.println("Token saqlandi (per-device)");
+    LOG_PRINTLN("Token saqlandi (per-device)");
 }
 
 // Hisoblagich seriya raqamini NVS ga saqlash
@@ -211,7 +222,7 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
     wm.setConfigPortalTimeout(180);
     wm.setSaveConfigCallback([&]() {
         cfg_save(p_srv.getValue(), p_tok.getValue(), p_mode.getValue(), p_prov.getValue());
-        Serial.printf("Config saqlandi: %s (%s)\n", g_cfg.server_url, g_cfg.test_mode ? "TEST" : "PROD");
+        LOG_PRINTF("Config saqlandi: %s (%s)\n", g_cfg.server_url, g_cfg.test_mode ? "TEST" : "PROD");
     });
 
     // Custom AP sahifasi sarlavhasi
@@ -226,10 +237,10 @@ static void wifi_setup(const char* ap_name, const char* ap_pass,
 
     if (WiFi.status() == WL_CONNECTED) {
         WiFi.setSleep(false);
-        Serial.printf("WiFi: %s (%d dBm)\n",
+        LOG_PRINTF("WiFi: %s (%d dBm)\n",
             WiFi.localIP().toString().c_str(), WiFi.RSSI());
     } else {
-        Serial.println("WiFi: offline rejim");
+        LOG_PRINTLN("WiFi: offline rejim");
     }
 }
 
@@ -248,7 +259,7 @@ static bool http_post(const char* path, const String& body) {
     http_prepare(http, 8000);
     int code = http.POST(body);
     if (code < 200 || code >= 300) {
-        Serial.printf("POST %s xato: HTTP %d %s\n", path, code, http.getString().c_str());
+        LOG_PRINTF("POST %s xato: HTTP %d %s\n", path, code, http.getString().c_str());
     }
     http.end();
     return code >= 200 && code < 300;
@@ -266,7 +277,7 @@ static String http_get(const char* path) {
     int code = http.GET();
     String resp = (code == 200) ? http.getString() : "";
     if (code < 200 || code >= 300) {
-        Serial.printf("GET %s xato: HTTP %d\n", path, code);
+        LOG_PRINTF("GET %s xato: HTTP %d\n", path, code);
     }
     http.end();
     return resp;
@@ -286,14 +297,14 @@ static bool server_check() {
     String resp = http.getString();
     http.end();
     if (code >= 200 && code < 300) {
-        Serial.printf("Server: OK (HTTP %d)\n", code);
+        LOG_PRINTF("Server: OK (HTTP %d)\n", code);
         return true;
     }
     const char* r = "noma'lum";
     if      (code == -1)  r = "ulanmadi (REFUSED)";
     else if (code == -11) r = "timeout";
     else if (code == -4)  r = "WiFi yo'q";
-    Serial.printf("Server: XATO (kod=%d, %s) %s\n", code, r, resp.c_str());
+    LOG_PRINTF("Server: XATO (kod=%d, %s) %s\n", code, r, resp.c_str());
     return false;
 }
 
@@ -316,7 +327,7 @@ static void ota_check(const char* device_id, const char* fw_version) {
     http.end();
     if (!doc["update"].as<bool>()) return;
     String fw_url = String(g_cfg.server_url) + doc["url"].as<String>();
-    Serial.printf("OTA: v%s → yangilash...\n", doc["version"].as<const char*>());
+    LOG_PRINTF("OTA: v%s → yangilash...\n", doc["version"].as<const char*>());
     if (fw_url.startsWith("https://")) {
         WiFiClientSecure fw_client;
         fw_client.setInsecure();
@@ -381,13 +392,13 @@ static bool app_register(const char* device_id,
                     g_prefs.begin("app", false);
                     g_prefs.remove("prv");
                     g_prefs.end();
-                    Serial.println("Provisioning token muvaffaqiyatli foydalanildi va o'chirildi");
+                    LOG_PRINTLN("Provisioning token muvaffaqiyatli foydalanildi va o'chirildi");
                 }
             }
         }
-        Serial.printf("Ro'yxatdan o'tildi: %s (%s)\n", device_id, meter_type);
+        LOG_PRINTF("Ro'yxatdan o'tildi: %s (%s)\n", device_id, meter_type);
     } else {
-        Serial.printf("Register xato: HTTP %d %s\n", code, http.getString().c_str());
+        LOG_PRINTF("Register xato: HTTP %d %s\n", code, http.getString().c_str());
     }
     http.end();
     return ok;
@@ -432,26 +443,26 @@ static void app_poll_commands(const char* device_id, int* pending_relay) {
 
         if (strcmp(action, "reboot") == 0) {
             http_post(ack, "{}");
-            Serial.println("Cmd: reboot");
+            LOG_PRINTLN("Cmd: reboot");
             delay(200);
             ESP.restart();
         } else if (strcmp(action, "relay_on") == 0) {
             *pending_relay = 2;   // Keyingi DLMS session da bajariladi
             http_post(ack, "{}");
-            Serial.println("Cmd: relay_on navbatga olindi");
+            LOG_PRINTLN("Cmd: relay_on navbatga olindi");
         } else if (strcmp(action, "relay_off") == 0) {
             *pending_relay = 1;
             http_post(ack, "{}");
-            Serial.println("Cmd: relay_off navbatga olindi");
+            LOG_PRINTLN("Cmd: relay_off navbatga olindi");
         } else if (strcmp(action, "set_volume") == 0) {
             float val = cmd["params"]["volume"].as<float>();
             sensor_set_volume(val);
             http_post(ack, "{\"ok\":true}");
-            Serial.printf("Cmd: set_volume %.3f\n", val);
+            LOG_PRINTF("Cmd: set_volume %.3f\n", val);
         } else {
             // Noma'lum command — ack qilib o'tkazib yuborish
             http_post(ack, "{}");
-            Serial.printf("Cmd: noma'lum '%s' — o'tkazildi\n", action);
+            LOG_PRINTF("Cmd: noma'lum '%s' — o'tkazildi\n", action);
         }
     }
 }

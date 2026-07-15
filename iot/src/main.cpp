@@ -76,12 +76,12 @@ static void buf_push(const String& json) {
     off_buf[off_head] = json;
     off_head = (off_head + 1) % OFFLINE_BUF_SIZE;
     if (off_count < OFFLINE_BUF_SIZE) off_count++;
-    else Serial.println("Buffer to'ldi — eng eski o'qish o'chirildi");
+    else LOG_PRINTLN("Buffer to'ldi — eng eski o'qish o'chirildi");
 }
 
 static void buf_flush() {
     if (off_count == 0 || !server_ok) return;
-    Serial.printf("Buffer: %d ta o'qish yuborilmoqda\n", off_count);
+    LOG_PRINTF("Buffer: %d ta o'qish yuborilmoqda\n", off_count);
     int start = (off_head - off_count + OFFLINE_BUF_SIZE) % OFFLINE_BUF_SIZE;
     int sent  = 0;
     for (int i = 0; i < off_count; i++) {
@@ -91,7 +91,7 @@ static void buf_flush() {
     }
     off_count -= sent;
     if (off_count < 0) off_count = 0;
-    if (sent > 0) Serial.printf("Buffer: %d ta yuborildi\n", sent);
+    if (sent > 0) LOG_PRINTF("Buffer: %d ta yuborildi\n", sent);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -141,7 +141,7 @@ void setup() {
     if (digitalRead(0) == LOW) {
         delay(3000);
         if (digitalRead(0) == LOW) {
-            Serial.println("[BOOT] WiFi sozlamalari o'chirilmoqda...");
+            LOG_PRINTLN("[BOOT] WiFi sozlamalari o'chirilmoqda...");
             WiFiManager wm;
             wm.resetSettings();
             ESP.restart();
@@ -166,30 +166,30 @@ void setup() {
 #ifdef SENSOR_ELECTRICITY
     // RS-485: WiFi radio o'chirib DLMS ulanish
     sensor_init();
-    Serial.println("WiFi → pause (RS-485 ulanish)");
+    LOG_PRINTLN("WiFi → pause (RS-485 ulanish)");
     wifi_pause();
 
     bool meter_found = false;
     for (int attempt = 1; attempt <= 3; attempt++) {
-        Serial.printf("  Urinish %d/3...", attempt);
+        LOG_PRINTF("  Urinish %d/3...", attempt);
         if (sensor_connect()) {
-            Serial.println(" OK");
+            LOG_PRINTLN(" OK");
             dlms_get_string(1, OBIS_SERIAL, 2,
                             g_sensor_meta.meter_serial,
                             sizeof(g_sensor_meta.meter_serial));
-            Serial.printf("  Seriya: %s\n", g_sensor_meta.meter_serial);
+            LOG_PRINTF("  Seriya: %s\n", g_sensor_meta.meter_serial);
             sensor_detect_type();
             cfg_save_meter_serial(g_sensor_meta.meter_serial);
             meter_found = true;
             break;
         }
-        Serial.println(" XATO");
+        LOG_PRINTLN(" XATO");
         delay(500);
     }
     if (!meter_found)
-        Serial.println("Diqqat: hisoblagich topilmadi! Offline rejimda davom etiladi.");
+        LOG_PRINTLN("Diqqat: hisoblagich topilmadi! Offline rejimda davom etiladi.");
 
-    Serial.println("WiFi → resume");
+    LOG_PRINTLN("WiFi → resume");
     wifi_resume();
 
 #else
@@ -243,7 +243,7 @@ void loop() {
         bool prev = server_ok;
         server_ok = server_check();
         if (server_ok && !prev) {
-            Serial.println("Server qaytdi!");
+            LOG_PRINTLN("Server qaytdi!");
             if (!registered) registered = do_register();
             buf_flush();
             ota_check(device_id, FW_VERSION);
@@ -260,21 +260,21 @@ void loop() {
 
         // DLMS sessiyasi yo'q bo'lsa qayta ulanish
         if (!dlms_connected) {
-            Serial.print("Ulanilmoqda...");
+            LOG_PRINT("Ulanilmoqda...");
             if (!sensor_connect()) {
-                Serial.println(" XATO!");
+                LOG_PRINTLN(" XATO!");
                 wifi_resume();
                 // Backoff: har muvaffaqiyatsizlikda interval 2x oshadi (max 5 daqiqa)
                 meter_fail_count++;
                 if (meter_fail_count >= 3) {
                     meter_retry_ms = min(meter_retry_ms * 2, METER_RETRY_MAX_MS);
-                    Serial.printf("Keyingi urinish %lu s dan keyin\n", meter_retry_ms / 1000);
+                    LOG_PRINTF("Keyingi urinish %lu s dan keyin\n", meter_retry_ms / 1000);
                 }
                 return;
             }
             meter_fail_count = 0;
             meter_retry_ms   = READ_INTERVAL_MS;  // Ulanish bo'lsa intervalni tiklash
-            Serial.println(" OK");
+            LOG_PRINTLN(" OK");
             if (!g_sensor_meta.meter_serial[0])
                 dlms_get_string(1, OBIS_SERIAL, 2,
                                 g_sensor_meta.meter_serial,
@@ -286,7 +286,7 @@ void loop() {
         // Relay buyrug'ini DLMS session ichida bajarish
         if (pending_relay) {
             bool ok = sensor_relay(pending_relay);
-            Serial.printf("Relay %s: %s\n",
+            LOG_PRINTF("Relay %s: %s\n",
                 pending_relay == 2 ? "ON" : "OFF", ok ? "OK" : "XATO");
             pending_relay = 0;
         }
@@ -305,7 +305,7 @@ void loop() {
 #endif
 
         if (!read_ok) {
-            Serial.println("O'qish xato");
+            LOG_PRINTLN("O'qish xato");
 #ifdef SENSOR_ELECTRICITY
             dlms_disconnect();
 #endif
@@ -324,15 +324,15 @@ void loop() {
                 if (!http_post("/api/readings", json)) {
                     server_ok = false;
                     buf_push(json);
-                    Serial.printf("Yuborilmadi → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
+                    LOG_PRINTF("Yuborilmadi → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
                 }
             } else {
                 buf_push(json);
-                Serial.printf("Server xato → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
+                LOG_PRINTF("Server xato → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
             }
         } else {
             buf_push(json);
-            Serial.printf("WiFi yo'q → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
+            LOG_PRINTF("WiFi yo'q → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
         }
 
         last_health_ms = millis();
