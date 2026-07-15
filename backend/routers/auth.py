@@ -28,7 +28,7 @@ async def create_user(body: UserCreate, admin: dict = Depends(require_admin)):
 @router.get("/users", response_model=UserListResponse)
 async def list_users(
     q: str | None = None,
-    role: str | None = Query(None, pattern="^(admin|user)$"),
+    role: str | None = Query(None, pattern="^(admin|user|viewer)$"),
     is_active: bool | None = None,
     sort_by: str = Query("username", pattern="^(username|role|status)$"),
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),

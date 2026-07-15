@@ -83,7 +83,7 @@ async def import_external_buildings(admin: dict = Depends(require_admin)):
     existing_ext_ids = {
         b["maps_url"]
         for b in existing["buildings"]
-        if b.get("maps_url", "").startswith(EXTERNAL_SOURCE_PREFIX)
+        if (b.get("maps_url") or "").startswith(EXTERNAL_SOURCE_PREFIX)
     }
 
     created, skipped = 0, 0

@@ -79,8 +79,8 @@ async def me(user_id: int) -> dict:
 
 
 async def create_user(body: UserCreate) -> dict:
-    if body.role not in ("admin", "user"):
-        raise HTTPException(400, "role faqat admin yoki user bo'lishi mumkin")
+    if body.role not in ("admin", "user", "viewer"):
+        raise HTTPException(400, "role faqat admin, user yoki viewer bo'lishi mumkin")
     validate_password(body.password)
     ts = now_ts()
     async with SessionLocal() as session:
@@ -150,8 +150,8 @@ async def update_user(user_id: int, body: UserUpdate, actor_id: int | None = Non
     fields = body.model_dump(exclude_none=True)
     if not fields:
         raise HTTPException(400, "Yangilanadigan maydon yo'q")
-    if "role" in fields and fields["role"] not in ("admin", "user"):
-        raise HTTPException(400, "role faqat admin yoki user bo'lishi mumkin")
+    if "role" in fields and fields["role"] not in ("admin", "user", "viewer"):
+        raise HTTPException(400, "role faqat admin, user yoki viewer bo'lishi mumkin")
     if "password" in fields:
         validate_password(fields["password"])
 

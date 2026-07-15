@@ -136,6 +136,12 @@ async def require_admin(payload: dict = Depends(current_token_payload)) -> dict:
     return payload
 
 
+async def require_staff(payload: dict = Depends(current_token_payload)) -> dict:
+    """admin, user, viewer — har qanday autentifikatsiyadan o'tgan foydalanuvchi.
+    Viewer roli faqat o'qish operatsiyalarida ishlatilishi kerak."""
+    return payload
+
+
 async def require_device_token(token: str | None = Depends(device_token_scheme)) -> bool:
     if not settings.device_api_token:
         return True
