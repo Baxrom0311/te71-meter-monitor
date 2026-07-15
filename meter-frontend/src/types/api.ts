@@ -2,7 +2,7 @@
 export interface User {
   id: number
   username: string
-  role: 'admin' | 'user'
+  role: 'admin' | 'user' | 'viewer'
   is_active: boolean
 }
 
@@ -325,4 +325,38 @@ export interface WebSocketMessage {
   notification?: Record<string, unknown>
   data?: Record<string, unknown>
   result?: Record<string, unknown>
+}
+
+// Provisioning Tokens
+export interface ProvisioningToken {
+  id: number
+  device_id: string | null
+  building_id: number | null
+  point_id: number | null
+  utility_type: string | null
+  device_role: string | null
+  firmware_mode: string | null
+  expires_at: number
+  used_at: number | null
+  used_by_device_id: string | null
+  revoked_at: number | null
+  revoked_by_user_id: number | null
+  revoked_by_username: string | null
+  created_by_user_id: number | null
+  created_by_username: string | null
+  created_at: number | null
+}
+
+export interface ProvisioningTokenCreateResponse {
+  ok: boolean
+  id: number
+  provisioning_token: string
+  expires_at: number
+  device_id: string | null
+  building_id: number | null
+  utility_type: string | null
+}
+
+export interface ProvisioningTokenListResponse {
+  tokens: ProvisioningToken[]
 }

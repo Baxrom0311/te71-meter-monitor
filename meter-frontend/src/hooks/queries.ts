@@ -14,6 +14,7 @@ import {
   OtaBatch,
   BuildingsEnergySummaryResponse,
   HourlyUtilityStatsResponse,
+  ProvisioningTokenListResponse,
 } from '@/types/api'
 
 const REALTIME_FALLBACK_INTERVAL_MS = 5 * 60 * 1000
@@ -52,6 +53,7 @@ export const qk = {
   energyAnalytics: (gran: string, from?: number, to?: number, bid?: number) => ['energy-analytics', gran, from, to, bid] as const,
   firmware:     () => ['firmware'] as const,
   otaBatches:   () => ['ota-batches'] as const,
+  provisioningTokens: () => ['provisioning-tokens'] as const,
   auditLogs:    (limit: number, page: number, filters?: object) => ['audit-logs', limit, page, filters] as const,
 }
 
@@ -369,3 +371,14 @@ export function useAlertsList(params: AlertsListParams): UseQueryResult<{ alerts
 }
 
 export { useWebSocket } from '@/lib/websocket'
+
+export function useProvisioningTokens(activeOnly = true): UseQueryResult<ProvisioningTokenListResponse> {
+  return useQuery({
+    queryKey: qk.provisioningTokens(),
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/api/devices/provisioning-tokens?active_only=${activeOnly}`)
+      return data as ProvisioningTokenListResponse
+    },
+    refetchInterval: OPERATIONS_FALLBACK_INTERVAL_MS,
+  })
+}
