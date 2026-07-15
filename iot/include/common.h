@@ -155,8 +155,15 @@ static void cfg_save_meter_serial(const char* serial) {
 // WiFi
 // ═══════════════════════════════════════════════════════════════════════════════
 static void wifi_quick(const char* ssid, const char* pass) {
-    WiFi.begin(ssid, pass);
+    WiFi.mode(WIFI_STA);
+    // Avval saqlangan WiFi ga urinish (WiFiManager saqlagan)
+    WiFi.begin();
     unsigned long t = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 6000) delay(300);
+    if (WiFi.status() == WL_CONNECTED) return;
+    // Saqlangan WiFi ishlamasa, default ga urinish
+    WiFi.begin(ssid, pass);
+    t = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) delay(300);
 }
 
@@ -398,7 +405,16 @@ static bool app_register(const char* device_id,
         }
         LOG_PRINTF("Ro'yxatdan o'tildi: %s (%s)\n", device_id, meter_type);
     } else {
-        LOG_PRINTF("Register xato: HTTP %d %s\n", code, http.getString().c_str());
+        String err = http.getString();
+        LOG_PRINTF("Register xato: HTTP %d %s\n", code, err.c_str());
+        // Muddati o'tgan yoki ishlatilgan provisioning token — NVS dan tozalash
+        if (code == 401 && g_cfg.provisioning_token[0]) {
+            g_cfg.provisioning_token[0] = '\0';
+            g_prefs.begin("app", false);
+            g_prefs.remove("prv");
+            g_prefs.end();
+            LOG_PRINTLN("Provisioning token muddati tugagan — NVS dan o'chirildi");
+        }
     }
     http.end();
     return ok;

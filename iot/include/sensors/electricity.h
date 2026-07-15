@@ -59,7 +59,8 @@ struct SensorData {
 };
 
 // ─── DLMS ichki holat ─────────────────────────────────────────────────────────
-static bool    dlms_connected = false;
+static bool    dlms_connected  = false;
+static bool    dlms_simulated  = false;  // true = real meter yo'q, test simulyatsiya
 static uint8_t dlms_client    = DLMS_CLIENT_READER;
 static uint8_t dlms_send_seq  = 0;
 static uint8_t dlms_recv_seq  = 0;
@@ -360,6 +361,7 @@ static bool sensor_connect() {
     if (g_cfg.test_mode) {
         LOG_PRINTLN("\n[TEST MODE] Hisoblagich topilmadi. Mock/Simulyatsiya ishga tushirildi!");
         dlms_connected = true;
+        dlms_simulated = true;
         g_sensor_meta.meter_baud = 9600;
         if (!g_sensor_meta.meter_serial[0]) {
             strncpy(g_sensor_meta.meter_serial, "202032000525", sizeof(g_sensor_meta.meter_serial));
@@ -394,8 +396,8 @@ static bool sensor_read(SensorData& d) {
 
     if (!dlms_connected) return false;
 
-    // Test rejimida va simulyatsiya hisoblagich serial bo'lsa, dummy ma'lumot generatsiya qilish
-    if (g_cfg.test_mode && strcmp(d.meter_serial, "202032000525") == 0) {
+    // Faqat simulyatsiya rejimida (real meter yo'q) dummy ma'lumot generatsiya qilish
+    if (g_cfg.test_mode && dlms_simulated) {
         d.voltage_l1 = 218.5f + (random(0, 100) / 25.0f); // 218.5 - 222.5 V
         d.current_l1 = 2.5f + (random(0, 100) / 20.0f);   // 2.5 - 7.5 A
         d.power_w = d.voltage_l1 * d.current_l1 * 0.98f;
@@ -440,7 +442,7 @@ static bool sensor_read(SensorData& d) {
 
 // Relay buyrug'i: method 1=off(disconnect), 2=on(reconnect)
 static bool sensor_relay(int method) {
-    if (g_cfg.test_mode && strcmp(g_sensor_meta.meter_serial, "202032000525") == 0) {
+    if (dlms_simulated) {
         LOG_PRINTF("[TEST MODE] Simulyatsiya qilingan rele %s qilindi!\n", method == 2 ? "ON" : "OFF");
         return true;
     }
