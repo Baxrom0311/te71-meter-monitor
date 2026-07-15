@@ -200,6 +200,27 @@ export default function DeviceDetailPage() {
           />
         ) : device ? (
           <div className="space-y-6">
+            {device.needs_rebind && (
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-5 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 font-bold">
+                    <AlertTriangle className="w-5 h-5 animate-pulse" />
+                    <span>Qayta biriktirish talab etiladi</span>
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Qurilmaga yangi hisoblagich (serial: <span className="font-mono font-bold text-orange-500">{device.meter_serial}</span>) ulanganligi sababli, uning avvalgi bino va o‘lchov nuqtasi bog‘lanishi bekor qilingan. Qurilmani yangi bino va nuqtaga qayta biriktiring.
+                  </p>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={openEdit}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition text-sm font-semibold shadow-sm shrink-0"
+                  >
+                    Hozir biriktirish
+                  </button>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Main Info */}
               <div className="lg:col-span-2 glass-card rounded-xl p-6 space-y-6 shadow">
