@@ -36,6 +36,7 @@ interface NavItem {
   path: string
   icon: ReactNode
   adminOnly?: boolean
+  viewerHidden?: boolean
   badge?: number
 }
 
@@ -51,7 +52,7 @@ interface NavigationProps {
   onDesktopModeChange: (mode: DesktopNavMode) => void
 }
 
-function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup[] {
+function useNavigationGroups(openAlertCount: number, isAdmin: boolean, isViewer: boolean): NavGroup[] {
   return useMemo(
     () => {
       const groups: NavGroup[] = [
@@ -99,6 +100,7 @@ function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup
             label: translations.nav.firmware,
             path: '/firmware',
             icon: <Wrench className="w-5 h-5" />,
+            viewerHidden: true,
           },
           {
             label: translations.nav.chat,
@@ -132,15 +134,22 @@ function useNavigationGroups(openAlertCount: number, isAdmin: boolean): NavGroup
       },
     ]
       return groups
-        .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || isAdmin) }))
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => {
+            if (item.adminOnly && !isAdmin) return false
+            if (item.viewerHidden && isViewer) return false
+            return true
+          }),
+        }))
         .filter((group) => group.items.length > 0)
     },
-    [openAlertCount, isAdmin],
+    [openAlertCount, isAdmin, isViewer],
   )
 }
 
 export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, isViewer } = useAuth()
   const { toggleTheme, isDark } = useTheme()
   const { data: alerts } = useAlerts(false, 200)
   const [isOpen, setIsOpen] = useState(false)
@@ -149,7 +158,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
 
   const openAlertCount = alerts?.length ?? 0
 
-  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
+  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin, isViewer)
 
   const isActive = (path: string) => location.pathname === path || (path !== '/devices' && location.pathname.startsWith(path + '/'))
 
@@ -339,7 +348,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
               </p>
               <p className={clsx('text-xs truncate flex items-center gap-1.5', isDark ? 'text-gray-400' : 'text-gray-500')}>
                 {user?.role === 'admin' && <ShieldCheck className="w-3 h-3 text-blue-500" />}
-                {user?.role === 'admin' ? translations.users.admin : translations.users.user}
+                {user?.role === 'admin' ? translations.users.admin : user?.role === 'viewer' ? 'Ko\'rgazma' : translations.users.user}
               </p>
             </div>
             )}
@@ -421,12 +430,12 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
 }
 
 export function TopNavbar({ desktopMode, onDesktopModeChange }: NavigationProps) {
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, isViewer } = useAuth()
   const { toggleTheme, isDark } = useTheme()
   const { data: alerts } = useAlerts(false, 200)
   const location = useLocation()
   const openAlertCount = alerts?.length ?? 0
-  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin)
+  const visibleGroups = useNavigationGroups(openAlertCount, isAdmin, isViewer)
   const navItems = visibleGroups.flatMap((group) => group.items)
   const isActive = (path: string) => location.pathname === path || (path !== '/devices' && location.pathname.startsWith(path + '/'))
 

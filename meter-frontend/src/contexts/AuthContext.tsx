@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (token: string, user: User) => void
   logout: () => void
   isAdmin: boolean
+  isViewer: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         isAdmin: user?.role === 'admin',
+        isViewer: user?.role === 'viewer',
       }}
     >
       {children}
@@ -90,6 +92,7 @@ export function useAuth() {
       login: () => {},
       logout: () => {},
       isAdmin: false,
+      isViewer: false,
     }
   }
   return context

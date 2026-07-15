@@ -32,7 +32,7 @@ export default function UsersPage() {
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [searchQuery,  setSearchQuery]  = useState('')
-  const [roleFilter,   setRoleFilter]   = useState<'all' | 'admin' | 'user'>('all')
+  const [roleFilter,   setRoleFilter]   = useState<'all' | 'admin' | 'user' | 'viewer'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [sortBy,       setSortBy]       = useState<'username' | 'role' | 'status'>('username')
   const [sortOrder,    setSortOrder]    = useState<'asc' | 'desc'>('asc')
@@ -195,6 +195,7 @@ export default function UsersPage() {
               <option value="all">Barcha rollar</option>
               <option value="admin">Admin</option>
               <option value="user">Oddiy user</option>
+              <option value="viewer">Ko'rgazma</option>
             </select>
             <select
               value={statusFilter}
@@ -262,7 +263,7 @@ export default function UsersPage() {
                       )}
                       {isColumnVisible('role') && (
                         <td className="px-6 py-4 text-gray-650 dark:text-gray-400 capitalize">
-                          {u.role === 'admin' ? translations.users.admin : translations.users.user}
+                          {u.role === 'admin' ? translations.users.admin : u.role === 'viewer' ? "Ko'rgazma" : translations.users.user}
                         </td>
                       )}
                       {isColumnVisible('status') && (
@@ -330,7 +331,7 @@ export default function UsersPage() {
                   </div>
                   <div className="mobile-data-row">
                     <span className="mobile-data-label">{translations.users.role}</span>
-                    <span className="mobile-data-value">{u.role === 'admin' ? translations.users.admin : translations.users.user}</span>
+                    <span className="mobile-data-value">{u.role === 'admin' ? translations.users.admin : u.role === 'viewer' ? "Ko'rgazma" : translations.users.user}</span>
                   </div>
                   {isAdmin && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
@@ -401,6 +402,7 @@ export default function UsersPage() {
                   <select value={role} onChange={(e) => setRole(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium">
                     <option value="user">Foydalanuvchi</option>
+                    <option value="viewer">Ko'rgazma</option>
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
@@ -445,6 +447,7 @@ export default function UsersPage() {
                   <select value={editRole} onChange={(e) => setEditRole(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium">
                     <option value="user">Foydalanuvchi</option>
+                    <option value="viewer">Ko'rgazma</option>
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
