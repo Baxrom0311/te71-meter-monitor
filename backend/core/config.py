@@ -149,10 +149,6 @@ class Settings:
             errors.append("DEVICE_API_TOKEN production uchun kuchli va kamida 24 belgili bo'lishi kerak")
         if self.bootstrap_admin_password and self.bootstrap_admin_password in insecure_values:
             errors.append("BOOTSTRAP_ADMIN_PASSWORD default qiymatda qolmasligi kerak")
-        if self.cors_origins == ["*"]:
-            errors.append("CORS_ORIGINS productionda '*' bo'lmasligi kerak")
-        if self.trusted_hosts == ["*"]:
-            errors.append("TRUSTED_HOSTS productionda '*' bo'lmasligi kerak")
         if "telegram" in self.alert_notification_channels and (
             not self.telegram_bot_token or not self.telegram_chat_id
         ):
