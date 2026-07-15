@@ -97,8 +97,8 @@ static void sensor_init() {
 
     analogRead(PIN_PRESSURE_GAS);  // isitib olish
     delay(100);
-    Serial.println("Gaz bosim va impuls sensorlari tayyor");
-    Serial.printf("  Pin: GPIO%d | Impuls: GPIO%d | Max: %.1f bar\n", PIN_PRESSURE_GAS, PIN_GAS_PULSE, SENSOR_MAX_BAR);
+    LOG_PRINTLN("Gaz bosim va impuls sensorlari tayyor");
+    LOG_PRINTF("  Pin: GPIO%d | Impuls: GPIO%d | Max: %.1f bar\n", PIN_PRESSURE_GAS, PIN_GAS_PULSE, SENSOR_MAX_BAR);
 }
 
 static bool sensor_connect() {
@@ -116,7 +116,7 @@ static bool sensor_read(SensorData& d) {
         d.temperature_c = 22.0f + (random(0, 10) / 10.0f);        // 22.0 - 23.0 C
         d.valid = true;
         
-        Serial.printf("[TEST MODE] Gaz: bosim=%.3f bar | oqim=%.3f m3/h | hajm=%.3f m3\n",
+        LOG_PRINTF("[TEST MODE] Gaz: bosim=%.3f bar | oqim=%.3f m3/h | hajm=%.3f m3\n",
                       d.pressure_bar, d.flow_rate, d.volume_m3);
         return true;
     }
@@ -157,7 +157,7 @@ static bool sensor_read(SensorData& d) {
         last_saved_time_ms = time_now;
     }
 
-    Serial.printf("Gaz: bosim=%.3f bar | oqim=%.3f m3/h | jami=%.3f m3 (pulses=%lu)\n",
+    LOG_PRINTF("Gaz: bosim=%.3f bar | oqim=%.3f m3/h | jami=%.3f m3 (pulses=%lu)\n",
                   d.pressure_bar, d.flow_rate, d.volume_m3, current_pulses);
     return true;
 }
@@ -197,5 +197,5 @@ void sensor_set_volume(float val) {
     g_gas_pulse_count = 0;
     g_initial_volume_m3 = val;
     g_last_read_pulses = 0;
-    Serial.printf("Gaz base hajmi %.3f m3 qilib o'rnatildi\n", val);
+    LOG_PRINTF("Gaz base hajmi %.3f m3 qilib o'rnatildi\n", val);
 }

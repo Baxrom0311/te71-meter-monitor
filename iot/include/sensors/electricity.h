@@ -350,15 +350,15 @@ static bool sensor_try_baud(uint32_t baud) {
 }
 
 static bool sensor_connect() {
-    Serial.print("  9600...");
+    LOG_PRINT("  9600...");
     if (sensor_try_baud(9600)) { g_sensor_meta.meter_baud = 9600; return true; }
     dlms_disconnect();
-    Serial.print(" 4800...");
+    LOG_PRINT(" 4800...");
     if (sensor_try_baud(4800)) { g_sensor_meta.meter_baud = 4800; return true; }
     dlms_disconnect();
 
     if (g_cfg.test_mode) {
-        Serial.println("\n[TEST MODE] Hisoblagich topilmadi. Mock/Simulyatsiya ishga tushirildi!");
+        LOG_PRINTLN("\n[TEST MODE] Hisoblagich topilmadi. Mock/Simulyatsiya ishga tushirildi!");
         dlms_connected = true;
         g_sensor_meta.meter_baud = 9600;
         if (!g_sensor_meta.meter_serial[0]) {
@@ -377,7 +377,7 @@ static void sensor_detect_type() {
     bool is_te73 = !isnan(vl2) && vl2 > 10;  // mV da — 10mV < = noise
     strncpy(g_sensor_meta.sensor_type, is_te73 ? "te73" : "te71",
             sizeof(g_sensor_meta.sensor_type));
-    Serial.printf("Tur: %s\n", g_sensor_meta.sensor_type);
+    LOG_PRINTF("Tur: %s\n", g_sensor_meta.sensor_type);
 }
 
 // Barcha ma'lumotlarni o'qish → SensorData
@@ -441,7 +441,7 @@ static bool sensor_read(SensorData& d) {
 // Relay buyrug'i: method 1=off(disconnect), 2=on(reconnect)
 static bool sensor_relay(int method) {
     if (g_cfg.test_mode && strcmp(g_sensor_meta.meter_serial, "202032000525") == 0) {
-        Serial.printf("[TEST MODE] Simulyatsiya qilingan rele %s qilindi!\n", method == 2 ? "ON" : "OFF");
+        LOG_PRINTF("[TEST MODE] Simulyatsiya qilingan rele %s qilindi!\n", method == 2 ? "ON" : "OFF");
         return true;
     }
     return dlms_action(70, OBIS_RELAY, (uint8_t)method);

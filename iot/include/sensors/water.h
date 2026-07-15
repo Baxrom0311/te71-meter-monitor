@@ -105,8 +105,8 @@ static void sensor_init() {
     analogRead(PIN_PRESSURE_BOTTOM);
     analogRead(PIN_PRESSURE_TOP);
     delay(100);
-    Serial.println("Suv bosim va impuls sensorlari tayyor");
-    Serial.printf("  Pastki: GPIO%d | Yuqori: GPIO%d | Impuls: GPIO%d\n",
+    LOG_PRINTLN("Suv bosim va impuls sensorlari tayyor");
+    LOG_PRINTF("  Pastki: GPIO%d | Yuqori: GPIO%d | Impuls: GPIO%d\n",
                   PIN_PRESSURE_BOTTOM, PIN_PRESSURE_TOP, PIN_WATER_PULSE);
 }
 
@@ -126,7 +126,7 @@ static bool sensor_read(SensorData& d) {
         d.temperature_c       = 18.5f + (random(0, 10) / 10.0f);   // 18.5 - 19.5 C
         d.valid = true;
         
-        Serial.printf("[TEST MODE] Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | hajm=%.3f m3\n",
+        LOG_PRINTF("[TEST MODE] Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | hajm=%.3f m3\n",
                       d.pressure_bottom_bar, d.pressure_top_bar, d.flow_rate, d.volume_m3);
         return true;
     }
@@ -168,7 +168,7 @@ static bool sensor_read(SensorData& d) {
         last_saved_time_ms = time_now;
     }
 
-    Serial.printf("Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | jami=%.3f m3 (pulses=%lu)\n",
+    LOG_PRINTF("Suv: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | jami=%.3f m3 (pulses=%lu)\n",
                   d.pressure_bottom_bar, d.pressure_top_bar, d.flow_rate, d.volume_m3, current_pulses);
     return true;
 }
@@ -209,5 +209,5 @@ void sensor_set_volume(float val) {
     g_water_pulse_count = 0;
     g_initial_volume_m3 = val;
     g_last_read_pulses = 0;
-    Serial.printf("Suv base hajmi %.3f m3 qilib o'rnatildi\n", val);
+    LOG_PRINTF("Suv base hajmi %.3f m3 qilib o'rnatildi\n", val);
 }
