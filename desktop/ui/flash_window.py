@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QFrame, QMessageBox, QRadioButton, QButtonGroup, QTabWidget,
     QCheckBox, QScrollArea,
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QFont, QColor, QTextCursor
 
 from controllers.flash_controller import FlashController
@@ -40,6 +40,9 @@ class FlashWindow(QMainWindow):
 
         # Initialize controller
         self.controller = FlashController()
+
+        # Load settings storage
+        self.settings_storage = QSettings("Toshelectroapparat", "MeterTool")
 
         self._fw_radios = {}
         self._setup_ui()
@@ -105,33 +108,49 @@ class FlashWindow(QMainWindow):
             left_layout.addWidget(rb)
         self._fw_radios["electricity"].setChecked(True)
 
+        # Load saved settings values
+        saved_server = self.settings_storage.value("flash_server", DEFAULT_SERVER)
+        saved_prod_token = self.settings_storage.value("flash_prod_token", DEFAULT_TOKEN)
+        saved_test_token = self.settings_storage.value("flash_test_token", DEFAULT_TOKEN)
+        saved_test_mode = self.settings_storage.value("flash_test_mode", False, type=bool)
+        saved_ssid = self.settings_storage.value("flash_wifi_ssid", DEFAULT_WIFI_SSID)
+        saved_wifi_pass = self.settings_storage.value("flash_wifi_pass", DEFAULT_WIFI_PASS)
+
         # Server
         left_layout.addWidget(self._section("Server sozlamalari"))
         left_layout.addWidget(self._small_label("Server URL"))
-        self.txt_server = QLineEdit(DEFAULT_SERVER)
+        self.txt_server = QLineEdit(saved_server)
         self.txt_server.setMinimumHeight(34)
+        self.txt_server.textEdited.connect(lambda v: self.settings_storage.setValue("flash_server", v.strip()))
         left_layout.addWidget(self.txt_server)
 
-        left_layout.addWidget(self._small_label("Device Token"))
-        self.txt_token = QLineEdit(DEFAULT_TOKEN)
+        self.lbl_token_title = self._small_label("Test Device Token" if saved_test_mode else "Production Device Token")
+        left_layout.addWidget(self.lbl_token_title)
+        
+        self.txt_token = QLineEdit(saved_test_token if saved_test_mode else saved_prod_token)
         self.txt_token.setMinimumHeight(34)
+        self.txt_token.textEdited.connect(self._on_token_edited)
         left_layout.addWidget(self.txt_token)
 
         self.chk_test_mode = QCheckBox("Test mode (productionga aralashmaydi)")
-        self.chk_test_mode.setToolTip("Yoqilsa firmware register paytida is_test_device=true yuboradi. Token maydoniga TEST_DEVICE_API_TOKEN kiriting.")
+        self.chk_test_mode.setToolTip("Yoqilsa firmware register paytida is_test_device=true yuboradi.")
+        self.chk_test_mode.setChecked(saved_test_mode)
+        self.chk_test_mode.toggled.connect(self._on_test_mode_toggled)
         left_layout.addWidget(self.chk_test_mode)
 
         # WiFi
         left_layout.addWidget(self._section("WiFi sozlamalari"))
         left_layout.addWidget(self._small_label("WiFi SSID"))
-        self.txt_ssid = QLineEdit(DEFAULT_WIFI_SSID)
+        self.txt_ssid = QLineEdit(saved_ssid)
         self.txt_ssid.setMinimumHeight(34)
+        self.txt_ssid.textEdited.connect(lambda v: self.settings_storage.setValue("flash_wifi_ssid", v.strip()))
         left_layout.addWidget(self.txt_ssid)
 
         left_layout.addWidget(self._small_label("WiFi Parol"))
-        self.txt_wifi_pass = QLineEdit(DEFAULT_WIFI_PASS)
+        self.txt_wifi_pass = QLineEdit(saved_wifi_pass)
         self.txt_wifi_pass.setMinimumHeight(34)
         self.txt_wifi_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self.txt_wifi_pass.textEdited.connect(lambda v: self.settings_storage.setValue("flash_wifi_pass", v))
         left_layout.addWidget(self.txt_wifi_pass)
 
         chk_show = QCheckBox("Parolni ko'rsatish")
@@ -437,6 +456,24 @@ class FlashWindow(QMainWindow):
         self.monitor_log.setTextColor(QColor(color))
         self.monitor_log.insertPlainText(text + "\n")
         self.monitor_log.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _on_token_edited(self, text: str):
+        val = text.strip()
+        if self.chk_test_mode.isChecked():
+            self.settings_storage.setValue("flash_test_token", val)
+        else:
+            self.settings_storage.setValue("flash_prod_token", val)
+
+    def _on_test_mode_toggled(self, checked: bool):
+        self.settings_storage.setValue("flash_test_mode", checked)
+        if checked:
+            self.lbl_token_title.setText("Test Device Token")
+            test_tok = self.settings_storage.value("flash_test_token", DEFAULT_TOKEN)
+            self.txt_token.setText(test_tok)
+        else:
+            self.lbl_token_title.setText("Production Device Token")
+            prod_tok = self.settings_storage.value("flash_prod_token", DEFAULT_TOKEN)
+            self.txt_token.setText(prod_tok)
 
     # ── Close Event ──────────────────────────────────────────────────────────
 
