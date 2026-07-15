@@ -374,6 +374,7 @@ class DeviceUpdate(BaseModel):
     building_id: Optional[int] = None
     point_id: Optional[int] = None
     is_active: Optional[bool] = None
+    is_test_device: Optional[bool] = None
 
 
 class DeviceTokenResponse(BaseModel):

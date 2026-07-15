@@ -402,7 +402,14 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
         # uses 'building_text'/'floor_text' (since 'building' is the FK relationship)
         _remap = {"building": "building_text", "floor": "floor_text"}
         for key, value in fields.items():
+            if key == "is_test_device":
+                continue  # quyida alohida
             setattr(device, _remap.get(key, key), value)
+        if fields.get("is_test_device") is True:
+            mark_test_device(device, now_ts())
+        elif fields.get("is_test_device") is False:
+            device.is_test_device = False
+            device.auto_cleanup_at = None
         if "building_id" in fields or "point_id" in fields:
             device.needs_rebind = False
         device.updated_at = now_ts()
