@@ -42,6 +42,9 @@
 struct SensorData {
     float pressure_bottom_bar;  // Kirish joyi (pastki) bosimi, bar
     float pressure_top_bar;     // Yuqori qavat bosimi, bar
+    float flow_rate;            // Oqim tezligi, L/min
+    float volume_m3;            // Jami hajm, m3
+    float temperature_c;        // Harorat, C
     bool  valid;
 };
 
@@ -79,8 +82,27 @@ static bool sensor_connect() {
 }
 
 static bool sensor_read(SensorData& d) {
+    if (g_cfg.test_mode) {
+        d.pressure_bottom_bar = 3.2f + (random(0, 100) / 200.0f);  // 3.2 - 3.7 bar
+        d.pressure_top_bar    = 1.8f + (random(0, 100) / 200.0f);  // 1.8 - 2.3 bar
+        d.flow_rate           = 12.5f + (random(0, 100) / 25.0f);  // 12.5 - 16.5 L/min
+        
+        static float sim_volume = 48.250f;
+        sim_volume += (d.flow_rate / 60.0f) * (30.0f / 1000.0f);   // 30 soniyada o'tgan hajm
+        d.volume_m3           = sim_volume;
+        d.temperature_c       = 18.5f + (random(0, 10) / 10.0f);   // 18.5 - 19.5 C
+        d.valid = true;
+        
+        Serial.printf("[TEST MODE] Suv datchigi: pastki=%.3f bar | yuqori=%.3f bar | oqim=%.3f L/min | hajm=%.3f m3\n",
+                      d.pressure_bottom_bar, d.pressure_top_bar, d.flow_rate, d.volume_m3);
+        return true;
+    }
+
     d.pressure_bottom_bar = _adc_to_bar(PIN_PRESSURE_BOTTOM);
     d.pressure_top_bar    = _adc_to_bar(PIN_PRESSURE_TOP);
+    d.flow_rate           = NAN;
+    d.volume_m3           = NAN;
+    d.temperature_c       = NAN;
     d.valid = true;
 
     Serial.printf("Suv bosim: pastki=%.3f bar | yuqori=%.3f bar\n",
@@ -89,20 +111,26 @@ static bool sensor_read(SensorData& d) {
 }
 
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
-    return app_register(device_id, "water", "water_pressure", "", fw_version, 0);
+    const char* s_type = g_cfg.test_mode ? "water_pulse_flow" : "water_pressure";
+    return app_register(device_id, "water", s_type, "", fw_version, 0);
 }
 
 static String sensor_build_json(const char* device_id,
                                  const char* fw_ver,
                                  const SensorData& d) {
-    StaticJsonDocument<256> doc;
-    doc["device_id"]           = device_id;
-    doc["utility_type"]        = "water";
-    doc["sensor_type"]         = "water_pressure";
-    doc["fw_version"]          = fw_ver;
+    StaticJsonDocument<384> doc;
+    doc["device_id"]    = device_id;
+    doc["utility_type"] = "water";
+    doc["sensor_type"]  = g_cfg.test_mode ? "water_pulse_flow" : "water_pressure";
+    doc["fw_version"]   = fw_ver;
     if (g_cfg.test_mode) doc["is_test_device"] = true;
-    doc["pressure_bottom_bar"] = serialized(String(d.pressure_bottom_bar, 3));
-    doc["pressure_top_bar"]    = serialized(String(d.pressure_top_bar, 3));
+
+    if (!isnan(d.pressure_bottom_bar)) doc["pressure_bottom_bar"] = serialized(String(d.pressure_bottom_bar, 3));
+    if (!isnan(d.pressure_top_bar))    doc["pressure_top_bar"]    = serialized(String(d.pressure_top_bar, 3));
+    if (!isnan(d.flow_rate))           doc["flow_rate"]           = serialized(String(d.flow_rate, 3));
+    if (!isnan(d.volume_m3))           doc["volume_m3"]           = serialized(String(d.volume_m3, 3));
+    if (!isnan(d.temperature_c))       doc["temperature_c"]       = serialized(String(d.temperature_c, 1));
+
     String out;
     serializeJson(doc, out);
     return out;

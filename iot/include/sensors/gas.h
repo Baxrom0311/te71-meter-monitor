@@ -37,6 +37,9 @@
 // ─── SensorData (gaz) ─────────────────────────────────────────────────────────
 struct SensorData {
     float pressure_bar;  // Gaz bosimi, bar
+    float flow_rate;     // Oqim tezligi, m3/h
+    float volume_m3;     // Jami hajm, m3
+    float temperature_c; // Harorat, C
     bool  valid;
 };
 
@@ -68,26 +71,51 @@ static bool sensor_connect() {
 }
 
 static bool sensor_read(SensorData& d) {
-    d.pressure_bar = _adc_to_bar(PIN_PRESSURE_GAS);
+    if (g_cfg.test_mode) {
+        d.pressure_bar  = 0.02f + (random(0, 100) / 5000.0f);     // 0.02 - 0.04 bar (low pressure)
+        d.flow_rate     = 1.5f + (random(0, 100) / 100.0f);       // 1.5 - 2.5 m3/h
+        
+        static float sim_volume = 1250.450f;
+        sim_volume += (d.flow_rate / 3600.0f) * 30.0f;            // 30 soniyada o'tgan hajm m3 da
+        d.volume_m3     = sim_volume;
+        d.temperature_c = 22.0f + (random(0, 10) / 10.0f);        // 22.0 - 23.0 C
+        d.valid = true;
+        
+        Serial.printf("[TEST MODE] Gaz datchigi: bosim=%.3f bar | oqim=%.3f m3/h | hajm=%.3f m3\n",
+                      d.pressure_bar, d.flow_rate, d.volume_m3);
+        return true;
+    }
+
+    d.pressure_bar  = _adc_to_bar(PIN_PRESSURE_GAS);
+    d.flow_rate     = NAN;
+    d.volume_m3     = NAN;
+    d.temperature_c = NAN;
     d.valid = true;
+
     Serial.printf("Gaz bosimi: %.3f bar\n", d.pressure_bar);
     return true;
 }
 
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
-    return app_register(device_id, "gas", "gas_pressure", "", fw_version, 0);
+    const char* s_type = g_cfg.test_mode ? "gas_pulse_flow" : "gas_pressure";
+    return app_register(device_id, "gas", s_type, "", fw_version, 0);
 }
 
 static String sensor_build_json(const char* device_id,
                                  const char* fw_ver,
                                  const SensorData& d) {
-    StaticJsonDocument<192> doc;
+    StaticJsonDocument<256> doc;
     doc["device_id"]    = device_id;
     doc["utility_type"] = "gas";
-    doc["sensor_type"]  = "gas_pressure";
+    doc["sensor_type"]  = g_cfg.test_mode ? "gas_pulse_flow" : "gas_pressure";
     doc["fw_version"]   = fw_ver;
     if (g_cfg.test_mode) doc["is_test_device"] = true;
-    doc["pressure_bar"] = serialized(String(d.pressure_bar, 3));
+
+    if (!isnan(d.pressure_bar))  doc["pressure_bar"] = serialized(String(d.pressure_bar, 3));
+    if (!isnan(d.flow_rate))     doc["flow_rate"]    = serialized(String(d.flow_rate, 3));
+    if (!isnan(d.volume_m3))     doc["volume_m3"]    = serialized(String(d.volume_m3, 3));
+    if (!isnan(d.temperature_c)) doc["temperature_c"] = serialized(String(d.temperature_c, 1));
+
     String out;
     serializeJson(doc, out);
     return out;
