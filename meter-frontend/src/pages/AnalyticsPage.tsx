@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
-import { TrendingUp, Download, Calendar, Filter, Printer } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { TrendingUp, Download, Calendar, FileSpreadsheet, Filter, Printer } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useEnergyAnalytics, useBuildings, useHourlyStats } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useTheme } from '@/contexts/ThemeContext'
 import { chartTheme } from '@/lib/chartTheme'
 import { EmptyBlock, ErrorBlock } from '@/components/StateBlock'
@@ -196,6 +197,102 @@ export default function AnalyticsPage() {
     notifySuccess('CSV hisoboti muvaffaqiyatli eksport qilindi')
   }
 
+  // Excel Export
+  const handleExportExcel = () => {
+    const buildingName = buildingId
+      ? (buildings?.find(b => b.id.toString() === buildingId)?.name ?? buildingId)
+      : 'Barcha binolar'
+    const utilLabel = utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : 'Gaz'
+
+    const wb = XLSX.utils.book_new()
+
+    // Sheet 1: Energy/Main analytics
+    if (formattedData.length > 0 && (utilityType === 'electricity' || utilityType === 'all')) {
+      const energySheet = [
+        ['METER MONITOR — Elektr sarfi tahlili'],
+        [`Bino: ${buildingName}`, `Muddat: ${dateRange}`, `Granularity: ${granularity}`],
+        [],
+        ['Sana / Vaqt', 'Energiya sarfi (kWh)', "O'rtacha yuklama (W)", "O'lchovlar soni"],
+        ...formattedData.map(r => [r.label, r.energy, r.power, r.samples]),
+        [],
+        ['JAMI:', formattedData.reduce((s, r) => s + r.energy, 0).toFixed(2) + ' kWh'],
+        ['O\'RTACHA:', (formattedData.reduce((s, r) => s + r.power, 0) / (formattedData.length || 1)).toFixed(1) + ' W'],
+        ['MAX:', Math.max(...formattedData.map(r => r.energy)).toFixed(2) + ' kWh'],
+      ]
+      const ws = XLSX.utils.aoa_to_sheet(energySheet)
+      ws['!cols'] = [{ wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 16 }]
+      XLSX.utils.book_append_sheet(wb, ws, 'Elektr sarfi')
+    }
+
+    // Sheet 2: Hourly utility stats
+    if (hourlyChartData.length > 0) {
+      let headers: string[]
+      let dataRows: (string | number)[][]
+      if (utilityType === 'electricity' || utilityType === 'all') {
+        headers = ['Sana / Vaqt', 'Kuchlanish L1 (V)', "O'rtacha quvvat (W)", "O'lchovlar soni"]
+        dataRows = hourlyChartData.map(r => [r.label, r.voltage, r.power, r.samples])
+      } else if (utilityType === 'water') {
+        headers = ['Sana / Vaqt', 'Pastki bosim (bar)', 'Yuqori bosim (bar)', 'Oqim (L/min)', 'Jami hajm (m³)', "O'lchovlar soni"]
+        dataRows = hourlyChartData.map(r => [r.label, r.pressure, r.pressureTop, r.flow, r.volume, r.samples])
+      } else {
+        headers = ['Sana / Vaqt', 'Bosim (bar)', 'Oqim (m³/h)', 'Jami hajm (m³)', "O'lchovlar soni"]
+        dataRows = hourlyChartData.map(r => [r.label, r.pressure, r.flow, r.volume, r.samples])
+      }
+      const ws2 = XLSX.utils.aoa_to_sheet([
+        [`METER MONITOR — ${utilLabel} monitoring`],
+        [`Bino: ${buildingName}`, `Muddat: ${dateRange}`],
+        [],
+        headers,
+        ...dataRows,
+      ])
+      ws2['!cols'] = headers.map((_, i) => ({ wch: i === 0 ? 22 : 18 }))
+      XLSX.utils.book_append_sheet(wb, ws2, `${utilLabel} monitoring`)
+    }
+
+    XLSX.writeFile(wb, `meter_monitor_${buildingId || 'all'}_${utilityType}_${dateRange}.xlsx`)
+    notifySuccess('Excel hisoboti muvaffaqiyatli eksport qilindi')
+  }
+
+  // Summary stats
+  const summaryStats = useMemo(() => {
+    if (utilityType === 'electricity' || utilityType === 'all') {
+      if (formattedData.length === 0) return null
+      const total = formattedData.reduce((s, r) => s + r.energy, 0)
+      const avgPower = formattedData.reduce((s, r) => s + r.power, 0) / formattedData.length
+      const maxEnergy = Math.max(...formattedData.map(r => r.energy))
+      const minEnergy = Math.min(...formattedData.filter(r => r.energy > 0).map(r => r.energy))
+      return [
+        { label: 'Jami sarflangan', value: total.toFixed(2), unit: 'kWh', color: 'text-blue-400' },
+        { label: "O'rtacha quvvat", value: avgPower.toFixed(1), unit: 'W', color: 'text-green-400' },
+        { label: 'Eng yuqori', value: maxEnergy.toFixed(2), unit: 'kWh', color: 'text-red-400' },
+        { label: 'Eng past', value: minEnergy.toFixed(2), unit: 'kWh', color: 'text-yellow-400' },
+      ]
+    } else if (utilityType === 'water') {
+      if (hourlyChartData.length === 0) return null
+      const maxVol = Math.max(...hourlyChartData.map(r => r.volume))
+      const avgPressure = hourlyChartData.reduce((s, r) => s + r.pressure, 0) / hourlyChartData.length
+      const avgFlow = hourlyChartData.reduce((s, r) => s + r.flow, 0) / hourlyChartData.length
+      return [
+        { label: 'Jami hajm', value: maxVol.toFixed(2), unit: 'm³', color: 'text-cyan-400' },
+        { label: "O'rtacha oqim", value: avgFlow.toFixed(3), unit: 'L/min', color: 'text-blue-400' },
+        { label: "O'rtacha bosim", value: avgPressure.toFixed(3), unit: 'bar', color: 'text-purple-400' },
+        { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
+      ]
+    } else if (utilityType === 'gas') {
+      if (hourlyChartData.length === 0) return null
+      const maxVol = Math.max(...hourlyChartData.map(r => r.volume))
+      const avgFlow = hourlyChartData.reduce((s, r) => s + r.flow, 0) / hourlyChartData.length
+      const avgPressure = hourlyChartData.reduce((s, r) => s + r.pressure, 0) / hourlyChartData.length
+      return [
+        { label: 'Jami hajm', value: maxVol.toFixed(2), unit: 'm³', color: 'text-amber-400' },
+        { label: "O'rtacha oqim", value: avgFlow.toFixed(3), unit: 'm³/h', color: 'text-orange-400' },
+        { label: "O'rtacha bosim", value: avgPressure.toFixed(3), unit: 'bar', color: 'text-red-400' },
+        { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
+      ]
+    }
+    return null
+  }, [formattedData, hourlyChartData, utilityType])
+
   return (
     <RootLayout>
       <div className="space-y-6">
@@ -215,14 +312,14 @@ export default function AnalyticsPage() {
             <TrendingUp className="w-8 h-8 text-blue-500" />
             <h1 className="text-3xl font-bold text-gray-100">Kommunal Sarf Tahlili</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => window.print()}
               disabled={hourlyChartData.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              Chop etish (PDF)
+              PDF
             </button>
             <button
               onClick={handleExportCSV}
@@ -230,7 +327,15 @@ export default function AnalyticsPage() {
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 border border-gray-700 rounded-lg transition text-sm font-semibold shadow-sm"
             >
               <Download className="w-4 h-4" />
-              Eksport (CSV)
+              CSV
+            </button>
+            <button
+              onClick={handleExportExcel}
+              disabled={formattedData.length === 0 && hourlyChartData.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg transition text-sm font-semibold shadow-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Excel
             </button>
           </div>
         </div>
@@ -339,7 +444,22 @@ export default function AnalyticsPage() {
           <ErrorBlock message={getApiErrorMessage(analyticsError)} onRetry={() => refetch()} />
         ) : formattedData.length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
-            {/* Energy delta chart */}
+            {/* Summary Stats Cards */}
+            {summaryStats && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+                {summaryStats.map((stat, i) => (
+                  <div key={i} className="glass-card rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">{stat.label}</span>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className={`text-2xl font-bold font-mono ${stat.color}`}>{stat.value}</span>
+                      <span className="text-xs text-gray-550 dark:text-gray-450 font-medium">{stat.unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Energy delta chart (AreaChart) */}
             <div className="glass-card chart-panel rounded-xl p-6 shadow-sm space-y-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -350,18 +470,24 @@ export default function AnalyticsPage() {
               </div>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={formattedData} barCategoryGap="30%">
+                  <AreaChart data={formattedData}>
+                    <defs>
+                      <linearGradient id="colorEnergy" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0}/>
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
                     <XAxis dataKey="label" stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} width={48} />
                     <Tooltip
                       contentStyle={chart.tooltip}
-                      labelStyle={{ color: chart.label, fontWeight: 800 }}
-                      cursor={{ fill: isDark ? 'rgba(59,130,246,0.08)' : 'rgba(37,99,235,0.08)' }}
+                      labelStyle={{ color: chart.label, fontSpread: '800' }}
+                      cursor={chart.cursor}
                     />
                     <Legend wrapperStyle={{ color: chart.label, fontSize: 12 }} />
-                    <Bar dataKey="energy" name="Energiya (kWh)" fill="#3B82F6" radius={[8, 8, 3, 3]} />
-                  </BarChart>
+                    <Area type="monotone" dataKey="energy" name="Energiya (kWh)" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorEnergy)" />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
