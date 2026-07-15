@@ -403,6 +403,8 @@ async def update_device(device_id: str, body: DeviceUpdate) -> dict:
         _remap = {"building": "building_text", "floor": "floor_text"}
         for key, value in fields.items():
             setattr(device, _remap.get(key, key), value)
+        if "building_id" in fields or "point_id" in fields:
+            device.needs_rebind = False
         device.updated_at = now_ts()
         await session.commit()
     await ws_manager.broadcast({"type": "device_updated", "device_id": device_id})
