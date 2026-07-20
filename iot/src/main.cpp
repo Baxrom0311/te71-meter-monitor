@@ -6,7 +6,6 @@
  *   pio run -e water          → 2x suv bosim sensori (analog ADC)
  *   pio run -e gas            → 1x gaz bosim sensori (analog ADC)
  *   pio run -e soil           → Yerto'la namligi sensori (kapasitiv ADC, WiFi)
- *   pio run -e display        → OLED ekran qurilmasi (SSD1306 128x64, WiFi)
  *   pio run -e ads1115_test   → ADS1115 + HY-131 4-20mA test
  *
  * Arxitektura:
@@ -15,7 +14,6 @@
  *   include/sensors/water.h       → 2x analog bosim (suv)
  *   include/sensors/gas.h         → 1x analog bosim (gaz)
  *   include/sensors/soil.h        → Yerto'la namligi (kapasitiv, WiFi)
- *   include/sensors/display.h     → OLED ekran (WiFi, readings yo'q)
  */
 
 #define FW_VERSION "4.0.0"
@@ -130,15 +128,6 @@ void loop() {
 #include "lora_packet.h"
 #include "lora_gw.h"
 // setup() va loop() lora_gw.h da aniqlanadi
-
-#elif defined(SENSOR_DISPLAY)
-// ═══════════════════════════════════════════════════════════════════════════════
-// DISPLAY MODE — WiFi + SSD1306 OLED ekran (LoRa YO'Q, readings yuborilmaydi)
-// Build: pio run -e display
-// ═══════════════════════════════════════════════════════════════════════════════
-#include "common.h"
-#include "sensors/display.h"
-// setup() va loop() display.h da aniqlanadi
 
 #else
 // ═══════════════════════════════════════════════════════════════════════════════
