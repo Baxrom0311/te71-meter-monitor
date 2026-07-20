@@ -154,7 +154,7 @@ void loop() {
 // App konstantalar
 // ═══════════════════════════════════════════════════════════════════════════════
 #define WIFI_AP_NAME     "Bakhromdev"
-#define WIFI_AP_PASS     "meter1234"
+#define WIFI_AP_PASS     "998935580311"
 #define READ_INTERVAL_MS  30000UL  // Har 30s da o'qish
 #define CMD_POLL_MS       60000UL  // Har 60s da command poll
 #define HEALTH_CHECK_MS   60000UL  // Har 60s da server check
