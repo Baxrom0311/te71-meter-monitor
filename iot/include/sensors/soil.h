@@ -149,6 +149,9 @@ static bool sensor_read(SensorData& d) {
     return true;
 }
 
+// Soil sensorida hajm hisobi yo'q — bo'sh stub (common.h extern talab qiladi)
+void sensor_set_volume(float) {}
+
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
     return app_register(device_id, "soil", "capacitive_soil_moisture", "", fw_version, 0);
 }
