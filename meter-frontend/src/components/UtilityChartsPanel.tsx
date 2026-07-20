@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Droplets, Flame, Zap } from 'lucide-react'
+import { Droplets, Flame, Zap, Sprout } from 'lucide-react'
 import { useHourlyStats } from '@/hooks/queries'
 import { useTheme } from '@/contexts/ThemeContext'
 import { chartTheme } from '@/lib/chartTheme'
 import { ChartSkeleton } from '@/components/Skeleton'
 import type { HourlyUtilityStat } from '@/types/api'
 
-type UtilityKey = 'electricity' | 'water' | 'gas'
+type UtilityKey = 'electricity' | 'water' | 'gas' | 'soil'
 
 interface UtilityChartsPanelProps {
   buildingId?: number
@@ -24,6 +24,7 @@ interface BucketRow {
   pressure: number
   pressureTop: number
   flow: number
+  humidity: number
 }
 
 const utilityCards = [
@@ -54,6 +55,15 @@ const utilityCards = [
     color: '#F97316',
     fill: 'url(#gasFill)',
   },
+  {
+    key: 'soil' as const,
+    title: "Yerto'la namligi",
+    subtitle: 'Namlik foizi (oxirgi 24 soat)',
+    unit: '%',
+    icon: Sprout,
+    color: '#22C55E',
+    fill: 'url(#soilFill)',
+  },
 ]
 
 function formatLabel(ts: number) {
@@ -78,6 +88,7 @@ function createEmptyRows(): BucketRow[] {
       pressure: 0,
       pressureTop: 0,
       flow: 0,
+      humidity: 0,
     }
   })
 }
@@ -98,6 +109,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
         pressure: 0,
         pressureTop: 0,
         flow: 0,
+        humidity: 0,
       }
 
       current.power += row.avg_power_w ?? 0
@@ -118,10 +130,11 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
       pressure: row.pressureSamples ? Number((row.pressure / row.pressureSamples).toFixed(3)) : 0,
       pressureTop: row.pressureSamples ? Number((row.pressureTop / row.pressureSamples).toFixed(3)) : 0,
       flow: Number(row.flow.toFixed(3)),
+      humidity: Number(row.humidity.toFixed(1)),
     }))
 }
 
-export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = "Elektr, suv va gaz bo'yicha oxirgi 24 soat" }: UtilityChartsPanelProps) {
+export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = "Elektr, suv, gaz va yerto'la namligi — oxirgi 24 soat" }: UtilityChartsPanelProps) {
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
   const { data, isLoading, isError } = useHourlyStats(24, buildingId)
@@ -133,6 +146,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
       electricity: aggregateRows(stats, 'electricity'),
       water: aggregateRows(stats, 'water'),
       gas: aggregateRows(stats, 'gas'),
+      soil: aggregateRows(stats, 'soil'),
     }
   }, [data])
 
@@ -143,7 +157,8 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
           <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{title}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-450">{subtitle}</p>
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
+          <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
@@ -158,7 +173,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
         <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{title}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-450">{subtitle}</p>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
         {utilityCards.map((card) => {
           const Icon = card.icon
           const rows = chartRows[card.key]
@@ -194,6 +209,22 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
                     <YAxis stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} width={42} />
                     <Tooltip contentStyle={chart.tooltip} labelStyle={{ color: chart.label, fontWeight: 800 }} cursor={chart.cursor} />
                     <Area type="monotone" dataKey="power" name="Jami quvvat (W)" stroke="#EAB308" strokeWidth={2.5} dot={false} fill={card.fill} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : card.key === 'soil' ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={displayRows}>
+                    <defs>
+                      <linearGradient id="soilFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22C55E" stopOpacity={0.32} />
+                        <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
+                    <XAxis dataKey="label" stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} width={42} domain={[0, 100]} unit="%" />
+                    <Tooltip contentStyle={chart.tooltip} labelStyle={{ color: chart.label, fontWeight: 800 }} cursor={chart.cursor} />
+                    <Area type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" strokeWidth={2.5} dot={false} fill={card.fill} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (

@@ -18,7 +18,7 @@ const utilityOverview = [
   { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
   { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
   { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-  { key: 'soil', label: 'Tuproq', icon: Sprout, accent: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+  { key: 'soil', label: "Yerto'la", icon: Sprout, accent: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
 ] as const
 
 export default function DashboardPage() {

@@ -87,6 +87,7 @@ export const translations = {
     electricity: 'Elektr',
     water: 'Suv',
     gas: 'Gaz',
+    soil: "Yerto'la namligi",
   },
 
   // Alerts

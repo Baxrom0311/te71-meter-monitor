@@ -189,7 +189,7 @@ export default function DeviceDetailPage() {
     : device?.utility_type === "gas"
       ? { title: "Gaz ko'rsatkichlari grafigi", subtitle: "Oxirgi 24 soatdagi bosim va oqim o'zgarishi" }
       : device?.utility_type === "soil"
-        ? { title: "Tuproq namligi grafigi", subtitle: "Oxirgi 24 soatdagi namlik o'zgarishi" }
+        ? { title: "Yerto'la namligi grafigi", subtitle: "Oxirgi 24 soatdagi namlik o'zgarishi" }
         : { title: "Elektr quvvati grafigi", subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
 
   if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
@@ -723,7 +723,7 @@ export default function DeviceDetailPage() {
                   <option value="electricity">Elektr</option>
                   <option value="water">Suv</option>
                   <option value="gas">Gaz</option>
-                  <option value="soil">Tuproq namligi</option>
+                  <option value="soil">Yerto'la namligi</option>
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-2">
