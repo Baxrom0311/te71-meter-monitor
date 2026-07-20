@@ -15,6 +15,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "mbedtls/gcm.h"
 
 // ─── RS-485 pinlar ────────────────────────────────────────────────────────────
 #define PIN_RX   16
@@ -191,7 +192,28 @@ static uint8_t dlms_next_ctrl() {
 
 static bool dlms_snrm() {
     hdlc_build(DLMS_SERVER_ADDR, dlms_client, 0x93, nullptr, 0);
-    return dlms_txrx(2000) && dlms_rx_len > 4;
+    if (!dlms_txrx(2000) || dlms_rx_len < 6) {
+        LOG_PRINTLN("  SNRM: timeout/short");
+        return false;
+    }
+    LOG_PRINTF("  SNRM resp(%d):", (int)dlms_rx_len);
+    for (size_t i = 0; i < dlms_rx_len && i < 12; i++) LOG_PRINTF(" %02X", dlms_rx[i]);
+    LOG_PRINTLN("");
+    // RS-485 dan kelgan frame oldida 0x00 null byte bo'lishi mumkin
+    // Frame: [00?] 7E A0 len dest src ctrl ...
+    // 7E 0xA0 ni topib, undan 5 pozitsiyada ctrl byte ni tekshiramiz
+    // UA ctrl = 0x63 (F=0) yoki 0x73 (F=1)
+    // DM ctrl = 0x0F yoki 0x1F → rad
+    for (size_t i = 0; i + 5 < dlms_rx_len; i++) {
+        if (dlms_rx[i] == 0x7E && dlms_rx[i+1] == 0xA0) {
+            uint8_t ctrl = dlms_rx[i+5];
+            if (ctrl == 0x63 || ctrl == 0x73) return true;
+            LOG_PRINTF("  SNRM: not UA (ctrl=0x%02X)\n", ctrl);
+            return false;
+        }
+    }
+    LOG_PRINTLN("  SNRM: HDLC frame topilmadi");
+    return false;
 }
 
 static bool dlms_aarq(const uint8_t* aarq, size_t alen) {
@@ -227,7 +249,133 @@ static bool dlms_connect_public() {
     return dlms_aarq(aarq, sizeof(aarq));
 }
 
-// Reader client (Client 1, HLS5)
+// ─── HLS5 GMAC yordamchi funksiyalar ─────────────────────────────────────────
+
+// AARE javobidan s-to-c challenge ni ajratib olish
+// AARE: responding-authentication-value = AA [len] 80 [data_len] [s-to-c bytes]
+// NOT A4 (AP-title) — bu keng tarqalgan xato!
+static size_t dlms_extract_stoc(uint8_t* stoc, size_t max) {
+    for (size_t i = 0; i + 3 < dlms_rx_len; i++) {
+        if (dlms_rx[i] == 0xAA && dlms_rx[i+2] == 0x80) {
+            uint8_t slen = dlms_rx[i+3];
+            if (slen > 0 && slen <= max && i + 4 + slen <= dlms_rx_len) {
+                memcpy(stoc, dlms_rx + i + 4, slen);
+                return slen;
+            }
+        }
+    }
+    return 0;
+}
+
+// HLS5 GMAC hisoblash: SC(1) || IC(4) || AES_GCM_tag(12) = 17 bayt
+//   AK = Authentication Key (16 bayt, standart = barcha nol)
+//   systitle = Client System Title (8 bayt)
+//   ic = Invocation Counter (0 dan boshlash)
+//   s_chal = server dan kelgan challenge (AARE A4 tegidan)
+static bool hls5_gmac(const uint8_t ak[16], const uint8_t systitle[8], uint32_t ic,
+                       const uint8_t* s_chal, size_t s_len, uint8_t out[17]) {
+    // IV = SysTitle(8) || IC(4)
+    uint8_t iv[12];
+    memcpy(iv, systitle, 8);
+    iv[8]=(ic>>24)&0xFF; iv[9]=(ic>>16)&0xFF; iv[10]=(ic>>8)&0xFF; iv[11]=ic&0xFF;
+
+    // AAD = SC(1) || s_chal
+    uint8_t aad[64];
+    aad[0] = 0x10;  // SC = authentication only, unicast
+    if (s_len > 63) s_len = 63;
+    memcpy(aad + 1, s_chal, s_len);
+
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, ak, 128);
+    if (ret) { mbedtls_gcm_free(&gcm); return false; }
+    uint8_t tag[16];
+    ret = mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT,
+        0, iv, 12, aad, 1 + s_len, NULL, NULL, 12, tag);
+    mbedtls_gcm_free(&gcm);
+    if (ret) return false;
+
+    out[0] = 0x10;  // SC
+    out[1]=(ic>>24)&0xFF; out[2]=(ic>>16)&0xFF;
+    out[3]=(ic>>8)&0xFF;  out[4]=ic&0xFF;
+    memcpy(out + 5, tag, 12);  // 12 baytlik GMAC teg
+    return true;
+}
+
+// HLS5 ni yakunlash: ACTION (Class 15, OBIS 0.0.40.0.0.255, method 1)
+// data = OCTET-STRING (09 11 SC IC[4] GMAC[12]) = 19 bayt
+static bool hls5_complete(const uint8_t resp17[17]) {
+    static const uint8_t OBIS_ASSOC[6] = {0x00,0x00,0x28,0x00,0x00,0xFF}; // 0.0.40.0.0.255
+    // PDU = C3 01 invoke 00 0F obis[6] method=01 has-data=01 09 11 resp[17] → 33 bayt
+    uint8_t pdu[33]; size_t pp = 0;
+    pdu[pp++]=0xC3; pdu[pp++]=0x01; pdu[pp++]=dlms_invoke++;
+    pdu[pp++]=0x00; pdu[pp++]=0x0F;         // class 15
+    memcpy(pdu+pp, OBIS_ASSOC, 6); pp+=6;
+    pdu[pp++]=0x01;                          // method 1
+    pdu[pp++]=0x01;                          // has-data = 1
+    pdu[pp++]=0x09; pdu[pp++]=0x11;         // OCTET-STRING, 17 bayt
+    memcpy(pdu+pp, resp17, 17); pp+=17;     // pp = 33
+    uint8_t info[3+33];
+    memcpy(info, DLMS_LLC, 3); memcpy(info+3, pdu, pp);
+    hdlc_build(DLMS_SERVER_ADDR, dlms_client, dlms_next_ctrl(), info, 3+pp);
+    if (!dlms_txrx(3000)) { LOG_PRINTLN("  HLS5-ACTION timeout"); return false; }
+    size_t plen; const uint8_t* r = dlms_find_pdu(&plen);
+    LOG_PRINTF("  HLS5-ACTION(%d):", (int)plen);
+    for (size_t i = 0; r && i < plen && i < 16; i++) LOG_PRINTF(" %02X", r[i]);
+    LOG_PRINTLN("");
+    if (!r || plen < 4) return false;
+    return (r[0] == 0xC7 && r[3] == 0x00);  // ACTION-Response, success
+}
+
+// Manager client — LOW auth, parol "00000000"
+// DLMS standart: Manager = Client Address 1 = HDLC SAP 0x03
+// TE73 manual va AI qidiruv: Client=1, LOW Security, pwd="00000000"
+static bool dlms_connect_manager() {
+    // AARQ: ctx01 + LOW auth (mechanism 1), body = 54 = 0x36
+    // app_ctx(11) + acse(4) + mech_LOW(9) + auth(12) + ui(18) = 54
+    static const uint8_t pwd[8] = {'0','0','0','0','0','0','0','0'};  // "00000000"
+    uint8_t aarq[64]; size_t p = 0;
+    aarq[p++]=0x60; aarq[p++]=0x36;  // body = 54
+    const uint8_t ac[]={0xA1,0x09,0x06,0x07,0x60,0x85,0x74,0x05,0x08,0x01,0x01}; // ctx01
+    memcpy(aarq+p, ac, 11); p+=11;
+    const uint8_t as[]={0x8A,0x02,0x07,0x80};
+    memcpy(aarq+p, as, 4); p+=4;
+    const uint8_t mh[]={0x8B,0x07,0x60,0x85,0x74,0x05,0x08,0x02,0x01}; // mechanism 1 = LOW
+    memcpy(aarq+p, mh, 9); p+=9;
+    // auth value: AC [len+2] 80 [len] [password]
+    aarq[p++]=0xAC; aarq[p++]=0x0A; aarq[p++]=0x80; aarq[p++]=0x08;
+    memcpy(aarq+p, pwd, 8); p+=8;
+    const uint8_t ui[]={0xBE,0x10,0x04,0x0E,0x01,0x00,0x00,0x00,
+                        0x06,0x5F,0x1F,0x04,0x00,0x00,0x7E,0x1F,0x04,0xB0};
+    memcpy(aarq+p, ui, 18); p+=18;
+    // ac(11)+as(4)+mh(9)+auth(4+8=12)+ui(18) = 54 = 0x36 ✓
+
+    // Client 1 = HDLC SAP 0x03 (DLMS standart: Management client = Client Address 1)
+    dlms_client   = DLMS_CLIENT_READER;  // 0x03 — Client 1, xuddi Reader bilan bir xil SAP
+    dlms_send_seq = dlms_recv_seq = 0;
+    delay(500);
+
+    LOG_PRINT("  Mgr SNRM (SAP=03, Client1, LOW)...");
+    if (!dlms_snrm()) { LOG_PRINTLN("XATO"); return false; }
+    LOG_PRINTLN("OK");
+
+    bool ok = dlms_aarq(aarq, p);
+    LOG_PRINTF("  AARE(%d):", (int)dlms_rx_len);
+    for (size_t i = 0; i < dlms_rx_len && i < 80; i++)
+        LOG_PRINTF(" %02X", dlms_rx[i]);
+    LOG_PRINTLN(ok ? " QABUL" : " rad");
+
+    if (ok) LOG_PRINTLN("  Manager ulandi (Client1, LOW auth)");
+    else {
+        hdlc_build(DLMS_SERVER_ADDR, dlms_client, 0x53, nullptr, 0);
+        dlms_txrx(500); dlms_connected = false;
+        LOG_PRINTLN("  Manager ulanmadi");
+    }
+    return ok;
+}
+
+// Reader client (Client 1, HLS5) — ulangandan keyin HLS5 completion ham sinab ko'riladi
+// Ba'zi metrlar completion talab qiladi, ba'zilari qilmaydi
 static bool dlms_connect_reader() {
     dlms_client = DLMS_CLIENT_READER;
     dlms_send_seq = dlms_recv_seq = 0;
@@ -249,7 +397,32 @@ static bool dlms_connect_reader() {
     const uint8_t ui[]={0xBE,0x10,0x04,0x0E,0x01,0x00,0x00,0x00,
                         0x06,0x5F,0x1F,0x04,0x00,0x00,0x7E,0x1F,0x04,0xB0};
     memcpy(aarq+p, ui, 18); p+=18;
-    return dlms_aarq(aarq, p);
+    bool ok = dlms_aarq(aarq, p);
+    // AARE logini har doim ko'rish (muvaffaqiyatsiz bo'lganda ham)
+    LOG_PRINTF("  Reader AARE(%d):", (int)dlms_rx_len);
+    for (size_t i = 0; i < dlms_rx_len && i < 80; i++) LOG_PRINTF(" %02X", dlms_rx[i]);
+    LOG_PRINTLN(ok ? " QABUL" : " rad");
+    if (!ok) return false;
+
+    // HLS5 completion: s-to-c ajratib, GMAC hisob, ACTION yuborish
+    static const uint8_t ak[16]     = {0};  // default AK = nollar
+    static const uint8_t syst[8]    = {'E','S','P','3','2','0','0','0'};
+    uint8_t stoc[32];
+    size_t stoc_len = dlms_extract_stoc(stoc, sizeof(stoc));
+    LOG_PRINTF("  Reader s-to-c(%d):", (int)stoc_len);
+    for (size_t i = 0; i < stoc_len; i++) LOG_PRINTF(" %02X", stoc[i]);
+    LOG_PRINTLN("");
+    if (stoc_len > 0) {
+        uint8_t resp[17];
+        if (hls5_gmac(ak, syst, 0, stoc, stoc_len, resp)) {
+            LOG_PRINT("  Reader GMAC:");
+            for (int i = 0; i < 17; i++) LOG_PRINTF(" %02X", resp[i]);
+            LOG_PRINTLN("");
+            if (hls5_complete(resp)) LOG_PRINTLN("  Reader HLS5 to'liq ulandi!");
+            else                     LOG_PRINTLN("  Reader HLS5 completion xato");
+        }
+    }
+    return true;
 }
 
 static void dlms_disconnect() {
@@ -309,20 +482,30 @@ static bool dlms_get_string(uint16_t cls, const uint8_t obis[6],
 // ═══════════════════════════════════════════════════════════════════════════════
 static bool dlms_action(uint16_t cls, const uint8_t obis[6], uint8_t method) {
     if (!dlms_connected) return false;
-    // ACTION PDU: C3 01 invoke cls[2] obis[6] method has-data=01 integer(0)
+    // ACTION PDU: C3 01 invoke cls[2] obis[6] method 01 0F 00
+    // connection.py: data=b"\x0F\x00" (has-data=1, int8=0) — ishlaydigan versiya
     uint8_t pdu[15];
     pdu[0]=0xC3; pdu[1]=0x01; pdu[2]=dlms_invoke++;
     pdu[3]=cls>>8; pdu[4]=cls&0xFF;
     memcpy(pdu+5, obis, 6);
-    pdu[11]=method; pdu[12]=0x01;  // has-data = true
-    pdu[13]=0x0F;   pdu[14]=0x00;  // integer(0)
+    pdu[11]=method; pdu[12]=0x01; pdu[13]=0x0F; pdu[14]=0x00;  // has-data=1, int8(0)
     uint8_t info[18];
     memcpy(info, DLMS_LLC, 3); memcpy(info+3, pdu, 15);
     hdlc_build(DLMS_SERVER_ADDR, dlms_client, dlms_next_ctrl(), info, 18);
     if (!dlms_txrx(5000)) return false;
     size_t plen; const uint8_t* resp = dlms_find_pdu(&plen);
-    // C7 01 invoke 00 = success
-    return resp && plen>=4 && resp[0]==0xC7 && resp[3]==0x00;
+    if (!resp || plen < 4) {
+        LOG_PRINTF("Relay DLMS javob yo'q (plen=%d)\n", (int)plen);
+        return false;
+    }
+    // C7 01 invoke 00 = success | C7 01 invoke 01 = error
+    LOG_PRINTF("Relay DLMS javob: %02X %02X %02X %02X\n",
+               resp[0], resp[1], resp[2], resp[3]);
+    if (resp[0] == 0xC7 && resp[3] == 0x00) return true;
+    // Xato kodini chiqarish (resp[3] = result, resp[4+] = error detail)
+    if (resp[0] == 0xC7 && resp[3] != 0x00 && plen > 4)
+        LOG_PRINTF("Relay xato kodi: %02X\n", resp[4]);
+    return false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -340,12 +523,16 @@ static void sensor_init() {
     g_sensor_meta.sensor_type[0]  = '\0';
 }
 
-// Metrga ulanish (Reader, keyin Public fallback)
+// Metrga ulanish: Reader(HLS5) → Public
+// Manager (LOW) TE73 da authentication-failure beradi — ishlatilmaydi
 static bool sensor_try_baud(uint32_t baud) {
     Serial2.end(); delay(50);
     Serial2.begin(baud, SERIAL_8N1, PIN_RX, PIN_TX); delay(100);
+    // 1. Reader (Client 1, HLS5) — to'liq auth, relay uchun zarur
     if (dlms_connect_reader()) return true;
     dlms_disconnect();
+    delay(300);
+    // 2. Public (Client 16, auth yo'q) — faqat o'qish (fallback)
     if (dlms_connect_public()) return true;
     return false;
 }
@@ -441,12 +628,36 @@ static bool sensor_read(SensorData& d) {
 }
 
 // Relay buyrug'i: method 1=off(disconnect), 2=on(reconnect)
+// Strategiya: Reader (Client 1) + HLS5 completion orqali
+//   1) Mavjud reader sessiya (HLS5 to'liq) bilan sinash
+//   2) Agar xato → qayta ulanish (yangi HLS5 completion) va sinash
 static bool sensor_relay(int method) {
     if (dlms_simulated) {
-        LOG_PRINTF("[TEST MODE] Simulyatsiya qilingan rele %s qilindi!\n", method == 2 ? "ON" : "OFF");
+        LOG_PRINTF("[TEST MODE] Simulyatsiya: rele %s\n", method == 2 ? "ON" : "OFF");
         return true;
     }
-    return dlms_action(70, OBIS_RELAY, (uint8_t)method);
+
+    // === 1-urinish: mavjud reader sessiya bilan ===
+    if (dlms_connected) {
+        LOG_PRINTF("Relay %s: reader bilan sinash...\n", method == 2 ? "ON" : "OFF");
+        bool r = dlms_action(70, OBIS_RELAY, (uint8_t)method);
+        LOG_PRINTF("Relay %s (reader): %s\n", method == 2 ? "ON" : "OFF", r ? "OK" : "XATO");
+        if (r) return true;
+    }
+
+    // === 2-urinish: reader qayta ulanish + HLS5 completion ===
+    LOG_PRINT("Relay: reader qayta ulanmoqda (HLS5)...");
+    dlms_disconnect();
+    delay(1000);
+    if (!dlms_connect_reader()) {
+        LOG_PRINTLN(" XATO — reader ulanmadi");
+        return false;
+    }
+    LOG_PRINTLN(" OK");
+
+    bool result = dlms_action(70, OBIS_RELAY, (uint8_t)method);
+    LOG_PRINTF("Relay %s (reader+HLS5): %s\n", method == 2 ? "ON" : "OFF", result ? "OK" : "XATO");
+    return result;
 }
 
 // Backend uchun JSON (MeterReading sxemasiga mos)
@@ -489,6 +700,8 @@ static String sensor_build_json(const char* device_id,
 }
 
 // Backend uchun registratsiya (main.cpp dan chaqiriladi)
+// LORA_NODE da WiFi/HTTP yo'q — ishlatilmaydi
+#ifndef LORA_NODE
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
     return app_register(
         device_id,
@@ -499,6 +712,7 @@ static bool sensor_do_register(const char* device_id, const char* fw_version) {
         g_sensor_meta.meter_baud
     );
 }
+#endif
 
 void sensor_set_volume(float val) {
     // Electricity does not use pulse counters

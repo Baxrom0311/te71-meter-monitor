@@ -32,6 +32,7 @@ x-backend-common: &backend-common
     - TRUSTED_HOSTS=*
     - RATE_LIMIT_PER_MINUTE=120
     - DEVICE_RATE_LIMIT_PER_MINUTE=600
+    - TEST_METER_SERIALS=
     - MAX_REQUEST_BODY_BYTES=26214400
     - COMMAND_TTL_SEC=3600
     - COMMAND_MAX_PENDING_PER_DEVICE=20
@@ -90,7 +91,32 @@ services:
       timeout: 5s
       retries: 3
 
+  # ── Adminer (PostgreSQL web UI) ─────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: meter-adminer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DESIGN=dracula
+    depends_on:
+      - postgres
+
+  # ── Portainer (Docker monitoring UI) ────────────────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: meter-portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
 volumes:
   postgres_data:
   firmware_store:
   backup_store:
+  portainer_data:

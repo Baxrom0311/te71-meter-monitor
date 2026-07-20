@@ -20,7 +20,7 @@ export const translations = {
     username: 'Foydalanuvchi nomi',
     password: 'Parol',
     signIn: 'Kirish',
-    error: 'Login yoki parol noto\'g\'ri',
+    error: "Login yoki parol noto\'g\'ri",
     loading: 'Kirilmoqda...',
   },
 
@@ -30,10 +30,10 @@ export const translations = {
     devices: 'Qurilmalar',
     buildings: 'Binolar',
     alerts: 'Ogohlantirishlar',
-    readings: 'O\'lchovlar (bugun)',
+    readings: "O\'lchovlar (bugun)",
     online: 'onlayn',
     offline: 'offlayn',
-    energy: 'So\'nggi 24 soat — Energiya sarfi',
+    energy: "So\'nggi 24 soat — Energiya sarfi",
     activeAlerts: 'Faol ogohlantirishlar',
   },
 
@@ -45,7 +45,7 @@ export const translations = {
     activeAlerts: 'Faol ogohlantirishlar',
     criticalAlerts: 'Kritik ogohlantirishlar',
     warningAlerts: 'Ogohlantirish ogohlantirishlar',
-    readingsToday: 'Bugungi o\'lchovlar',
+    readingsToday: "Bugungi o\'lchovlar",
   },
 
   // Buildings
@@ -57,9 +57,9 @@ export const translations = {
     coordinates: 'Koordinatalar',
     deviceCount: 'Qurilmalar soni',
     devices: 'Qurilmalar',
-    addBuilding: 'Yangi bino qo\'shish',
+    addBuilding: "Yangi bino qo\'shish",
     editBuilding: 'Binoni tahrirlash',
-    deleteBuilding: 'Binoni o\'chirish',
+    deleteBuilding: "Binoni o\'chirish",
   },
 
   // Devices
@@ -77,9 +77,9 @@ export const translations = {
     minutes: 'daqiqa oldin',
     hours: 'soat oldin',
     days: 'kun oldin',
-    addDevice: 'Yangi qurilma qo\'shish',
+    addDevice: "Yangi qurilma qo\'shish",
     editDevice: 'Qurilmani tahrirlash',
-    deleteDevice: 'Qurilmani o\'chirish',
+    deleteDevice: "Qurilmani o\'chirish",
   },
 
   // Device Types
@@ -92,7 +92,7 @@ export const translations = {
   // Alerts
   alerts: {
     title: 'Ogohlantirishlar',
-    severity: 'Og\'irligi',
+    severity: "Og\'irligi",
     kind: 'Turi',
     message: 'Xabar',
     timestamp: 'Vaqti',
@@ -103,7 +103,7 @@ export const translations = {
     warning: 'Ogohlantirish',
     info: 'Axborot',
     markAsCleared: 'Bekor qilingan deb belgilash',
-    dismiss: 'O\'tkazib yuborish',
+    dismiss: "O\'tkazib yuborish",
   },
 
   // Firmware
@@ -111,7 +111,7 @@ export const translations = {
     title: 'Firmware boshqaruvi',
     version: 'Versiya',
     releaseDate: 'Chiqarilgan sana',
-    changelog: 'O\'zgarishlar jurnali',
+    changelog: "O\'zgarishlar jurnali",
     deploy: 'Joylashtirish',
     schedule: 'Rejalashtirilgan',
     updateStatus: 'Yangilash holati',
@@ -130,7 +130,7 @@ export const translations = {
     inactive: 'Faol emas',
     createUser: 'Yangi foydalanuvchi yaratish',
     editUser: 'Foydalanuvchini tahrirlash',
-    deleteUser: 'Foydalanuvchini o\'chirish',
+    deleteUser: "Foydalanuvchini o\'chirish",
   },
 
   // Audit (Admin)
@@ -157,17 +157,17 @@ export const translations = {
     loading: 'Yuklanmoqda...',
     error: 'Xato yuz berdi',
     success: 'Muvaffaqiyatli',
-    delete: 'O\'chirish',
+    delete: "O\'chirish",
     cancel: 'Bekor qilish',
     save: 'Saqlash',
     edit: 'Tahrirlash',
-    add: 'Qo\'shish',
+    add: "Qo\'shish",
     back: 'Orqaga',
     logout: 'Chiqish',
     profile: 'Profil',
-    noData: 'Ma\'lumot topilmadi',
+    noData: "Ma\'lumot topilmadi",
     confirm: 'Tasdiqlash',
-    confirmDelete: 'Haqiqatdan ham o\'chirmoqchisiz?',
+    confirmDelete: "Haqiqatdan ham o\'chirmoqchisiz?",
   },
 }
 

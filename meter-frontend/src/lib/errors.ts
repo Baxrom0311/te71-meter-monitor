@@ -13,9 +13,9 @@ export function getApiErrorMessage(error: unknown): string {
     if (error.response?.status === 403) return 'Bu amal uchun ruxsat yetarli emas.'
     if (error.response?.status === 404) return 'Maʼlumot topilmadi.'
     if (error.response?.status === 409) return 'Bu maʼlumot allaqachon mavjud yoki konflikt bor.'
-    if (error.response?.status && error.response.status >= 500) return 'Serverda xatolik yuz berdi. Keyinroq urinib ko‘ring.'
-    if (error.code === 'ERR_NETWORK') return 'Server bilan aloqa yo‘q. Internet yoki backend holatini tekshiring.'
-    return error.message || 'So‘rov bajarilmadi.'
+    if (error.response?.status && error.response.status >= 500) return "Serverda xatolik yuz berdi. Keyinroq urinib ko'ring."
+    if (error.code === 'ERR_NETWORK') return "Server bilan aloqa yo'q. Internet yoki backend holatini tekshiring."
+    return error.message || "So'rov bajarilmadi."
   }
 
   if (error instanceof Error) return error.message

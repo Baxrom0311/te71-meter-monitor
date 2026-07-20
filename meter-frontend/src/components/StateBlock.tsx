@@ -18,7 +18,7 @@ export function LoadingBlock({ title = 'Yuklanmoqda...', message = 'Maʼlumotlar
   )
 }
 
-export function EmptyBlock({ title = 'Maʼlumot topilmadi', message = 'Hozircha ko‘rsatish uchun yozuv yo‘q.' }: StateBlockProps) {
+export function EmptyBlock({ title = 'Maʼlumot topilmadi', message = "Hozircha ko'rsatish uchun yozuv yo'q." }: StateBlockProps) {
   return (
     <div className="state-block">
       <Inbox className="w-7 h-7 text-gray-400" />
@@ -30,7 +30,7 @@ export function EmptyBlock({ title = 'Maʼlumot topilmadi', message = 'Hozircha 
   )
 }
 
-export function ErrorBlock({ title = 'Xatolik yuz berdi', message = 'So‘rov bajarilmadi.', onRetry }: StateBlockProps) {
+export function ErrorBlock({ title = 'Xatolik yuz berdi', message = "So'rov bajarilmadi.", onRetry }: StateBlockProps) {
   return (
     <div className="state-block border-red-500/25 bg-red-500/5">
       <AlertCircle className="w-7 h-7 text-red-500" />

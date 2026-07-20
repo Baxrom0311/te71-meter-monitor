@@ -107,6 +107,7 @@ export interface Reading {
   volume_m3: number | null
   temperature_c: number | null
   leak_detected: boolean | null
+  humidity: number | null
 }
 
 export interface DeviceHistoryResponse {

@@ -19,6 +19,8 @@ ALERT_RULE_KINDS = {
     "water_not_reaching_top",
     "gas_pressure",
     "gas_leak",
+    "soil_dry",
+    "soil_wet",
 }
 
 
@@ -230,6 +232,44 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
                 ),
                 gas_leak_rule,
             )
+    elif reading.utility_type == "soil":
+        if reading.humidity is not None:
+            soil_dry_rule = rules.get("soil_dry")
+            soil_wet_rule = rules.get("soil_wet")
+            soil_min = _rule_min(soil_dry_rule, settings.soil_humidity_min)
+            soil_max = _rule_max(soil_wet_rule, settings.soil_humidity_max)
+            if reading.humidity < soil_min:
+                _queue_alert(
+                    alerts,
+                    Alert(
+                        device_id=reading.device_id,
+                        building_id=reading.building_id,
+                        point_id=reading.point_id,
+                        utility_type="soil",
+                        severity=_rule_severity(soil_dry_rule, "warning"),
+                        ts=ts,
+                        kind="soil_dry",
+                        value=reading.humidity,
+                        message=_rule_message(soil_dry_rule, f"Tuproq quruq: {reading.humidity:.1f}%"),
+                    ),
+                    soil_dry_rule,
+                )
+            elif reading.humidity > soil_max:
+                _queue_alert(
+                    alerts,
+                    Alert(
+                        device_id=reading.device_id,
+                        building_id=reading.building_id,
+                        point_id=reading.point_id,
+                        utility_type="soil",
+                        severity=_rule_severity(soil_wet_rule, "warning"),
+                        ts=ts,
+                        kind="soil_wet",
+                        value=reading.humidity,
+                        message=_rule_message(soil_wet_rule, f"Tuproq haddan ziyod nam: {reading.humidity:.1f}%"),
+                    ),
+                    soil_wet_rule,
+                )
 
     to_broadcast = []
     alert_repo = AlertRepository(session)

@@ -235,6 +235,7 @@ class Reading(Base):
     temperature_c: Mapped[float | None] = mapped_column(Float)
     leak_detected: Mapped[bool | None] = mapped_column(Boolean)
     valve_open: Mapped[bool | None] = mapped_column(Boolean)
+    humidity: Mapped[float | None] = mapped_column(Float)
     raw_payload: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[int | None] = mapped_column(Integer)
 

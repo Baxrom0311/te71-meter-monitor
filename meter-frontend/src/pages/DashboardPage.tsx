@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame } from 'lucide-react'
+import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame, Sprout } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { KPICard } from '@/components/KPICard'
 import { useSummary, useDevices, useAlerts, useBuildings } from '@/hooks/queries'
@@ -18,6 +18,7 @@ const utilityOverview = [
   { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
   { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
   { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  { key: 'soil', label: 'Tuproq', icon: Sprout, accent: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
 ] as const
 
 export default function DashboardPage() {

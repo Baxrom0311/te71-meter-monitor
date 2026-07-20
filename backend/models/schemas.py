@@ -8,6 +8,7 @@ class UtilityType(StrEnum):
     electricity = "electricity"
     water = "water"
     gas = "gas"
+    soil = "soil"
 
 
 class MeasurementRole(StrEnum):
@@ -18,18 +19,21 @@ class MeasurementRole(StrEnum):
     water_flow = "water_flow"
     gas_flow = "gas_flow"
     gas_leak = "gas_leak"
+    soil_moisture = "soil_moisture"
 
 
 class DeviceRole(StrEnum):
     electricity_node = "electricity_node"
     water_node = "water_node"
     gas_node = "gas_node"
+    soil_node = "soil_node"
 
 
 class FirmwareMode(StrEnum):
     electricity = "electricity"
     water = "water"
     gas = "gas"
+    soil = "soil"
     auto = "auto"
 
 
@@ -932,6 +936,8 @@ class MeterReading(BaseModel):
     temperature_c: Optional[float] = None
     leak_detected: Optional[bool] = None
     valve_open: Optional[bool] = None
+
+    humidity: Optional[float] = None
 
 
 class MeterReadingBatch(BaseModel):

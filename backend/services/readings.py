@@ -43,6 +43,7 @@ def _validate_reading(body: MeterReading) -> None:
     for name in ("flow_rate", "volume_m3"):
         _validate_range(name, getattr(body, name), 0, None)
     _validate_range("temperature_c", body.temperature_c, settings.min_temperature_c, settings.max_temperature_c)
+    _validate_range("humidity", body.humidity, 0, 100)
 
 
 async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: int, test_mode: bool = False) -> list[dict]:
@@ -133,6 +134,7 @@ async def _save_reading_internal(session: AsyncSession, body: MeterReading, ts: 
         temperature_c=body.temperature_c,
         leak_detected=body.leak_detected,
         valve_open=body.valve_open,
+        humidity=body.humidity,
         raw_payload=json.dumps(body.model_dump(), ensure_ascii=False, default=str),
         created_at=ts,
     )

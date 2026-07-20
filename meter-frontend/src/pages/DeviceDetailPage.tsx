@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X, Trash2, Sprout } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDeviceById, useDeviceLatest, useDeviceHistory, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
@@ -58,7 +58,7 @@ export default function DeviceDetailPage() {
     setMsg(null)
     try {
       await apiClient.post(`/api/devices/${id}/reboot`)
-      notifySuccess('Reboot buyrug‘i yuborildi')
+      notifySuccess("Reboot buyrug'i yuborildi")
     } catch (err: any) {
       console.error(err)
       setMsg(getApiErrorMessage(err))
@@ -72,7 +72,7 @@ export default function DeviceDetailPage() {
     setMsg(null)
     try {
       await apiClient.post(`/api/devices/${id}/relay`, { action })
-      notifySuccess(`Releni ${action === 'on' ? 'yoqish' : 'o‘chirish'} buyrug‘i yuborildi`)
+      notifySuccess(`Releni ${action === 'on' ? 'yoqish' : "o'chirish"} buyrug'i yuborildi`)
     } catch (err: any) {
       console.error(err)
       setMsg(getApiErrorMessage(err))
@@ -113,7 +113,7 @@ export default function DeviceDetailPage() {
       await apiClient.delete(`/api/devices/${id}`)
       queryClient.invalidateQueries({ queryKey: qk.devices() })
       queryClient.invalidateQueries({ queryKey: qk.summary() })
-      notifySuccess('Qurilma o'chirildi')
+      notifySuccess("Qurilma o'chirildi")
       navigate(-1)
     } catch (err: any) {
       console.error(err)
@@ -180,14 +180,17 @@ export default function DeviceDetailPage() {
         pressureTop: r.pressure_top_bar ?? 0,
         flow: r.flow_rate ?? 0,
         volume: r.volume_m3 ?? 0,
+        humidity: r.humidity ?? 0,
       }))
   }, [chartHistoryData])
 
-  const chartMeta = device?.utility_type === 'water'
-    ? { title: 'Suv ko‘rsatkichlari grafigi', subtitle: 'Oxirgi 24 soatdagi bosim va oqim o‘zgarishi' }
-    : device?.utility_type === 'gas'
-      ? { title: 'Gaz ko‘rsatkichlari grafigi', subtitle: 'Oxirgi 24 soatdagi bosim va oqim o‘zgarishi' }
-      : { title: 'Elektr quvvati grafigi', subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
+  const chartMeta = device?.utility_type === "water"
+    ? { title: "Suv ko'rsatkichlari grafigi", subtitle: "Oxirgi 24 soatdagi bosim va oqim o'zgarishi" }
+    : device?.utility_type === "gas"
+      ? { title: "Gaz ko'rsatkichlari grafigi", subtitle: "Oxirgi 24 soatdagi bosim va oqim o'zgarishi" }
+      : device?.utility_type === "soil"
+        ? { title: "Tuproq namligi grafigi", subtitle: "Oxirgi 24 soatdagi namlik o'zgarishi" }
+        : { title: "Elektr quvvati grafigi", subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
 
   if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
 
@@ -212,7 +215,7 @@ export default function DeviceDetailPage() {
 
         {/* Device Details */}
         {isLoading ? (
-          <LoadingBlock title="Qurilma yuklanmoqda..." message="Qurilma holati va so‘nggi telemetriya olinmoqda." />
+          <LoadingBlock title="Qurilma yuklanmoqda..." message="Qurilma holati va so'nggi telemetriya olinmoqda." />
         ) : isError ? (
           <ErrorBlock
             title="Qurilma maʼlumotlari olinmadi"
@@ -229,7 +232,7 @@ export default function DeviceDetailPage() {
                     <span>Qayta biriktirish talab etiladi</span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300">
-                    Qurilmaga yangi hisoblagich (serial: <span className="font-mono font-bold text-orange-500">{device.meter_serial}</span>) ulanganligi sababli, uning avvalgi bino va o‘lchov nuqtasi bog‘lanishi bekor qilingan. Qurilmani yangi bino va nuqtaga qayta biriktiring.
+                    Qurilmaga yangi hisoblagich (serial: <span className="font-mono font-bold text-orange-500">{device.meter_serial}</span>) ulanganligi sababli, uning avvalgi bino va o'lchov nuqtasi bog'lanishi bekor qilingan. Qurilmani yangi bino va nuqtaga qayta biriktiring.
                   </p>
                 </div>
                 {isAdmin && (
@@ -399,6 +402,8 @@ export default function DeviceDetailPage() {
                   <Droplets className="w-5 h-5 text-cyan-500" />
                 ) : device.utility_type === 'gas' ? (
                   <Flame className="w-5 h-5 text-orange-500" />
+                ) : device.utility_type === 'soil' ? (
+                  <Sprout className="w-5 h-5 text-green-500" />
                 ) : (
                   <Zap className="w-5 h-5 text-yellow-500" />
                 )}
@@ -490,6 +495,15 @@ export default function DeviceDetailPage() {
                       <span className="text-2xl font-extrabold text-purple-650 dark:text-purple-400 mt-2 font-mono">{latestReading.temperature_c} <span className="text-sm font-normal text-gray-500">C</span></span>
                     </div>
                   )}
+                  {latestReading.humidity !== undefined && latestReading.humidity !== null && (
+                    <div className="glass-card border border-green-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Sprout className="w-3.5 h-3.5 text-green-500" />
+                        Namlik
+                      </span>
+                      <span className="text-2xl font-extrabold text-green-650 dark:text-green-400 mt-2 font-mono">{latestReading.humidity.toFixed(1)} <span className="text-sm font-normal text-gray-500">%</span></span>
+                    </div>
+                  )}
                   {latestReading.leak_detected !== undefined && latestReading.leak_detected !== null && (
                     <div className={`glass-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm ${latestReading.leak_detected ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/20 bg-green-500/5'}`}>
                       <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
@@ -497,15 +511,15 @@ export default function DeviceDetailPage() {
                         Leak
                       </span>
                       <span className={`text-2xl font-extrabold mt-2 ${latestReading.leak_detected ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                        {latestReading.leak_detected ? 'Aniqlandi' : 'Yo‘q'}
+                        {latestReading.leak_detected ? 'Aniqlandi' : "Yo'q"}
                       </span>
                     </div>
                   )}
                 </div>
               ) : (
                 <EmptyBlock
-                  title="Ko‘rsatkich kelmagan"
-                  message="Qurilmadan hali hech qanday ko‘rsatkich kelib tushmagan."
+                  title="Ko'rsatkich kelmagan"
+                  message="Qurilmadan hali hech qanday ko'rsatkich kelib tushmagan."
                 />
               )}
             </div>
@@ -539,6 +553,10 @@ export default function DeviceDetailPage() {
                           <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.2} />
                           <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
                         </linearGradient>
+                        <linearGradient id="chartGradGreen" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#22C55E" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
                       <XAxis dataKey="timestamp" stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} />
@@ -570,6 +588,9 @@ export default function DeviceDetailPage() {
                             <Area type="monotone" dataKey="flow" name="Gaz oqimi (m³/h)" stroke="#F59E0B" fillOpacity={1} fill="url(#chartGradOrange)" strokeWidth={2} dot={false} />
                           )}
                         </>
+                      )}
+                      {device?.utility_type === 'soil' && (
+                        <Area type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" fillOpacity={1} fill="url(#chartGradGreen)" strokeWidth={3} dot={false} />
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
@@ -603,6 +624,10 @@ export default function DeviceDetailPage() {
                             <th className="px-6 py-4 font-semibold">Oqim (L/min)</th>
                             <th className="px-6 py-4 font-semibold">Jami hajm (m³)</th>
                           </>
+                        ) : device?.utility_type === 'soil' ? (
+                          <>
+                            <th className="px-6 py-4 font-semibold">Namlik (%)</th>
+                          </>
                         ) : (
                           <>
                             <th className="px-6 py-4 font-semibold">Bosim (bar)</th>
@@ -630,6 +655,10 @@ export default function DeviceDetailPage() {
                               <td className="px-6 py-3.5 font-mono text-purple-600 dark:text-purple-400 font-bold">{r.pressure_top_bar ?? '—'}</td>
                               <td className="px-6 py-3.5 font-mono text-blue-600 dark:text-blue-400 font-bold">{r.flow_rate ?? '—'}</td>
                               <td className="px-6 py-3.5 font-mono text-pink-650 dark:text-pink-400 font-bold">{r.volume_m3 ?? '—'}</td>
+                            </>
+                          ) : device?.utility_type === 'soil' ? (
+                            <>
+                              <td className="px-6 py-3.5 font-mono text-green-600 dark:text-green-400 font-bold">{r.humidity !== null && r.humidity !== undefined ? r.humidity.toFixed(1) + '%' : '—'}</td>
                             </>
                           ) : (
                             <>
@@ -694,6 +723,7 @@ export default function DeviceDetailPage() {
                   <option value="electricity">Elektr</option>
                   <option value="water">Suv</option>
                   <option value="gas">Gaz</option>
+                  <option value="soil">Tuproq namligi</option>
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-2">
@@ -714,25 +744,25 @@ export default function DeviceDetailPage() {
       <ConfirmDialog
         open={pendingCommand !== null}
         title={
-          pendingCommand?.type === ‘reboot’
-            ? ‘Qurilmani reboot qilish’
-            : pendingCommand?.type === ‘relay’
-              ? `Releni ${pendingCommand.action === ‘on’ ? ‘yoqish’ : ‘o’chirish’}`
-              : pendingCommand?.type === ‘delete’
-                ? ‘Qurilmani butunlay o’chirish’
-                : ‘Qurilma statusini o’zgartirish’
+          pendingCommand?.type === "reboot"
+            ? "Qurilmani reboot qilish"
+            : pendingCommand?.type === "relay"
+              ? `Releni ${pendingCommand.action === "on" ? "yoqish" : "o'chirish"}`
+              : pendingCommand?.type === "delete"
+                ? "Qurilmani butunlay o'chirish"
+                : "Qurilma statusini o'zgartirish"
         }
         message={
-          pendingCommand?.type === ‘reboot’
-            ? ‘Bu buyruq ESP32 qurilmasini qayta yuklaydi. Amalni davom ettirasizmi?’
-            : pendingCommand?.type === ‘relay’
-              ? ‘Bu buyruq qurilma relesiga darhol yuboriladi. Amalni tasdiqlang.’
-              : pendingCommand?.type === ‘delete’
-                ? ‘Qurilma va uning barcha o’lchov ma’lumotlari bazadan butunlay o’chiriladi. Bu amalni qaytarib bo’lmaydi!’
-                : ‘Qurilmaning faol/faol emas holati o’zgartiriladi.’
+          pendingCommand?.type === "reboot"
+            ? "Bu buyruq ESP32 qurilmasini qayta yuklaydi. Amalni davom ettirasizmi?"
+            : pendingCommand?.type === "relay"
+              ? "Bu buyruq qurilma relesiga darhol yuboriladi. Amalni tasdiqlang."
+              : pendingCommand?.type === "delete"
+                ? "Qurilma va uning barcha o'lchov ma'lumotlari bazadan butunlay o'chiriladi. Bu amalni qaytarib bo'lmaydi!"
+                : "Qurilmaning faol/faol emas holati o'zgartiriladi."
         }
-        confirmLabel={pendingCommand?.type === ‘delete’ ? ‘Ha, o’chirib yuborish’ : ‘Buyruq yuborish’}
-        tone={pendingCommand?.type === ‘delete’ || (pendingCommand?.type === ‘relay’ && pendingCommand.action === ‘off’) ? ‘danger’ : ‘default’}
+        confirmLabel={pendingCommand?.type === "delete" ? "Ha, o'chirib yuborish" : "Buyruq yuborish"}
+        tone={pendingCommand?.type === "delete" || (pendingCommand?.type === "relay" && pendingCommand.action === "off") ? "danger" : "default"}
         pending={loadingAction !== null}
         onConfirm={executePendingCommand}
         onCancel={() => setPendingCommand(null)}

@@ -162,9 +162,11 @@ static void wifi_quick(const char* ssid, const char* pass) {
     while (WiFi.status() != WL_CONNECTED && millis() - t < 6000) delay(300);
     if (WiFi.status() == WL_CONNECTED) return;
     // Saqlangan WiFi ishlamasa, default ga urinish
+    // disconnect(true) — "sta is connecting" xatosidan himoya
+    WiFi.disconnect(true); delay(300);
     WiFi.begin(ssid, pass);
     t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) delay(300);
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 10000) delay(300);
 }
 
 // WiFi radio to'xtatish (RS-485 RF interferensiyasidan himoya)
@@ -453,7 +455,7 @@ static void app_poll_commands(const char* device_id, int* pending_relay) {
     String resp = http_get(path);
     if (resp.isEmpty()) return;
 
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<1024> doc;
     if (deserializeJson(doc, resp)) return;
 
     for (JsonObject cmd : doc["commands"].as<JsonArray>()) {
@@ -470,13 +472,13 @@ static void app_poll_commands(const char* device_id, int* pending_relay) {
             delay(200);
             ESP.restart();
         } else if (strcmp(action, "relay_on") == 0) {
-            *pending_relay = 2;   // Keyingi DLMS session da bajariladi
+            if (pending_relay) *pending_relay = 2;   // Keyingi DLMS session da bajariladi
             http_post(ack, "{}");
-            LOG_PRINTLN("Cmd: relay_on navbatga olindi");
+            LOG_PRINTLN(pending_relay ? "Cmd: relay_on navbatga olindi" : "Cmd: relay_on — bu sensor uchun relay yo'q");
         } else if (strcmp(action, "relay_off") == 0) {
-            *pending_relay = 1;
+            if (pending_relay) *pending_relay = 1;
             http_post(ack, "{}");
-            LOG_PRINTLN("Cmd: relay_off navbatga olindi");
+            LOG_PRINTLN(pending_relay ? "Cmd: relay_off navbatga olindi" : "Cmd: relay_off — bu sensor uchun relay yo'q");
         } else if (strcmp(action, "set_volume") == 0) {
             float val = cmd["params"]["volume"].as<float>();
             sensor_set_volume(val);

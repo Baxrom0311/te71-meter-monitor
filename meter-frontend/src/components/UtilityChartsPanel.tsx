@@ -30,7 +30,7 @@ const utilityCards = [
   {
     key: 'electricity' as const,
     title: 'Elektr sarfi',
-    subtitle: 'Barcha binolar quvvati yig‘indisi',
+    subtitle: "Barcha binolar quvvati yig'indisi",
     unit: 'W / kWh',
     icon: Zap,
     color: '#EAB308',
@@ -39,7 +39,7 @@ const utilityCards = [
   {
     key: 'water' as const,
     title: 'Suv bosimi',
-    subtitle: 'Bosim o‘rtachasi va flow yig‘indisi',
+    subtitle: "Bosim o'rtachasi va flow yig'indisi",
     unit: 'bar / flow',
     icon: Droplets,
     color: '#06B6D4',
@@ -48,7 +48,7 @@ const utilityCards = [
   {
     key: 'gas' as const,
     title: 'Gaz bosimi',
-    subtitle: 'Bosim o‘rtachasi va flow yig‘indisi',
+    subtitle: "Bosim o'rtachasi va flow yig'indisi",
     unit: 'bar / flow',
     icon: Flame,
     color: '#F97316',
@@ -121,7 +121,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
     }))
 }
 
-export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = 'Elektr, suv va gaz bo‘yicha oxirgi 24 soat' }: UtilityChartsPanelProps) {
+export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = "Elektr, suv va gaz bo'yicha oxirgi 24 soat" }: UtilityChartsPanelProps) {
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
   const { data, isLoading, isError } = useHourlyStats(24, buildingId)
@@ -220,7 +220,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
               {(!hasData || isError) && (
                 <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
                   <span className="rounded-full border border-gray-300/70 bg-white/80 px-3 py-1 text-[11px] font-bold text-gray-500 shadow-sm backdrop-blur dark:border-gray-800 dark:bg-gray-950/75 dark:text-gray-400">
-                    {isError ? 'Statistika olinmadi' : 'O‘lchov kelganda grafik to‘ladi'}
+                    {isError ? 'Statistika olinmadi' : "O'lchov kelganda grafik to'ladi"}
                   </span>
                 </div>
               )}

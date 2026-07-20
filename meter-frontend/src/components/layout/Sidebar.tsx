@@ -348,7 +348,7 @@ export function Sidebar({ desktopMode, onDesktopModeChange }: NavigationProps) {
               </p>
               <p className={clsx('text-xs truncate flex items-center gap-1.5', isDark ? 'text-gray-400' : 'text-gray-500')}>
                 {user?.role === 'admin' && <ShieldCheck className="w-3 h-3 text-blue-500" />}
-                {user?.role === 'admin' ? translations.users.admin : user?.role === 'viewer' ? 'Ko\'rgazma' : translations.users.user}
+                {user?.role === 'admin' ? translations.users.admin : user?.role === 'viewer' ? "Ko\'rgazma" : translations.users.user}
               </p>
             </div>
             )}
