@@ -35,10 +35,10 @@ async def display_kpi():
                 break
         return result
 
-    elec  = await analytics_service.list_hourly_stats("electricity", hours=2, limit=10)
-    water = await analytics_service.list_hourly_stats("water",       hours=2, limit=10)
-    gas   = await analytics_service.list_hourly_stats("gas",         hours=2, limit=10)
-    soil  = await analytics_service.list_hourly_stats("soil",        hours=2, limit=10)
+    elec  = await analytics_service.list_hourly_stats(utility_type="electricity", hours=2, limit=10)
+    water = await analytics_service.list_hourly_stats(utility_type="water",       hours=2, limit=10)
+    gas   = await analytics_service.list_hourly_stats(utility_type="gas",         hours=2, limit=10)
+    soil  = await analytics_service.list_hourly_stats(utility_type="soil",        hours=2, limit=10)
 
     e = _latest(elec["stats"])
     w = _latest(water["stats"])
@@ -60,6 +60,6 @@ async def display_kpi():
             "flow_rate":    g.get("avg_flow_rate"),
         },
         "soil": {
-            "humidity": s.get("avg_pressure_bar"),  # soil uchun humidity alohida saqlanadi
+            "humidity": s.get("avg_humidity"),
         },
     }

@@ -65,7 +65,15 @@ export interface Device {
   needs_rebind: boolean
   is_test_device: boolean
   auto_cleanup_at: number | null
+  serial_number: string | null
+  hardware_version: string | null
   software_version: string | null
+  build_number: string | null
+  token_created_at: number | null
+  token_revoked_at: number | null
+  token_revoked_by_user_id: number | null
+  token_revoked_by_username: string | null
+  baud_rate: number | null
   chip_model: string | null
   rssi: number | null
   ip: string | null
@@ -77,15 +85,19 @@ export interface Device {
   is_active: boolean
   last_seen: number | null  // Unix timestamp seconds
   registered: number | null
-  created_at: number
-  updated_at: number
-  online: boolean
+  created_at: number | null
+  updated_at: number | null
+  online: boolean | null
 }
 
 // Reading
 export interface Reading {
   id: number
   device_id: string
+  reading_id: string | null
+  sequence_no: number | null
+  building_id: number | null
+  point_id: number | null
   ts: number
   utility_type: string
   sensor_type: string | null
@@ -97,9 +109,15 @@ export interface Reading {
   current_l2: number | null
   current_l3: number | null
   power_w: number | null
+  power_var: number | null
   frequency: number | null
   pf: number | null
   energy_kwh: number | null
+  energy_t1: number | null
+  energy_t2: number | null
+  energy_t3: number | null
+  energy_t4: number | null
+  relay_on: boolean | null
   pressure_bar: number | null
   pressure_bottom_bar: number | null
   pressure_top_bar: number | null
@@ -107,7 +125,10 @@ export interface Reading {
   volume_m3: number | null
   temperature_c: number | null
   leak_detected: boolean | null
+  valve_open: boolean | null
   humidity: number | null
+  raw_payload: string | null
+  created_at: number | null
 }
 
 export interface DeviceHistoryResponse {
@@ -211,6 +232,7 @@ export interface HourlyUtilityStat {
   avg_flow_rate: number | null
   max_volume_m3: number | null
   leak_count: number | null
+  avg_humidity: number | null
   created_at: number | null
   updated_at: number | null
 }

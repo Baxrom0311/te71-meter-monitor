@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle, Zap, Droplets, Flame } from 'lucide-react'
+import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle, Zap, Droplets, Flame, Sprout } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDevicesList, useBuildings, qk } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -21,9 +21,10 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 const DEFAULT_PAGE_SIZE = 20
 
 const UTILITY_TABS = [
-  { key: 'electricity', label: 'Elektr', icon: Zap,      accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-  { key: 'water',       label: 'Suv',    icon: Droplets,  accent: 'text-cyan-500',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20'   },
-  { key: 'gas',         label: 'Gaz',    icon: Flame,     accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  { key: 'electricity', label: 'Elektr',   icon: Zap,     accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  { key: 'water',       label: 'Suv',      icon: Droplets, accent: 'text-cyan-500',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20'   },
+  { key: 'gas',         label: 'Gaz',      icon: Flame,    accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  { key: 'soil',        label: "Yerto'la", icon: Sprout,   accent: 'text-green-500',  bg: 'bg-green-500/10',  border: 'border-green-500/20'  },
 ] as const
 
 const deviceTableColumns: TableColumn[] = [
@@ -71,7 +72,7 @@ export default function DevicesPage() {
   // Read utility filter from URL (e.g. /devices?utility=water)
   useEffect(() => {
     const utility = new URLSearchParams(location.search).get('utility')
-    if (utility === 'electricity' || utility === 'water' || utility === 'gas') {
+    if (utility === 'electricity' || utility === 'water' || utility === 'gas' || utility === 'soil') {
       setTypeFilter(utility)
     }
   }, [location.search])
@@ -374,6 +375,7 @@ export default function DevicesPage() {
                             device.utility_type === 'electricity' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
                             device.utility_type === 'water'       && 'bg-cyan-500/10   text-cyan-600   dark:text-cyan-400   border-cyan-500/20',
                             device.utility_type === 'gas'         && 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+                            device.utility_type === 'soil'        && 'bg-green-500/10  text-green-600  dark:text-green-400  border-green-500/20',
                           )}>
                             {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
                           </span>
@@ -571,6 +573,7 @@ export default function DevicesPage() {
                       <option value="electricity">Elektr</option>
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
+                      <option value="soil">Yerto'la namligi</option>
                     </select>
                   </div>
                   <div>

@@ -17,6 +17,37 @@
 #include <ArduinoJson.h>
 #include "mbedtls/gcm.h"
 
+// ─── LCD 16x2 I2C (LoRa nodeda yo'q) ─────────────────────────────────────────
+#ifndef LORA_NODE
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+#define ELEC_LCD_COLS  16
+#define ELEC_LCD_ROWS   2
+#define ELEC_LCD_SDA   21   // GPIO21
+#define ELEC_LCD_SCL   22   // GPIO22
+
+// Pointer — init da auto-detect qilingan manzil bilan yaratiladi (0x27 yoki 0x3F)
+static LiquidCrystal_I2C* g_elec_lcd = nullptr;
+static bool g_elec_lcd_ok = false;
+
+static void elec_lcd_row(uint8_t row, const char* text) {
+    if (!g_elec_lcd_ok || !g_elec_lcd) return;
+    char buf[ELEC_LCD_COLS + 1];
+    snprintf(buf, sizeof(buf), "%-*s", ELEC_LCD_COLS, text);
+    g_elec_lcd->setCursor(0, row);
+    g_elec_lcd->print(buf);
+}
+
+// 2-qator: holat satri (WiFi + server)
+static void lcd_show_status(const char* line2) {
+    elec_lcd_row(1, line2);
+}
+#else
+// LoRa Node: LCD yo'q — bo'sh stub
+static void lcd_show_status(const char*) {}
+#endif  // !LORA_NODE
+
 // ─── RS-485 pinlar ────────────────────────────────────────────────────────────
 #define PIN_RX   16
 #define PIN_TX   17
@@ -58,6 +89,22 @@ struct SensorData {
     int   meter_baud;        // Ulanish baud rate
     bool  valid;             // O'qish muvaffaqiyatlimi
 };
+
+// ─── LCD: 1-qator — tok ma'lumotlari (SensorData keyin) ──────────────────────
+#ifndef LORA_NODE
+// "220V 1.2A 1234W"
+static void lcd_show_electricity(const SensorData& d) {
+    if (!g_elec_lcd_ok || !d.valid) return;
+    char row0[ELEC_LCD_COLS + 1];
+    float v = isnan(d.voltage_l1) ? 0.0f : d.voltage_l1;
+    float i = isnan(d.current_l1) ? 0.0f : d.current_l1;
+    float p = isnan(d.power_w)    ? 0.0f : d.power_w;
+    snprintf(row0, sizeof(row0), "%.0fV %.1fA %.0fW", v, i, p);
+    elec_lcd_row(0, row0);
+}
+#else
+static void lcd_show_electricity(const SensorData&) {}
+#endif
 
 // ─── DLMS ichki holat ─────────────────────────────────────────────────────────
 static bool    dlms_connected  = false;
@@ -521,6 +568,33 @@ static void sensor_init() {
     g_sensor_meta.meter_baud    = 9600;
     g_sensor_meta.meter_serial[0] = '\0';
     g_sensor_meta.sensor_type[0]  = '\0';
+
+#ifndef LORA_NODE
+    // LCD 16x2 I2C: I2C shinasini skan qilib manzilni auto-detect
+    Wire.begin(ELEC_LCD_SDA, ELEC_LCD_SCL);
+    delay(50);
+    uint8_t lcd_addr = 0;
+    for (uint8_t a : {0x27u, 0x3Fu, 0x20u, 0x38u}) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) { lcd_addr = a; break; }
+        delay(5);
+    }
+    LOG_PRINTF("LCD I2C scan: %s (0x%02X)\n",
+               lcd_addr ? "topildi" : "topilmadi", lcd_addr);
+    if (lcd_addr) {
+        g_elec_lcd = new LiquidCrystal_I2C(lcd_addr, ELEC_LCD_COLS, ELEC_LCD_ROWS);
+        g_elec_lcd->init();
+        delay(20);
+        g_elec_lcd->backlight();
+        g_elec_lcd->clear();
+        g_elec_lcd_ok = true;
+        elec_lcd_row(0, "Meter Monitor");
+        bool _wok = (WiFi.status() == WL_CONNECTED);
+        char _s2[ELEC_LCD_COLS + 1];
+        snprintf(_s2, sizeof(_s2), "W:%-2s S:-- L:--", _wok ? "OK" : "--");
+        elec_lcd_row(1, _s2);
+    }
+#endif
 }
 
 // Metrga ulanish: Reader(HLS5) → Public
@@ -595,6 +669,9 @@ static bool sensor_read(SensorData& d) {
         d.energy_kwh = sim_energy;
         d.pf = 0.98f;
         d.valid = true;
+#ifndef LORA_NODE
+        lcd_show_electricity(d);
+#endif
         return true;
     }
 
@@ -624,6 +701,9 @@ static bool sensor_read(SensorData& d) {
     if (!isnan(d.pf))         d.pf         /= 1000.0f;
 
     d.valid = (!isnan(d.voltage_l1) || !isnan(d.power_w));
+#ifndef LORA_NODE
+    if (d.valid) lcd_show_electricity(d);
+#endif
     return d.valid;
 }
 

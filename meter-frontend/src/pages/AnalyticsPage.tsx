@@ -19,7 +19,7 @@ export default function AnalyticsPage() {
 
   // Filters State
   const [buildingId, setBuildingId] = useState<string>('')
-  const [utilityType, setUtilityType] = useState<'all' | 'electricity' | 'water' | 'gas'>('all')
+  const [utilityType, setUtilityType] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil'>('all')
   const [granularity, setGranularity] = useState<'hour' | 'day' | 'month'>('day')
   const [dateRange, setDateRange] = useState<string>('7d')
 
@@ -89,6 +89,7 @@ export default function AnalyticsPage() {
       pressureTop: number
       flow: number
       volume: number
+      humidity: number
       samples: number
     }>()
 
@@ -102,6 +103,7 @@ export default function AnalyticsPage() {
         pressureTop: 0,
         flow: 0,
         volume: 0,
+        humidity: 0,
         samples: 0,
       }
       const samples = Math.max(row.samples || 1, 1)
@@ -111,6 +113,7 @@ export default function AnalyticsPage() {
       current.pressureTop += (row.avg_pressure_top_bar ?? 0) * samples
       current.flow += (row.avg_flow_rate ?? 0) * samples
       current.volume = Math.max(current.volume, row.max_volume_m3 ?? 0)
+      current.humidity += (row.avg_humidity ?? 0) * samples
       current.samples += samples
       buckets.set(row.bucket_ts, current)
     })
@@ -123,6 +126,7 @@ export default function AnalyticsPage() {
       pressureTop: row.samples ? Number((row.pressureTop / row.samples).toFixed(3)) : 0,
       flow: row.samples ? Number((row.flow / row.samples).toFixed(3)) : 0,
       volume: Number(row.volume.toFixed(3)),
+      humidity: row.samples ? Number((row.humidity / row.samples).toFixed(1)) : 0,
     }))
   }, [hourlyStats])
 
@@ -165,6 +169,14 @@ export default function AnalyticsPage() {
         row.volume.toFixed(3),
         row.samples
       ])
+    } else if (utilityType === 'soil') {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Namlik (%)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => [
+        row.bucket_ts,
+        `"${row.label}"`,
+        row.humidity.toFixed(1),
+        row.samples
+      ])
     } else {
       headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Quvvat (W)', 'Kuchlanish (V)', 'Suv pastki bosim (bar)', 'Suv yuqori bosim (bar)', 'Suv/Gaz oqimi', 'Jami hajm (m³)', 'O\'lchovlar soni']
       rows = hourlyChartData.map(row => [
@@ -202,7 +214,7 @@ export default function AnalyticsPage() {
     const buildingName = buildingId
       ? (buildings?.find(b => b.id.toString() === buildingId)?.name ?? buildingId)
       : 'Barcha binolar'
-    const utilLabel = utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : 'Gaz'
+    const utilLabel = utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : utilityType === 'gas' ? 'Gaz' : "Yerto'la"
 
     const wb = XLSX.utils.book_new()
 
@@ -234,6 +246,9 @@ export default function AnalyticsPage() {
       } else if (utilityType === 'water') {
         headers = ['Sana / Vaqt', 'Pastki bosim (bar)', 'Yuqori bosim (bar)', 'Oqim (L/min)', 'Jami hajm (m³)', "O'lchovlar soni"]
         dataRows = hourlyChartData.map(r => [r.label, r.pressure, r.pressureTop, r.flow, r.volume, r.samples])
+      } else if (utilityType === 'soil') {
+        headers = ['Sana / Vaqt', 'Namlik (%)', "O'lchovlar soni"]
+        dataRows = hourlyChartData.map(r => [r.label, r.humidity, r.samples])
       } else {
         headers = ['Sana / Vaqt', 'Bosim (bar)', 'Oqim (m³/h)', 'Jami hajm (m³)', "O'lchovlar soni"]
         dataRows = hourlyChartData.map(r => [r.label, r.pressure, r.flow, r.volume, r.samples])
@@ -289,6 +304,17 @@ export default function AnalyticsPage() {
         { label: "O'rtacha bosim", value: avgPressure.toFixed(3), unit: 'bar', color: 'text-red-400' },
         { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
       ]
+    } else if (utilityType === 'soil') {
+      if (hourlyChartData.length === 0) return null
+      const avgHum = hourlyChartData.reduce((s, r) => s + r.humidity, 0) / hourlyChartData.length
+      const maxHum = Math.max(...hourlyChartData.map(r => r.humidity))
+      const minHum = Math.min(...hourlyChartData.filter(r => r.humidity > 0).map(r => r.humidity))
+      return [
+        { label: "O'rtacha namlik", value: avgHum.toFixed(1), unit: '%', color: 'text-green-400' },
+        { label: 'Eng yuqori', value: maxHum.toFixed(1), unit: '%', color: 'text-blue-400' },
+        { label: 'Eng past', value: isFinite(minHum) ? minHum.toFixed(1) : '—', unit: '%', color: 'text-yellow-400' },
+        { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
+      ]
     }
     return null
   }, [formattedData, hourlyChartData, utilityType])
@@ -302,7 +328,7 @@ export default function AnalyticsPage() {
           <div className="text-sm text-gray-800 mt-2 flex justify-between">
             <span><strong>Bino:</strong> {buildingId ? buildings?.find(b => b.id.toString() === buildingId)?.name : 'Barcha binolar'}</span>
             <span><strong>Sana:</strong> {new Date().toLocaleDateString('uz-UZ')}</span>
-            <span><strong>Kommunal filtr:</strong> {utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : 'Gaz'}</span>
+            <span><strong>Kommunal filtr:</strong> {utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : utilityType === 'gas' ? 'Gaz' : "Yerto'la"}</span>
           </div>
         </div>
 
@@ -361,13 +387,14 @@ export default function AnalyticsPage() {
             <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Kommunal tur</label>
             <select
               value={utilityType}
-              onChange={(e) => setUtilityType(e.target.value as 'all' | 'electricity' | 'water' | 'gas')}
+              onChange={(e) => setUtilityType(e.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil')}
               className="w-full px-3 py-2 rounded-lg glass-input text-sm focus:outline-none"
             >
               <option value="all">Barchasi</option>
               <option value="electricity">Elektr</option>
               <option value="water">Suv</option>
               <option value="gas">Gaz</option>
+              <option value="soil">Yerto'la namligi</option>
             </select>
           </div>
 
@@ -482,7 +509,7 @@ export default function AnalyticsPage() {
                     <YAxis stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} width={48} />
                     <Tooltip
                       contentStyle={chart.tooltip}
-                      labelStyle={{ color: chart.label, fontSpread: '800' }}
+                      labelStyle={{ color: chart.label, fontWeight: 800 }}
                       cursor={chart.cursor}
                     />
                     <Legend wrapperStyle={{ color: chart.label, fontSize: 12 }} />
@@ -565,6 +592,9 @@ export default function AnalyticsPage() {
                           <Line type="monotone" dataKey="volume" name="Gaz hajmi (m³)" stroke="#10B981" strokeWidth={2.5} dot={false} />
                         </>
                       )}
+                      {(utilityType === 'all' || utilityType === 'soil') && (
+                        <Line type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" strokeWidth={2.5} dot={false} />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -577,7 +607,7 @@ export default function AnalyticsPage() {
             <div className="glass-card data-table-card rounded-xl overflow-hidden shadow-sm">
               <div className="p-5 border-b border-gray-300 dark:border-gray-800 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">Tahliliy hisobot jadvali</h3>
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Jami: {utilityType === 'water' || utilityType === 'gas' ? hourlyChartData.length : formattedData.length} ta yozuv</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Jami: {utilityType === 'water' || utilityType === 'gas' || utilityType === 'soil' ? hourlyChartData.length : formattedData.length} ta yozuv</span>
               </div>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm text-left">
@@ -622,6 +652,25 @@ export default function AnalyticsPage() {
                             <td className="px-6 py-3.5 text-right font-mono text-purple-600 dark:text-purple-400 font-bold">{row.pressureTop.toFixed(3)}</td>
                             <td className="px-6 py-3.5 text-right font-mono text-blue-600 dark:text-blue-400 font-bold">{row.flow.toFixed(3)}</td>
                             <td className="px-6 py-3.5 text-right font-mono text-pink-650 dark:text-pink-400 font-bold">{row.volume.toFixed(3)}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  ) : utilityType === 'soil' ? (
+                    <>
+                      <thead>
+                        <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
+                          <th className="px-6 py-4">Sana / Vaqt</th>
+                          <th className="px-6 py-4 text-right">Namlik (%)</th>
+                          <th className="px-6 py-4 text-right">O'lchovlar soni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
+                        {hourlyChartData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
+                            <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-green-600 dark:text-green-400 font-bold">{row.humidity.toFixed(1)}%</td>
                             <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
                           </tr>
                         ))}
@@ -691,6 +740,20 @@ export default function AnalyticsPage() {
                         <div className="mobile-data-row">
                           <span className="mobile-data-label">Hajm</span>
                           <span className="mobile-data-value font-mono">{row.volume.toFixed(3)} m³</span>
+                        </div>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Samples</span>
+                          <span className="mobile-data-value font-mono">{row.samples}</span>
+                        </div>
+                      </div>
+                    ))
+                  : utilityType === 'soil'
+                  ? hourlyChartData.map((row) => (
+                      <div key={row.bucket_ts} className="mobile-data-card">
+                        <p className="font-bold text-gray-950 dark:text-gray-100">{row.label}</p>
+                        <div className="mobile-data-row">
+                          <span className="mobile-data-label">Namlik</span>
+                          <span className="mobile-data-value font-mono text-green-500">{row.humidity.toFixed(1)}%</span>
                         </div>
                         <div className="mobile-data-row">
                           <span className="mobile-data-label">Samples</span>

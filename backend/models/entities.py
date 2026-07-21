@@ -267,6 +267,7 @@ class HourlyUtilityStats(Base):
     avg_flow_rate: Mapped[float | None] = mapped_column(Float)
     max_volume_m3: Mapped[float | None] = mapped_column(Float)
     leak_count: Mapped[int | None] = mapped_column(Integer)
+    avg_humidity: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[int | None] = mapped_column(Integer)
 

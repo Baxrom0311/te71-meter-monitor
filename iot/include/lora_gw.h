@@ -345,7 +345,16 @@ void loop() {
     if (gw_server_ok && WiFi.status() == WL_CONNECTED &&
         now - gw_last_stat_ms >= GW_STATUS_MS) {
         gw_last_stat_ms = now;
-        app_send_status(gw_id, FW_VERSION);
+        // firmware_mode=lora_gateway bilan yuborish (electricity ESP32 uchun L: indikatori)
+        StaticJsonDocument<192> _sd;
+        _sd["device_id"]        = gw_id;
+        _sd["software_version"] = FW_VERSION;
+        _sd["ip"]               = WiFi.localIP().toString();
+        _sd["rssi"]             = WiFi.RSSI();
+        _sd["online"]           = true;
+        _sd["firmware_mode"]    = "lora_gateway";
+        String _sb; serializeJson(_sd, _sb);
+        http_post("/api/device-status", _sb);
         ota_check(gw_id, FW_VERSION);
     }
 }

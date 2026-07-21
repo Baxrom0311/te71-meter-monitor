@@ -34,6 +34,7 @@ class FirmwareMode(StrEnum):
     water = "water"
     gas = "gas"
     soil = "soil"
+    lora_gateway = "lora_gateway"
     auto = "auto"
 
 
@@ -997,6 +998,7 @@ class ReadingResponse(BaseModel):
     temperature_c: Optional[float] = None
     leak_detected: Optional[bool] = None
     valve_open: Optional[bool] = None
+    humidity: Optional[float] = None
     raw_payload: Optional[str] = None
     created_at: Optional[int] = None
 
@@ -1056,6 +1058,7 @@ class HourlyUtilityStatResponse(BaseModel):
     avg_flow_rate: Optional[float] = None
     max_volume_m3: Optional[float] = None
     leak_count: Optional[int] = None
+    avg_humidity: Optional[float] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
 

@@ -117,6 +117,7 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                 func.avg(Reading.flow_rate).label("avg_flow_rate"),
                 func.max(Reading.volume_m3).label("max_volume_m3"),
                 func.sum(Reading.leak_detected.cast(Integer)).label("leak_count"),
+                func.avg(Reading.humidity).label("avg_humidity"),
             )
             .join(Device, Device.id == Reading.device_id)
             .where(and_(Reading.ts >= cutoff, Device.is_test_device.is_(False)))
@@ -144,6 +145,7 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                     avg_flow_rate=row["avg_flow_rate"],
                     max_volume_m3=row["max_volume_m3"],
                     leak_count=row["leak_count"],
+                    avg_humidity=row["avg_humidity"],
                     created_at=ts,
                     updated_at=ts,
                 )

@@ -177,6 +177,25 @@ static int           pending_relay      = 0;    // 0=yo'q, 1=relay_off, 2=relay_
 static int           meter_fail_count   = 0;    // Ketma-ket muvaffaqiyatsiz urinishlar
 static unsigned long meter_retry_ms     = 30000UL; // Joriy retry interval
 #define METER_RETRY_MAX_MS  300000UL            // Maksimal interval: 5 daqiqa
+
+static bool g_lora_ok = false;  // LoRa gateway online holati
+
+// LoRa gateway online holatini serverdan olish
+static void lora_check() {
+    String resp = http_get("/api/public/lora-status");
+    if (resp.isEmpty()) { g_lora_ok = false; return; }
+    StaticJsonDocument<64> doc;
+    if (deserializeJson(doc, resp)) { g_lora_ok = false; return; }
+    g_lora_ok = doc["online"] | false;
+}
+
+// LCD 2-qatorini yangilash: "W:OK S:OK L:OK"
+static void lcd_elec_status(bool wok, bool sok, bool lok) {
+    char s[17];
+    snprintf(s, sizeof(s), "W:%-2s S:%-2s L:%-2s",
+             wok ? "OK" : "--", sok ? "OK" : "--", lok ? "OK" : "--");
+    lcd_show_status(s);
+}
 #endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -283,6 +302,7 @@ void setup() {
     // ── Sensor sozlash ───────────────────────────────────────────────────────
 #ifdef SENSOR_ELECTRICITY
     // RS-485: WiFi radio o'chirib DLMS ulanish
+    // sensor_init() LCD init ham qiladi va WiFi holatini ko'rsatadi
     sensor_init();
     LOG_PRINTLN("WiFi → pause (RS-485 ulanish)");
     wifi_pause();
@@ -320,6 +340,11 @@ void setup() {
         registered = do_register();
         buf_flush();
     }
+#ifdef SENSOR_ELECTRICITY
+    // LCD 2-qator: WiFi + server + LoRa holati
+    if (server_ok) lora_check();
+    lcd_elec_status(WiFi.status() == WL_CONNECTED, server_ok, g_lora_ok);
+#endif
 
     // ── Serial monitor xulosa ───────────────────────────────────────────────
     LOG_PRINTLN();
@@ -451,6 +476,12 @@ void loop() {
             buf_push(json);
             LOG_PRINTF("WiFi yo'q → buffer: %d/%d\n", off_count, OFFLINE_BUF_SIZE);
         }
+
+#ifdef SENSOR_ELECTRICITY
+        // LCD 2-qatorni har o'qishdan keyin yangilash
+        if (server_ok) lora_check();
+        lcd_elec_status(wifi_ok, server_ok, g_lora_ok);
+#endif
 
         last_health_ms = millis();
     }

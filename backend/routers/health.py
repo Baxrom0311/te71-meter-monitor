@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
@@ -24,3 +26,20 @@ async def ready():
 @router.get("/metrics", response_class=PlainTextResponse)
 async def metrics():
     return PlainTextResponse(await monitoring.metrics_text(), media_type="text/plain; version=0.0.4")
+
+
+@router.get("/api/public/lora-status")
+async def lora_status():
+    """LoRa gateway online holati — auth talab qilmaydi (ESP32 uchun)."""
+    threshold = int(time.time()) - 300  # oxirgi 5 daqiqa
+    async with SessionLocal() as session:
+        row = await session.execute(
+            text(
+                "SELECT COUNT(*) FROM devices "
+                "WHERE firmware_mode = 'lora_gateway' "
+                "AND last_seen >= :t AND is_active = true"
+            ),
+            {"t": threshold},
+        )
+        count = row.scalar() or 0
+    return {"online": count > 0}

@@ -117,6 +117,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
       current.pressure += (row.avg_pressure_bottom_bar ?? row.avg_pressure_bar ?? 0) * samples
       current.pressureTop += (row.avg_pressure_top_bar ?? 0) * samples
       current.flow += row.avg_flow_rate ?? 0
+      current.humidity += (row.avg_humidity ?? 0) * samples
       current.pressureSamples += samples
       buckets.set(row.bucket_ts, current)
     })
@@ -130,7 +131,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
       pressure: row.pressureSamples ? Number((row.pressure / row.pressureSamples).toFixed(3)) : 0,
       pressureTop: row.pressureSamples ? Number((row.pressureTop / row.pressureSamples).toFixed(3)) : 0,
       flow: Number(row.flow.toFixed(3)),
-      humidity: Number(row.humidity.toFixed(1)),
+      humidity: row.pressureSamples ? Number((row.humidity / row.pressureSamples).toFixed(1)) : 0,
     }))
 }
 
