@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts'
-import { Zap, Droplets, Flame, RefreshCw } from 'lucide-react'
+import { Zap, Droplets, Flame, Sprout, RefreshCw } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/env'
 import type { HourlyUtilityStat } from '@/types/api'
 
@@ -10,6 +10,7 @@ interface DisplayData {
   electricity: HourlyUtilityStat[]
   water: HourlyUtilityStat[]
   gas: HourlyUtilityStat[]
+  soil: HourlyUtilityStat[]
 }
 
 interface ChartPoint {
@@ -84,6 +85,19 @@ const CHARTS = [
     gradient: ['rgba(251,146,60,0.28)', 'rgba(251,146,60,0)'],
     bg: 'from-orange-950/60 to-slate-950/80',
     border: 'border-orange-500/25',
+    nominal: null,
+  },
+  {
+    key: 'soil' as const,
+    dataKey: 'avg_humidity' as keyof HourlyUtilityStat,
+    label: "Yerto'la namligi",
+    unit: '%',
+    icon: Sprout,
+    color: '#22C55E',
+    glow: 'rgba(34,197,94,0.35)',
+    gradient: ['rgba(34,197,94,0.28)', 'rgba(34,197,94,0)'],
+    bg: 'from-green-950/60 to-slate-950/80',
+    border: 'border-green-500/25',
     nominal: null,
   },
 ]
@@ -192,8 +206,8 @@ export default function DisplayPage() {
         </div>
       </header>
 
-      {/* Charts — 3 teng qism */}
-      <div className="flex-1 grid grid-rows-3 gap-0 overflow-hidden">
+      {/* Charts — 4 teng qism */}
+      <div className="flex-1 grid grid-rows-4 gap-0 overflow-hidden">
         {charts.map((cfg) => {
           const Icon = cfg.icon
           const hasData = cfg.points.some((p) => p.value != null)

@@ -86,6 +86,18 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                 )
             )
         ).mappings().one()
+        soil = (
+            await self.session.execute(
+                select(
+                    func.count().label("samples"),
+                    rnd(func.avg(Reading.humidity), 1).label("avg_humidity"),
+                    rnd(func.min(Reading.humidity), 1).label("min_humidity"),
+                    rnd(func.max(Reading.humidity), 1).label("max_humidity"),
+                ).where(
+                    and_(Reading.building_id == building_id, Reading.utility_type == "soil", Reading.ts > cutoff)
+                )
+            )
+        ).mappings().one()
         active_alerts = await self.session.scalar(
             select(func.count()).select_from(Alert).where(
                 and_(Alert.building_id == building_id, Alert.cleared.is_(False), Alert.ts > cutoff)
@@ -96,6 +108,7 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             "electricity": dict(electricity),
             "water": dict(water),
             "gas": dict(gas),
+            "soil": dict(soil),
         }
 
     async def aggregate_hourly_rows(self, cutoff: int) -> list[dict]:

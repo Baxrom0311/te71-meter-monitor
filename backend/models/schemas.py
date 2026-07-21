@@ -1104,6 +1104,13 @@ class BuildingGasAnalyticsResponse(BaseModel):
     leak_count: Optional[int] = None
 
 
+class BuildingSoilAnalyticsResponse(BaseModel):
+    samples: int
+    avg_humidity: Optional[float] = None
+    min_humidity: Optional[float] = None
+    max_humidity: Optional[float] = None
+
+
 class BuildingAnalyticsResponse(BaseModel):
     building_id: int
     hours: int
@@ -1111,6 +1118,7 @@ class BuildingAnalyticsResponse(BaseModel):
     electricity: BuildingElectricityAnalyticsResponse
     water: BuildingWaterAnalyticsResponse
     gas: BuildingGasAnalyticsResponse
+    soil: BuildingSoilAnalyticsResponse
 
 
 class DeviceStatus(BaseModel):
