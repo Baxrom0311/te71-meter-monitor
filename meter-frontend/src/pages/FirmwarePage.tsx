@@ -735,6 +735,7 @@ export default function FirmwarePage() {
                       <option value="electricity">⚡ Elektr</option>
                       <option value="water">💧 Suv</option>
                       <option value="gas">🔥 Gaz</option>
+                      <option value="soil">🌱 Yerto'la</option>
                     </select>
                   </div>
                   <div>
@@ -844,6 +845,7 @@ export default function FirmwarePage() {
                       <option value="electricity">Elektr</option>
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
+                      <option value="soil">Yerto'la</option>
                     </select>
                   </div>
                   <div>
@@ -857,6 +859,9 @@ export default function FirmwarePage() {
                       <option value="electricity">Elektr</option>
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
+                      <option value="soil">Yerto'la</option>
+                      <option value="lora_gateway">LoRa Gateway</option>
+                      <option value="display">Display</option>
                     </select>
                   </div>
                   <div>
