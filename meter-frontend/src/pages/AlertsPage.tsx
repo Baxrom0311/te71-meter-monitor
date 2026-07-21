@@ -35,6 +35,10 @@ const alertRuleOptions = {
     { value: 'gas_pressure', label: 'Gaz bosimi normadan tashqari' },
     { value: 'gas_leak', label: 'Gaz sizishi' },
   ],
+  soil: [
+    { value: 'soil_dry', label: "Tuproq qurib qoldi" },
+    { value: 'soil_wet', label: "Tuproq haddan tashqari nam" },
+  ],
 } as const
 
 const alertHistoryColumns: TableColumn[] = [
@@ -70,7 +74,7 @@ export default function AlertsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [severityFilter, setSeverityFilter] = useState<'all' | 'info' | 'warning' | 'critical'>('all')
   const [alertStatusFilter, setAlertStatusFilter] = useState<'all' | 'open' | 'cleared'>('all')
-  const [ruleUtilityFilter, setRuleUtilityFilter] = useState<'all' | 'electricity' | 'water' | 'gas'>('all')
+  const [ruleUtilityFilter, setRuleUtilityFilter] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil'>('all')
   const [ruleStatusFilter, setRuleStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
   const [sortBy, setSortBy] = useState<'time' | 'severity' | 'kind'>('time')
   const [page, setPage] = useState(1)
@@ -390,13 +394,14 @@ export default function AlertsPage() {
               <>
                 <select
                   value={ruleUtilityFilter}
-                  onChange={(event) => setRuleUtilityFilter(event.target.value as 'all' | 'electricity' | 'water' | 'gas')}
+                  onChange={(event) => setRuleUtilityFilter(event.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil')}
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
                 >
                   <option value="all">Barcha datchiklar</option>
                   <option value="electricity">Elektr</option>
                   <option value="water">Suv</option>
                   <option value="gas">Gaz</option>
+                  <option value="soil">Yerto'la</option>
                 </select>
                 <select
                   value={ruleStatusFilter}
@@ -833,6 +838,7 @@ export default function AlertsPage() {
                       <option value="electricity">Elektr</option>
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
+                      <option value="soil">Yerto'la</option>
                     </select>
                   </div>
                 </div>
