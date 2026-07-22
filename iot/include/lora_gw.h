@@ -68,7 +68,7 @@ static NodeState* gw_get_node(const uint8_t mac[6]) {
 }
 
 // ─── Node ni backendga ro'yxatdan o'tkazish ──────────────────────────────────
-static void gw_register_node(NodeState* n, const LoRaUplink& pkt) {
+static void gw_register_electricity_node(NodeState* n, const LoRaUplink& pkt) {
     if (n->registered) return;
     bool is_te73 = (pkt.flags & 0x01) != 0;
     StaticJsonDocument<256> doc;
@@ -92,12 +92,38 @@ static void gw_register_node(NodeState* n, const LoRaUplink& pkt) {
     int code = http.POST(body);
     if (code == 200 || code == 201) {
         n->registered = true;
-        LOG_PRINTF("GW: node %s ro'yxatga olindi\n", n->device_id);
+        LOG_PRINTF("GW: node %s ro'yxatga olindi (electricity)\n", n->device_id);
     }
     http.end();
 }
 
-// ─── Uplink qabul → backend ──────────────────────────────────────────────────
+static void gw_register_soil_node(NodeState* n) {
+    if (n->registered) return;
+    StaticJsonDocument<256> doc;
+    doc["device_id"]        = n->device_id;
+    doc["utility_type"]     = "soil";
+    doc["sensor_type"]      = "capacitive_soil_moisture";
+    doc["software_version"] = FW_VERSION;
+    doc["chip_model"]       = "ESP32+LoRa-Node";
+    String body; serializeJson(doc, body);
+
+    HTTPClient http;
+    char url[220];
+    snprintf(url, sizeof(url), "%s/api/register", g_cfg.server_url);
+    if (!http_begin_url(http, url)) return;
+    http.addHeader("Content-Type", "application/json");
+    if (g_cfg.device_token[0])
+        http.addHeader("X-Device-Token", g_cfg.device_token);
+    http_prepare(http, 8000);
+    int code = http.POST(body);
+    if (code == 200 || code == 201) {
+        n->registered = true;
+        LOG_PRINTF("GW: node %s ro'yxatga olindi (soil)\n", n->device_id);
+    }
+    http.end();
+}
+
+// ─── Elektr uplink qabul → backend ───────────────────────────────────────────
 static void gw_handle_uplink(const LoRaUplink& pkt, int rssi) {
     NodeState* node = gw_get_node(pkt.mac);
     if (!node) return;
@@ -105,29 +131,23 @@ static void gw_handle_uplink(const LoRaUplink& pkt, int rssi) {
 
     bool is_te73 = (pkt.flags & 0x01) != 0;
 
-    // Fixed-point → float
-    float v_l1 = pkt.v_l1 / 100.0f;
-    float v_l2 = pkt.v_l2 / 100.0f;
-    float v_l3 = pkt.v_l3 / 100.0f;
-    float i_l1 = pkt.i_l1 / 1000.0f;
-    float i_l2 = pkt.i_l2 / 1000.0f;
-    float i_l3 = pkt.i_l3 / 1000.0f;
-    float freq  = pkt.freq_chz / 100.0f;
+    float v_l1   = pkt.v_l1    / 100.0f;
+    float v_l2   = pkt.v_l2    / 100.0f;
+    float v_l3   = pkt.v_l3    / 100.0f;
+    float i_l1   = pkt.i_l1   / 1000.0f;
+    float i_l2   = pkt.i_l2   / 1000.0f;
+    float i_l3   = pkt.i_l3   / 1000.0f;
+    float freq   = pkt.freq_chz / 100.0f;
     float energy = pkt.energy_wh / 1000.0f;
-    float pf     = pkt.pf_pct / 100.0f;
+    float pf     = pkt.pf_pct  / 100.0f;
 
     LOG_PRINTF("GW RX ← [%s] RSSI=%ddBm V=%.1fV P=%dW E=%.3fkWh\n",
                node->device_id, rssi, v_l1, (int)pkt.power_w, energy);
 
-    if (!gw_server_ok) {
-        LOG_PRINTLN("GW: server offline — ma'lumot yo'qoldi");
-        return;
-    }
+    if (!gw_server_ok) { LOG_PRINTLN("GW: server offline"); return; }
 
-    // Node ro'yxatdan o'tish (birinchi marta)
-    gw_register_node(node, pkt);
+    gw_register_electricity_node(node, pkt);
 
-    // Readings JSON
     StaticJsonDocument<512> doc;
     doc["device_id"]    = node->device_id;
     doc["utility_type"] = "electricity";
@@ -150,8 +170,33 @@ static void gw_handle_uplink(const LoRaUplink& pkt, int rssi) {
     if (pkt.pf_pct   != 0) doc["pf"]         = serialized(String(pf, 3));
 
     String body; serializeJson(doc, body);
-    bool ok = http_post("/api/readings", body);
-    LOG_PRINTF("GW: readings → %s\n", ok ? "OK" : "XATO");
+    LOG_PRINTF("GW: readings → %s\n", http_post("/api/readings", body) ? "OK" : "XATO");
+}
+
+// ─── Tuproq uplink qabul → backend ───────────────────────────────────────────
+static void gw_handle_soil_uplink(const LoRaSoilUplink& pkt, int rssi) {
+    NodeState* node = gw_get_node(pkt.mac);
+    if (!node) return;
+    node->last_seen = millis();
+
+    float humidity = pkt.humidity / 100.0f;
+    LOG_PRINTF("GW RX ← [%s] RSSI=%ddBm namlik=%.1f%%\n",
+               node->device_id, rssi, humidity);
+
+    if (!gw_server_ok) { LOG_PRINTLN("GW: server offline"); return; }
+
+    gw_register_soil_node(node);
+
+    StaticJsonDocument<256> doc;
+    doc["device_id"]    = node->device_id;
+    doc["utility_type"] = "soil";
+    doc["sensor_type"]  = "capacitive_soil_moisture";
+    doc["fw_version"]   = FW_VERSION;
+    doc["lora_rssi"]    = rssi;
+    doc["humidity"]     = serialized(String(humidity, 1));
+
+    String body; serializeJson(doc, body);
+    LOG_PRINTF("GW: readings → %s\n", http_post("/api/readings", body) ? "OK" : "XATO");
 }
 
 // ─── Backend command poll → pending_relay ────────────────────────────────────
@@ -275,7 +320,7 @@ void setup() {
     LOG_PRINT("LoRa SX1278 init...");
     if (!lora_init()) {
         LOG_PRINTLN(" XATO! Modul topilmadi.");
-        LOG_PRINTLN("  Ulanishni tekshiring: CS=5 RST=14 DIO0=2");
+        LOG_PRINTLN("  Ulanishni tekshiring: CS=15 RST=14 DIO0=2");
         while (true) delay(5000);
     }
     LoRa.receive();  // RX rejimida kutish
@@ -302,23 +347,33 @@ void loop() {
         int rssi = LoRa.packetRssi();
 
         if (pkt_size == (int)sizeof(LoRaUplink)) {
+            // ─ Elektr hisoblagich uplink ─
             LoRaUplink pkt;
             LoRa.readBytes((uint8_t*)&pkt, sizeof(pkt));
             if (pkt.pkt_type == PKT_UPLINK &&
                 lora_crc_ok((uint8_t*)&pkt, sizeof(pkt))) {
                 gw_handle_uplink(pkt, rssi);
-                // Darhol pending downlink bor bo'lsa yubor
                 gw_send_downlinks();
             } else {
-                LOG_PRINTF("GW: noto'g'ri paket (type=0x%02X, size=%d)\n",
-                           pkt.pkt_type, pkt_size);
+                LOG_PRINTF("GW: noto'g'ri elektr paket (type=0x%02X)\n", pkt.pkt_type);
             }
+
+        } else if (pkt_size == (int)sizeof(LoRaSoilUplink)) {
+            // ─ Tuproq namligi uplink ─
+            LoRaSoilUplink pkt;
+            LoRa.readBytes((uint8_t*)&pkt, sizeof(pkt));
+            if (pkt.pkt_type == PKT_UPLINK_SOIL &&
+                lora_crc_ok((uint8_t*)&pkt, sizeof(pkt))) {
+                gw_handle_soil_uplink(pkt, rssi);
+            } else {
+                LOG_PRINTF("GW: noto'g'ri soil paket (type=0x%02X)\n", pkt.pkt_type);
+            }
+
         } else {
-            // Noto'g'ri o'lcham — bufer tozalash
+            // Noma'lum paket — bufer tozalash
             while (LoRa.available()) LoRa.read();
-            LOG_PRINTF("GW: kutilmagan paket hajmi=%d\n", pkt_size);
+            LOG_PRINTF("GW: noma'lum paket hajmi=%d\n", pkt_size);
         }
-        // TX tugagach RX ga qaytish (gw_handle_uplink da bo'lmasa)
         LoRa.receive();
     }
 

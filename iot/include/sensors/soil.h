@@ -83,6 +83,8 @@ static bool sensor_read(SensorData& d) {
 
 void sensor_set_volume(float) {}  // stub (common.h extern talab qiladi)
 
+// WiFi rejimida ishlatiladi (lora_node da bu funksiyalar kerak emas)
+#ifndef LORA_NODE
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
     return app_register(device_id, "soil", "capacitive_soil_moisture", "", fw_version, 0);
 }
@@ -101,3 +103,4 @@ static String sensor_build_json(const char* device_id,
     serializeJson(doc, out);
     return out;
 }
+#endif  // !LORA_NODE

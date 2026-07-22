@@ -6,7 +6,7 @@
  *   Ra-02 MOSI → ESP32 GPIO23
  *   Ra-02 MISO → ESP32 GPIO19
  *   Ra-02 SCK  → ESP32 GPIO18
- *   Ra-02 NSS  → ESP32 GPIO5
+ *   Ra-02 NSS  → ESP32 GPIO15
  *   Ra-02 RST  → ESP32 GPIO14
  *   Ra-02 DIO0 → ESP32 GPIO2
  *   Ra-02 3.3V → ESP32 3.3V
@@ -31,10 +31,21 @@
 #define LORA_SYNC     0xAB    // Sync word (tarmoq ajratuvchi, 0x12 = LoRaWAN)
 
 // ─── Paket turlari ────────────────────────────────────────────────────────────
-#define PKT_UPLINK   0x01   // Node → Gateway: sensor ma'lumotlari
-#define PKT_DOWNLINK 0x02   // Gateway → Node: relay buyruq
+#define PKT_UPLINK        0x01   // Node → Gateway: elektr hisoblagich
+#define PKT_DOWNLINK      0x02   // Gateway → Node: relay buyruq
+#define PKT_UPLINK_SOIL   0x03   // Node → Gateway: tuproq namligi
 
-// ─── Uplink paket: Node → Gateway ────────────────────────────────────────────
+// ─── Soil uplink: Node → Gateway ──────────────────────────────────────────────
+// Jami: 12 bayt
+struct __attribute__((packed)) LoRaSoilUplink {
+    uint8_t  pkt_type;   // PKT_UPLINK_SOIL = 0x03
+    uint8_t  mac[6];     // Node WiFi MAC adresi
+    uint8_t  flags;      // bit0=test_mode
+    int16_t  humidity;   // Namlik: %×100  (8530 = 85.30%)
+    uint16_t crc;
+};
+
+// ─── Electricity uplink: Node → Gateway ──────────────────────────────────────
 // Qiymatlar fixed-point (float overhead va NaN muammosi yo'q)
 // Jami: 46 bayt — LoRa uchun ideal hajm
 struct __attribute__((packed)) LoRaUplink {
