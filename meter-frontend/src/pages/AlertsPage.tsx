@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { AlertCircle, Trash2, Check, ShieldAlert, Plus, X, ToggleLeft, ToggleRight, Search, Download } from 'lucide-react'
+import { AlertCircle, Trash2, Check, ShieldAlert, Plus, X, ToggleLeft, ToggleRight, Search, Download, LayoutList, LayoutGrid } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useAlerts, useAlertRules, useBuildings, qk } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -39,6 +39,10 @@ const alertRuleOptions = {
     { value: 'soil_dry', label: "Tuproq qurib qoldi" },
     { value: 'soil_wet', label: "Tuproq haddan tashqari nam" },
   ],
+  sound: [
+    { value: 'sound_high_level', label: "Ovoz darajasi yuqori" },
+    { value: 'sound_low_level', label: "Ovoz darajasi past" },
+  ],
 } as const
 
 const alertHistoryColumns: TableColumn[] = [
@@ -74,10 +78,11 @@ export default function AlertsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [severityFilter, setSeverityFilter] = useState<'all' | 'info' | 'warning' | 'critical'>('all')
   const [alertStatusFilter, setAlertStatusFilter] = useState<'all' | 'open' | 'cleared'>('all')
-  const [ruleUtilityFilter, setRuleUtilityFilter] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil'>('all')
+  const [ruleUtilityFilter, setRuleUtilityFilter] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil' | 'sound'>('all')
   const [ruleStatusFilter, setRuleStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
   const [sortBy, setSortBy] = useState<'time' | 'severity' | 'kind'>('time')
   const [page, setPage] = useState(1)
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
   const { isColumnVisible: isAlertColumnVisible, toggleColumn: toggleAlertColumn } = useColumnVisibility(alertHistoryColumns, 'alerts-history-columns')
   const { isColumnVisible: isRuleColumnVisible, toggleColumn: toggleRuleColumn } = useColumnVisibility(alertRuleColumns, 'alerts-rules-columns')
 
@@ -172,10 +177,10 @@ export default function AlertsPage() {
     try {
       await apiClient.delete(`/api/alert-rules/${id}`)
       queryClient.invalidateQueries({ queryKey: qk.alertRules() })
-      notifySuccess('Qoida o‘chirildi')
+      notifySuccess("Qoida o'chirildi")
     } catch (err) {
       console.error('Error deleting rule:', err)
-      notifyError('Qoida o‘chirilmadi', getApiErrorMessage(err))
+      notifyError("Qoida o'chirilmadi", getApiErrorMessage(err))
     } finally {
       setConfirmAction(null)
     }
@@ -188,7 +193,7 @@ export default function AlertsPage() {
         enabled: !rule.enabled,
       })
       queryClient.invalidateQueries({ queryKey: qk.alertRules() })
-      notifySuccess(rule.enabled ? 'Qoida o‘chirildi' : 'Qoida yoqildi')
+      notifySuccess(rule.enabled ? "Qoida o'chirildi" : 'Qoida yoqildi')
     } catch (err) {
       console.error('Error toggling rule status:', err)
       notifyError('Qoida yangilanmadi', getApiErrorMessage(err))
@@ -363,7 +368,7 @@ export default function AlertsPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={activeTab === 'history' ? 'Alert, qurilma yoki xabar bo‘yicha qidirish...' : 'Qoida, bino yoki xabar bo‘yicha qidirish...'}
+              placeholder={activeTab === 'history' ? "Alert, qurilma yoki xabar bo'yicha qidirish..." : "Qoida, bino yoki xabar bo'yicha qidirish..."}
               className="w-full pl-10 pr-4 py-2 rounded-lg glass-input focus:outline-none text-sm"
             />
           </div>
@@ -394,7 +399,7 @@ export default function AlertsPage() {
               <>
                 <select
                   value={ruleUtilityFilter}
-                  onChange={(event) => setRuleUtilityFilter(event.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil')}
+                  onChange={(event) => setRuleUtilityFilter(event.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil' | 'sound')}
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none glass-input shadow-sm"
                 >
                   <option value="all">Barcha datchiklar</option>
@@ -402,6 +407,7 @@ export default function AlertsPage() {
                   <option value="water">Suv</option>
                   <option value="gas">Gaz</option>
                   <option value="soil">Yerto'la</option>
+                  <option value="sound">Ovoz</option>
                 </select>
                 <select
                   value={ruleStatusFilter}
@@ -410,7 +416,7 @@ export default function AlertsPage() {
                 >
                   <option value="all">Barcha qoidalar</option>
                   <option value="enabled">Yoqilgan</option>
-                  <option value="disabled">O‘chirilgan</option>
+                  <option value="disabled">O'chirilgan</option>
                 </select>
               </>
             )}
@@ -423,6 +429,23 @@ export default function AlertsPage() {
               <option value="severity">Saralash: daraja</option>
               <option value="kind">Saralash: tur</option>
             </select>
+            {/* View toggle */}
+            <div className="flex border border-gray-300 dark:border-gray-800 rounded-lg overflow-hidden bg-gray-100/50 dark:bg-gray-950/50 shadow-sm">
+              <button
+                onClick={() => setViewMode('table')}
+                title="Jadval ko'rinishi"
+                className={clsx('px-3 py-1.5 transition', viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200')}
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                title="Karta ko'rinishi"
+                className={clsx('px-3 py-1.5 transition', viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
             <button
               onClick={handleExportCSV}
               disabled={activeRows.length === 0}
@@ -477,7 +500,7 @@ export default function AlertsPage() {
                   </button>
                 </div>
               </div>
-              <div className="hidden md:block overflow-x-auto">
+              {viewMode === 'table' && <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -577,39 +600,36 @@ export default function AlertsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-              <div className="md:hidden mobile-card-list p-3">
+              </div>}
+              {viewMode === 'grid' && <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {pagedAlerts.map((alert) => (
-                  <div key={alert.id} className="mobile-data-card">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{alert.kind}</p>
-                        <p className="text-xs text-gray-500 mt-1">{alert.message ?? '—'}</p>
-                      </div>
-                      <span
-                        className={`shrink-0 px-2 py-1 rounded-full text-[11px] font-bold ${
-                          alert.severity === 'critical'
-                            ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                            : alert.severity === 'warning'
-                              ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
-                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                        }`}
-                      >
-                        {alert.severity}
+                  <div key={alert.id} className={clsx(
+                    'rounded-xl border p-4 flex flex-col gap-2.5 transition',
+                    alert.cleared
+                      ? 'border-gray-300 dark:border-gray-700 bg-white/20 dark:bg-gray-800/20 opacity-60'
+                      : 'border-yellow-500/25 bg-yellow-500/5 hover:bg-yellow-500/10',
+                  )}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-gray-950 dark:text-gray-100 text-sm truncate flex-1">{alert.kind}</p>
+                      <span className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-bold ${
+                        alert.severity === 'critical'
+                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                          : alert.severity === 'warning'
+                            ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-450'
+                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      }`}>{alert.severity}</span>
+                    </div>
+                    {alert.message && <p className="text-xs text-gray-500 dark:text-gray-400">{alert.message}</p>}
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{formatDistanceToNow(new Date(alert.ts * 1000), { addSuffix: true })}</span>
+                      <span className={clsx('px-2 py-0.5 rounded font-semibold', alert.cleared ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400')}>
+                        {alert.cleared ? translations.alerts.cleared : translations.alerts.open}
                       </span>
-                    </div>
-                    <div className="mobile-data-row">
-                      <span className="mobile-data-label">{translations.alerts.timestamp}</span>
-                      <span className="mobile-data-value">{formatDistanceToNow(new Date(alert.ts * 1000), { addSuffix: true })}</span>
-                    </div>
-                    <div className="mobile-data-row">
-                      <span className="mobile-data-label">{translations.alerts.status}</span>
-                      <span className="mobile-data-value">{alert.cleared ? translations.alerts.cleared : translations.alerts.open}</span>
                     </div>
                     {isAdmin && !alert.cleared && (
                       <button
                         onClick={() => handleClearAlert(alert.id)}
-                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 transition"
+                        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700 transition"
                       >
                         <Check className="w-3.5 h-3.5" />
                         Tozalash
@@ -617,7 +637,7 @@ export default function AlertsPage() {
                     )}
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           ) : (
             <EmptyBlock title={translations.common.noData} message="Hozircha ogohlantirishlar mavjud emas." />
@@ -651,7 +671,7 @@ export default function AlertsPage() {
                   </button>
                 </div>
               </div>
-              <div className="hidden md:block overflow-x-auto">
+              {viewMode === 'table' && <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -729,63 +749,61 @@ export default function AlertsPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
-              <div className="md:hidden mobile-card-list p-3">
+              </div>}
+              {viewMode === 'grid' && <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {pagedRules.map((rule) => {
                   const building = buildings?.find(b => b.id === rule.building_id)
                   return (
-                    <div key={rule.id} className="mobile-data-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{rule.kind}</p>
-                          <p className="text-xs text-gray-500">{building ? building.name : 'Barcha binolar'}</p>
-                        </div>
-                        <button
-                          onClick={() => isAdmin && handleToggleRule(rule)}
-                          disabled={!isAdmin}
-                          className="shrink-0"
-                        >
-                          {rule.enabled ? (
-                            <ToggleRight className="w-6 h-6 text-green-500" />
-                          ) : (
-                            <ToggleLeft className="w-6 h-6 text-gray-400 dark:text-gray-500" />
-                          )}
+                    <div key={rule.id} className={clsx(
+                      'rounded-xl border p-4 flex flex-col gap-2.5 transition',
+                      rule.enabled
+                        ? 'border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10'
+                        : 'border-gray-300 dark:border-gray-700 bg-white/20 dark:bg-gray-800/20 opacity-60',
+                    )}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-gray-950 dark:text-gray-100 text-sm truncate flex-1">{rule.kind}</p>
+                        <button onClick={() => isAdmin && handleToggleRule(rule)} disabled={!isAdmin} className="shrink-0">
+                          {rule.enabled ? <ToggleRight className="w-5 h-5 text-green-500" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
                         </button>
                       </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">Datchik</span>
-                        <span className="mobile-data-value">
-                          {rule.utility_type
-                            ? (translations.deviceTypes[rule.utility_type as keyof typeof translations.deviceTypes] || rule.utility_type)
-                            : 'Barchasi'}
-                        </span>
-                      </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">Chegara</span>
-                        <span className="mobile-data-value font-mono">
-                          {rule.min_value !== null ? `>= ${rule.min_value}` : ''}
-                          {rule.min_value !== null && rule.max_value !== null ? ' va ' : ''}
-                          {rule.max_value !== null ? `<= ${rule.max_value}` : ''}
-                          {rule.min_value === null && rule.max_value === null ? '—' : ''}
-                        </span>
-                      </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">Daraja</span>
-                        <span className="mobile-data-value">{rule.severity}</span>
+                      <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Datchik</span>
+                          <span className="font-semibold text-gray-700 dark:text-gray-300">
+                            {rule.utility_type ? (translations.deviceTypes[rule.utility_type as keyof typeof translations.deviceTypes] || rule.utility_type) : 'Barchasi'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Bino</span>
+                          <span>{building ? building.name : 'Barcha binolar'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Chegara</span>
+                          <span className="font-mono">
+                            {rule.min_value !== null ? `>= ${rule.min_value}` : ''}
+                            {rule.min_value !== null && rule.max_value !== null ? ' va ' : ''}
+                            {rule.max_value !== null ? `<= ${rule.max_value}` : ''}
+                            {rule.min_value === null && rule.max_value === null ? '—' : ''}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Daraja</span>
+                          <span className={clsx('font-semibold', rule.severity === 'critical' ? 'text-red-500' : rule.severity === 'warning' ? 'text-yellow-500' : 'text-blue-500')}>{rule.severity}</span>
+                        </div>
                       </div>
                       {isAdmin && (
                         <button
                           onClick={() => setConfirmAction({ type: 'delete-rule', id: rule.id })}
-                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 transition"
+                          className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 transition"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          O‘chirish
+                          O'chirish
                         </button>
                       )}
                     </div>
                   )
                 })}
-              </div>
+              </div>}
             </div>
           ) : (
             <EmptyBlock title={translations.common.noData} message="Sizda hali chegara qoidalari sozlanmagan." />
@@ -839,6 +857,7 @@ export default function AlertsPage() {
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
                       <option value="soil">Yerto'la</option>
+                      <option value="sound">Ovoz</option>
                     </select>
                   </div>
                 </div>
@@ -944,13 +963,13 @@ export default function AlertsPage() {
         )}
         <ConfirmDialog
           open={confirmAction !== null}
-          title={confirmAction?.type === 'clear-all' ? 'Barcha ogohlantirishlarni tozalash' : 'Qoidani o‘chirish'}
+          title={confirmAction?.type === 'clear-all' ? 'Barcha ogohlantirishlarni tozalash' : "Qoidani o'chirish"}
           message={
             confirmAction?.type === 'clear-all'
               ? 'Barcha ochiq ogohlantirishlar tozalanadi. Amalni davom ettirasizmi?'
-              : 'Bu chegara qoidasi o‘chiriladi. Keyingi o‘lchovlarda bu qoida ishlamaydi.'
+              : "Bu chegara qoidasi o'chiriladi. Keyingi o'lchovlarda bu qoida ishlamaydi."
           }
-          confirmLabel={confirmAction?.type === 'clear-all' ? 'Barchasini tozalash' : 'O‘chirish'}
+          confirmLabel={confirmAction?.type === 'clear-all' ? 'Barchasini tozalash' : "O'chirish"}
           tone="danger"
           pending={clearing}
           onConfirm={() => {

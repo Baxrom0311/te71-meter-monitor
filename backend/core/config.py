@@ -74,6 +74,8 @@ class Settings:
     gas_pressure_max_bar: float = float(os.getenv("GAS_PRESSURE_MAX_BAR", "5.0"))
     soil_humidity_min: float = float(os.getenv("SOIL_HUMIDITY_MIN", "20.0"))
     soil_humidity_max: float = float(os.getenv("SOIL_HUMIDITY_MAX", "80.0"))
+    sound_level_min: float = float(os.getenv("SOUND_LEVEL_MIN", "0.0"))
+    sound_level_max: float = float(os.getenv("SOUND_LEVEL_MAX", "80.0"))
     alert_dedupe_sec: int = int(os.getenv("ALERT_DEDUPE_SEC", "600"))
     alert_escalation_after_sec: int = int(os.getenv("ALERT_ESCALATION_AFTER_SEC", "300"))
     alert_notification_channels: list[str] = [

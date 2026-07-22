@@ -98,6 +98,18 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                 )
             )
         ).mappings().one()
+        sound = (
+            await self.session.execute(
+                select(
+                    func.count().label("samples"),
+                    rnd(func.avg(Reading.level), 1).label("avg_level"),
+                    rnd(func.min(Reading.level), 1).label("min_level"),
+                    rnd(func.max(Reading.level), 1).label("max_level"),
+                ).where(
+                    and_(Reading.building_id == building_id, Reading.utility_type == "sound", Reading.ts > cutoff)
+                )
+            )
+        ).mappings().one()
         active_alerts = await self.session.scalar(
             select(func.count()).select_from(Alert).where(
                 and_(Alert.building_id == building_id, Alert.cleared.is_(False), Alert.ts > cutoff)
@@ -109,6 +121,7 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
             "water": dict(water),
             "gas": dict(gas),
             "soil": dict(soil),
+            "sound": dict(sound),
         }
 
     async def aggregate_hourly_rows(self, cutoff: int) -> list[dict]:
@@ -131,6 +144,9 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                 func.max(Reading.volume_m3).label("max_volume_m3"),
                 func.sum(Reading.leak_detected.cast(Integer)).label("leak_count"),
                 func.avg(Reading.humidity).label("avg_humidity"),
+                func.avg(Reading.level).label("avg_level"),
+                func.min(Reading.level).label("min_level"),
+                func.max(Reading.level).label("max_level"),
             )
             .join(Device, Device.id == Reading.device_id)
             .where(and_(Reading.ts >= cutoff, Device.is_test_device.is_(False)))
@@ -159,6 +175,9 @@ class AnalyticsRepository(BaseRepository[HourlyUtilityStats]):
                     max_volume_m3=row["max_volume_m3"],
                     leak_count=row["leak_count"],
                     avg_humidity=row["avg_humidity"],
+                    avg_level=row["avg_level"],
+                    min_level=row["min_level"],
+                    max_level=row["max_level"],
                     created_at=ts,
                     updated_at=ts,
                 )

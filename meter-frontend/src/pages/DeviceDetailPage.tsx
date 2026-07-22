@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X, Trash2, Sprout } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Power, ToggleLeft, ToggleRight, Zap, Clock, Droplets, Flame, Gauge, Thermometer, AlertTriangle, Pencil, X, Trash2, Sprout, Volume2, Building2, MapPin, Cpu, Wifi, WifiOff, Info } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { useDeviceById, useDeviceLatest, useDeviceHistory, qk } from '@/hooks/queries'
+import { useDeviceById, useDeviceLatest, useDeviceHistory, useBuildings, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
@@ -44,6 +44,7 @@ export default function DeviceDetailPage() {
     data: historyData,
     isFetching: historyFetching,
   } = useDeviceHistory(id || '', 24, historyPage, historyPageSize)
+  const { data: buildings } = useBuildings()
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
@@ -51,6 +52,13 @@ export default function DeviceDetailPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editUtilityType, setEditUtilityType] = useState('')
+  const [editBuildingId, setEditBuildingId] = useState<string>('')
+  const [editFloor, setEditFloor] = useState('')
+  const [editRoom, setEditRoom] = useState('')
+  const [editGroupName, setEditGroupName] = useState('')
+  const [editDeviceRole, setEditDeviceRole] = useState('')
+  const [editFirmwareMode, setEditFirmwareMode] = useState('')
+  const [editIsTestDevice, setEditIsTestDevice] = useState(false)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
   const handleReboot = async () => {
@@ -127,6 +135,13 @@ export default function DeviceDetailPage() {
     if (!device || !id) return
     setEditName(device.name ?? '')
     setEditUtilityType(device.utility_type)
+    setEditBuildingId(device.building_id ? String(device.building_id) : '')
+    setEditFloor(device.floor ?? '')
+    setEditRoom(device.room ?? '')
+    setEditGroupName(device.group_name ?? '')
+    setEditDeviceRole(device.device_role ?? '')
+    setEditFirmwareMode(device.firmware_mode ?? '')
+    setEditIsTestDevice(device.is_test_device ?? false)
     setIsEditOpen(true)
   }
 
@@ -140,6 +155,13 @@ export default function DeviceDetailPage() {
         name: editName.trim() || null,
         utility_type: editUtilityType,
         is_active: device.is_active,
+        building_id: editBuildingId ? parseInt(editBuildingId) : null,
+        floor: editFloor.trim() || null,
+        room: editRoom.trim() || null,
+        group_name: editGroupName.trim() || null,
+        device_role: editDeviceRole || null,
+        firmware_mode: editFirmwareMode || null,
+        is_test_device: editIsTestDevice,
       })
       queryClient.invalidateQueries({ queryKey: qk.deviceDetail(deviceId) })
       queryClient.invalidateQueries({ queryKey: qk.devices() })
@@ -181,6 +203,7 @@ export default function DeviceDetailPage() {
         flow: r.flow_rate ?? 0,
         volume: r.volume_m3 ?? 0,
         humidity: r.humidity ?? 0,
+        level: r.level ?? 0,
       }))
   }, [chartHistoryData])
 
@@ -190,7 +213,9 @@ export default function DeviceDetailPage() {
       ? { title: "Gaz ko'rsatkichlari grafigi", subtitle: "Oxirgi 24 soatdagi bosim va oqim o'zgarishi" }
       : device?.utility_type === "soil"
         ? { title: "Yerto'la namligi grafigi", subtitle: "Oxirgi 24 soatdagi namlik o'zgarishi" }
-        : { title: "Elektr quvvati grafigi", subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
+        : device?.utility_type === "sound"
+          ? { title: "Ovoz darajasi grafigi", subtitle: "Oxirgi 24 soatdagi ovoz darajasi o'zgarishi" }
+          : { title: "Elektr quvvati grafigi", subtitle: "Oxirgi 24 soatdagi Power W o'zgarishi" }
 
   if (!id) return <div className="text-red-400 p-8">{translations.common.error}</div>
 
@@ -257,7 +282,7 @@ export default function DeviceDetailPage() {
                   <h1 className="text-3xl font-bold text-gray-950 dark:text-gray-100">{device.name ?? device.id}</h1>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-5 text-sm">
                   <div>
                     <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.type}</p>
                     <p className="text-gray-900 dark:text-gray-100 font-semibold">
@@ -265,53 +290,124 @@ export default function DeviceDetailPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.ip}</p>
-                    <p className="text-gray-800 dark:text-gray-100 font-mono font-medium">{device.ip ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.firmware}</p>
-                    <p className="text-gray-800 dark:text-gray-100 font-mono font-medium">{device.fw_version ?? '—'}</p>
-                  </div>
-                  <div>
                     <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.status}</p>
-                    <p className={`font-bold ${device.online ? 'text-green-500' : 'text-red-550'}`}>
-                      {device.online ? translations.devices.online : translations.devices.offline}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {device.online ? (
+                        <Wifi className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <WifiOff className="w-3.5 h-3.5 text-red-500" />
+                      )}
+                      <p className={`font-bold ${device.online ? 'text-green-500' : 'text-red-500'}`}>
+                        {device.online ? translations.devices.online : translations.devices.offline}
+                      </p>
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.lastSeen}</p>
-                    <p className="text-gray-850 dark:text-gray-100 font-semibold">
+                    <p className="text-gray-850 dark:text-gray-100 font-semibold text-xs">
                       {device.last_seen
                         ? new Date(device.last_seen * 1000).toLocaleString('uz-UZ')
                         : '—'}
                     </p>
                   </div>
-	                  <div>
-	                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Tizim Faolligi</p>
-	                    <div className="flex flex-wrap gap-1.5">
-	                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-	                        device.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-550'
-	                      }`}>
-	                        {device.is_active ? 'Faol' : 'Faol emas'}
-	                      </span>
-	                      {device.is_test_device && (
-	                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-500">
-	                          Test
-	                        </span>
-	                      )}
-	                      {device.needs_rebind && (
-	                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-500/10 text-orange-500">
-	                          Qayta biriktirish kerak
-	                        </span>
-	                      )}
-	                    </div>
-	                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-3 h-3" />Bino</p>
+                    <p className="text-gray-800 dark:text-gray-100 font-medium">{device.building ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider flex items-center gap-1"><MapPin className="w-3 h-3" />Qavat / Xona</p>
+                    <p className="text-gray-800 dark:text-gray-100 font-medium">
+                      {device.floor || device.room
+                        ? `${device.floor ?? ''}${device.floor && device.room ? ' / ' : ''}${device.room ?? ''}`
+                        : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.devices.ip}</p>
+                    <p className="text-gray-800 dark:text-gray-100 font-mono font-medium text-xs">{device.ip ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Tizim Faolligi</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        device.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {device.is_active ? 'Faol' : 'Faol emas'}
+                      </span>
+                      {device.is_test_device && (
+                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-500">
+                          Test
+                        </span>
+                      )}
+                      {device.needs_rebind && (
+                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-500/10 text-orange-500">
+                          Rebind
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   {device.meter_serial && (
                     <div>
                       <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Hisoblagich Seriali</p>
-                      <p className="text-gray-900 dark:text-gray-100 font-bold">{device.meter_serial}</p>
+                      <p className="text-gray-900 dark:text-gray-100 font-bold font-mono">{device.meter_serial}</p>
                     </div>
                   )}
+                  {device.group_name && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Guruh</p>
+                      <p className="text-gray-800 dark:text-gray-100 font-medium">{device.group_name}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Technical metadata */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+                  <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <Cpu className="w-3.5 h-3.5" />
+                    Texnik ma'lumotlar
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <p className="text-gray-400 mb-0.5">Device ID</p>
+                      <p className="font-mono text-gray-700 dark:text-gray-300 break-all">{device.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 mb-0.5">Firmware rejimi</p>
+                      <p className="font-mono text-gray-700 dark:text-gray-300">{device.firmware_mode || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 mb-0.5">Qurilma roli</p>
+                      <p className="font-mono text-gray-700 dark:text-gray-300">{device.device_role || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 mb-0.5">FW versiya</p>
+                      <p className="font-mono text-gray-700 dark:text-gray-300">{device.fw_version || '—'}</p>
+                    </div>
+                    {device.chip_model && (
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Chip</p>
+                        <p className="font-mono text-gray-700 dark:text-gray-300">{device.chip_model}</p>
+                      </div>
+                    )}
+                    {device.baud_rate && (
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Baud rate</p>
+                        <p className="font-mono text-gray-700 dark:text-gray-300">{device.baud_rate}</p>
+                      </div>
+                    )}
+                    {device.rssi !== null && device.rssi !== undefined && (
+                      <div>
+                        <p className="text-gray-400 mb-0.5">RSSI</p>
+                        <p className="font-mono text-gray-700 dark:text-gray-300">{device.rssi} dBm</p>
+                      </div>
+                    )}
+                    {device.serial_number && (
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Serial</p>
+                        <p className="font-mono text-gray-700 dark:text-gray-300">{device.serial_number}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -340,25 +436,27 @@ export default function DeviceDetailPage() {
                       Qurilmani reboot qilish
                     </button>
 
-                    {/* Relay Controls */}
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      <button
-                        onClick={() => setPendingCommand({ type: 'relay', action: 'on' })}
-                        disabled={loadingAction !== null}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        Rele ON
-                      </button>
-                      <button
-                        onClick={() => setPendingCommand({ type: 'relay', action: 'off' })}
-                        disabled={loadingAction !== null}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        Rele OFF
-                      </button>
-                    </div>
+                    {/* Relay Controls — faqat elektr hisoblagichlar uchun */}
+                    {device.utility_type === 'electricity' && (
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <button
+                          onClick={() => setPendingCommand({ type: 'relay', action: 'on' })}
+                          disabled={loadingAction !== null}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          Rele ON
+                        </button>
+                        <button
+                          onClick={() => setPendingCommand({ type: 'relay', action: 'off' })}
+                          disabled={loadingAction !== null}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition text-xs font-semibold shadow-sm"
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          Rele OFF
+                        </button>
+                      </div>
+                    )}
 
                     {/* Toggle Active Status */}
                     <button
@@ -404,6 +502,8 @@ export default function DeviceDetailPage() {
                   <Flame className="w-5 h-5 text-orange-500" />
                 ) : device.utility_type === 'soil' ? (
                   <Sprout className="w-5 h-5 text-green-500" />
+                ) : device.utility_type === 'sound' ? (
+                  <Volume2 className="w-5 h-5 text-purple-500" />
                 ) : (
                   <Zap className="w-5 h-5 text-yellow-500" />
                 )}
@@ -504,6 +604,15 @@ export default function DeviceDetailPage() {
                       <span className="text-2xl font-extrabold text-green-650 dark:text-green-400 mt-2 font-mono">{latestReading.humidity.toFixed(1)} <span className="text-sm font-normal text-gray-500">%</span></span>
                     </div>
                   )}
+                  {latestReading.level !== undefined && latestReading.level !== null && (
+                    <div className="glass-card border border-purple-500/20 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                        <Volume2 className="w-3.5 h-3.5 text-purple-500" />
+                        Ovoz darajasi
+                      </span>
+                      <span className="text-2xl font-extrabold text-purple-650 dark:text-purple-400 mt-2 font-mono">{latestReading.level.toFixed(1)} <span className="text-sm font-normal text-gray-500">%</span></span>
+                    </div>
+                  )}
                   {latestReading.leak_detected !== undefined && latestReading.leak_detected !== null && (
                     <div className={`glass-card border rounded-2xl p-4 flex flex-col justify-between shadow-sm ${latestReading.leak_detected ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/20 bg-green-500/5'}`}>
                       <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
@@ -557,6 +666,10 @@ export default function DeviceDetailPage() {
                           <stop offset="5%" stopColor="#22C55E" stopOpacity={0.2} />
                           <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
                         </linearGradient>
+                        <linearGradient id="chartGradPurple" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#A855F7" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#A855F7" stopOpacity={0} />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
                       <XAxis dataKey="timestamp" stroke={chart.axis} fontSize={11} tickLine={false} axisLine={false} />
@@ -591,6 +704,9 @@ export default function DeviceDetailPage() {
                       )}
                       {device?.utility_type === 'soil' && (
                         <Area type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" fillOpacity={1} fill="url(#chartGradGreen)" strokeWidth={3} dot={false} />
+                      )}
+                      {device?.utility_type === 'sound' && (
+                        <Area type="monotone" dataKey="level" name="Ovoz darajasi (%)" stroke="#A855F7" fillOpacity={1} fill="url(#chartGradPurple)" strokeWidth={3} dot={false} />
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
@@ -628,6 +744,10 @@ export default function DeviceDetailPage() {
                           <>
                             <th className="px-6 py-4 font-semibold">Namlik (%)</th>
                           </>
+                        ) : device?.utility_type === 'sound' ? (
+                          <>
+                            <th className="px-6 py-4 font-semibold">Ovoz darajasi (%)</th>
+                          </>
                         ) : (
                           <>
                             <th className="px-6 py-4 font-semibold">Bosim (bar)</th>
@@ -659,6 +779,10 @@ export default function DeviceDetailPage() {
                           ) : device?.utility_type === 'soil' ? (
                             <>
                               <td className="px-6 py-3.5 font-mono text-green-600 dark:text-green-400 font-bold">{r.humidity !== null && r.humidity !== undefined ? r.humidity.toFixed(1) + '%' : '—'}</td>
+                            </>
+                          ) : device?.utility_type === 'sound' ? (
+                            <>
+                              <td className="px-6 py-3.5 font-mono text-purple-600 dark:text-purple-400 font-bold">{r.level !== null && r.level !== undefined ? r.level.toFixed(1) + '%' : '—'}</td>
                             </>
                           ) : (
                             <>
@@ -694,45 +818,132 @@ export default function DeviceDetailPage() {
       </div>
       {isEditOpen && device && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-card rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl relative animate-modal-pop">
+          <div className="glass-card rounded-xl max-w-lg w-full p-6 shadow-2xl relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             <button onClick={() => setIsEditOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 dark:hover:text-white transition">
               <X className="w-5 h-5" />
             </button>
-            <h3 className="text-xl font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2">
+            <h3 className="text-xl font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2 mb-5">
               <Pencil className="w-5 h-5 text-blue-500" />
               Qurilmani tahrirlash
             </h3>
             <form onSubmit={handleEdit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Qurilma nomi</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Masalan: A bino, 3-qavat elektr"
-                  className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Qurilma nomi</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Masalan: A bino, 3-qavat elektr"
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Datchik turi</label>
+                  <select
+                    value={editUtilityType}
+                    onChange={(e) => setEditUtilityType(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  >
+                    <option value="electricity">Elektr</option>
+                    <option value="water">Suv</option>
+                    <option value="gas">Gaz</option>
+                    <option value="soil">Yerto'la namligi</option>
+                    <option value="sound">Ovoz</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Bino</label>
+                  <select
+                    value={editBuildingId}
+                    onChange={(e) => setEditBuildingId(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  >
+                    <option value="">— Biriktirilmagan —</option>
+                    {buildings?.map((b) => (
+                      <option key={b.id} value={String(b.id)}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Qavat</label>
+                  <input
+                    type="text"
+                    value={editFloor}
+                    onChange={(e) => setEditFloor(e.target.value)}
+                    placeholder="1, 2, 3..."
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Xona</label>
+                  <input
+                    type="text"
+                    value={editRoom}
+                    onChange={(e) => setEditRoom(e.target.value)}
+                    placeholder="101, A, ..."
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Guruh nomi</label>
+                  <input
+                    type="text"
+                    value={editGroupName}
+                    onChange={(e) => setEditGroupName(e.target.value)}
+                    placeholder="Masalan: A-qanot, Asosiy linia"
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Qurilma roli</label>
+                  <select
+                    value={editDeviceRole}
+                    onChange={(e) => setEditDeviceRole(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  >
+                    <option value="">— Belgilanmagan —</option>
+                    <option value="meter">Meter</option>
+                    <option value="gateway">Gateway</option>
+                    <option value="sensor">Sensor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Firmware rejimi</label>
+                  <select
+                    value={editFirmwareMode}
+                    onChange={(e) => setEditFirmwareMode(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                  >
+                    <option value="">— Belgilanmagan —</option>
+                    <option value="dlms">DLMS</option>
+                    <option value="pulse">Pulse</option>
+                    <option value="modbus">Modbus</option>
+                    <option value="soil">Soil</option>
+                    <option value="sound">Sound</option>
+                    <option value="lora_gateway">LoRa Gateway</option>
+                  </select>
+                </div>
+                <div className="col-span-2 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="editIsTestDevice"
+                    checked={editIsTestDevice}
+                    onChange={(e) => setEditIsTestDevice(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                  />
+                  <label htmlFor="editIsTestDevice" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Test qurilmasi
+                  </label>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Datchik turi</label>
-                <select
-                  value={editUtilityType}
-                  onChange={(e) => setEditUtilityType(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
-                >
-                  <option value="electricity">Elektr</option>
-                  <option value="water">Suv</option>
-                  <option value="gas">Gaz</option>
-                  <option value="soil">Yerto'la namligi</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-200 dark:border-gray-800">
                 <button type="button" onClick={() => setIsEditOpen(false)}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition">
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition text-sm">
                   Bekor qilish
                 </button>
                 <button type="submit" disabled={editSubmitting}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg transition font-semibold">
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg transition font-semibold text-sm">
                   {editSubmitting ? 'Saqlanmoqda...' : 'Saqlash'}
                 </button>
               </div>

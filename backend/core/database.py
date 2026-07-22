@@ -7,7 +7,14 @@ from core.config import settings
 from models.entities import Base
 
 
-engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
+_is_sqlite = settings.database_url.startswith("sqlite")
+engine = create_async_engine(
+    settings.database_url,
+    future=True,
+    pool_pre_ping=True,
+    # PostgreSQL: 210 qurilma uchun yetarli pool
+    **({} if _is_sqlite else {"pool_size": 20, "max_overflow": 30, "pool_timeout": 30}),
+)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

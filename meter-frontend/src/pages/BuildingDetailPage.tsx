@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Link2, Unlink, Plus, X, Smartphone, Home, Edit3, Trash2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Link2, Unlink, Plus, X, Smartphone, Home, Edit3, Trash2 } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useBuildingById, useDevices, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
@@ -50,7 +50,6 @@ export default function BuildingDetailPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
-  const [editMapsUrl, setEditMapsUrl] = useState('')
   const [editFloors, setEditFloors] = useState(1)
   const [editEntrancesCount, setEditEntrancesCount] = useState(1)
   const [editDescription, setEditDescription] = useState('')
@@ -129,7 +128,6 @@ export default function BuildingDetailPage() {
     if (!building) return
     setEditName(building.name)
     setEditAddress(building.address ?? '')
-    setEditMapsUrl(building.maps_url ?? '')
     setEditFloors(building.floors)
     setEditEntrancesCount(building.entrances_count)
     setEditDescription(building.description ?? '')
@@ -147,7 +145,6 @@ export default function BuildingDetailPage() {
       await apiClient.put(`/api/buildings/${buildingIdInt}`, {
         name: editName,
         address: editAddress || null,
-        maps_url: editMapsUrl || null,
         floors: editFloors,
         entrances_count: editEntrancesCount,
         description: editDescription || null,
@@ -233,22 +230,7 @@ export default function BuildingDetailPage() {
                   <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.buildings.address}</p>
                   <p className="text-base text-gray-900 dark:text-gray-100 font-medium">{building.address ?? '—'}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.buildings.mapsUrl}</p>
-                  {building.maps_url ? (
-                    <a
-                      href={building.maps_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-base text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                    >
-                      Google Maps
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  ) : (
-                    <p className="text-base text-gray-900 dark:text-gray-100 font-medium">—</p>
-                  )}
-                </div>
+
                 <div>
                   <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{translations.buildings.coordinates}</p>
                   <p className="text-base text-gray-900 dark:text-gray-100 font-medium">
@@ -284,7 +266,6 @@ export default function BuildingDetailPage() {
               title={`${building.name} — xarita`}
               name={building.name}
               address={building.address}
-              mapsUrl={building.maps_url}
               latitude={building.latitude}
               longitude={building.longitude}
               heightClassName="h-[340px]"
@@ -417,16 +398,6 @@ export default function BuildingDetailPage() {
                     />
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{translations.buildings.mapsUrl}</label>
-                    <input
-                      type="url"
-                      value={editMapsUrl}
-                      onChange={(e) => setEditMapsUrl(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/..."
-                      className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
-                    />
-                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

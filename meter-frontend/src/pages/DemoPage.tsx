@@ -256,7 +256,7 @@ export default function DemoPage() {
               </span>
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
-              Toshkent shahri, Chilonzor tumani · Kommunal monitoring tizimi
+              Xorazm viloyati, Urganch shahri · Kommunal monitoring tizimi
             </div>
           </div>
         </div>

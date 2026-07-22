@@ -21,6 +21,8 @@ ALERT_RULE_KINDS = {
     "gas_leak",
     "soil_dry",
     "soil_wet",
+    "sound_high_level",
+    "sound_low_level",
 }
 
 
@@ -269,6 +271,44 @@ async def check_alerts(session, reading: MeterReading) -> list[dict]:
                         message=_rule_message(soil_wet_rule, f"Tuproq haddan ziyod nam: {reading.humidity:.1f}%"),
                     ),
                     soil_wet_rule,
+                )
+    elif reading.utility_type == "sound":
+        if reading.level is not None:
+            sound_high_rule = rules.get("sound_high_level")
+            sound_low_rule = rules.get("sound_low_level")
+            sound_min = _rule_min(sound_low_rule, settings.sound_level_min)
+            sound_max = _rule_max(sound_high_rule, settings.sound_level_max)
+            if reading.level < sound_min:
+                _queue_alert(
+                    alerts,
+                    Alert(
+                        device_id=reading.device_id,
+                        building_id=reading.building_id,
+                        point_id=reading.point_id,
+                        utility_type="sound",
+                        severity=_rule_severity(sound_low_rule, "warning"),
+                        ts=ts,
+                        kind="sound_low_level",
+                        value=reading.level,
+                        message=_rule_message(sound_low_rule, f"Ovoz darajasi past: {reading.level:.1f}%"),
+                    ),
+                    sound_low_rule,
+                )
+            elif reading.level > sound_max:
+                _queue_alert(
+                    alerts,
+                    Alert(
+                        device_id=reading.device_id,
+                        building_id=reading.building_id,
+                        point_id=reading.point_id,
+                        utility_type="sound",
+                        severity=_rule_severity(sound_high_rule, "warning"),
+                        ts=ts,
+                        kind="sound_high_level",
+                        value=reading.level,
+                        message=_rule_message(sound_high_rule, f"Ovoz darajasi yuqori: {reading.level:.1f}%"),
+                    ),
+                    sound_high_rule,
                 )
 
     to_broadcast = []

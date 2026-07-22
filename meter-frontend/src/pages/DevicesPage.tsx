@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle, Zap, Droplets, Flame, Sprout } from 'lucide-react'
+import { Download, Plus, X, Search, Cpu, Wifi, WifiOff, PlusCircle, Zap, Droplets, Flame, Sprout, Volume2, LayoutList, LayoutGrid } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useDevicesList, useBuildings, qk } from '@/hooks/queries'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,6 +25,7 @@ const UTILITY_TABS = [
   { key: 'water',       label: 'Suv',      icon: Droplets, accent: 'text-cyan-500',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20'   },
   { key: 'gas',         label: 'Gaz',      icon: Flame,    accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
   { key: 'soil',        label: "Yerto'la", icon: Sprout,   accent: 'text-green-500',  bg: 'bg-green-500/10',  border: 'border-green-500/20'  },
+  { key: 'sound',       label: 'Ovoz',     icon: Volume2,  accent: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
 ] as const
 
 const deviceTableColumns: TableColumn[] = [
@@ -50,6 +51,9 @@ export default function DevicesPage() {
   const [page,         setPage]         = useState(1)
   const [pageSize,     setPageSize]     = useState(DEFAULT_PAGE_SIZE)
 
+  // ── View mode ─────────────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+
   // ── Add-device modal ──────────────────────────────────────────────────────
   const [isModalOpen,  setIsModalOpen]  = useState(false)
   const [deviceId,     setDeviceId]     = useState('')
@@ -72,7 +76,7 @@ export default function DevicesPage() {
   // Read utility filter from URL (e.g. /devices?utility=water)
   useEffect(() => {
     const utility = new URLSearchParams(location.search).get('utility')
-    if (utility === 'electricity' || utility === 'water' || utility === 'gas' || utility === 'soil') {
+    if (utility === 'electricity' || utility === 'water' || utility === 'gas' || utility === 'soil' || utility === 'sound') {
       setTypeFilter(utility)
     }
   }, [location.search])
@@ -256,6 +260,24 @@ export default function DevicesPage() {
               ))}
             </div>
 
+            {/* View toggle */}
+            <div className="flex border border-gray-300 dark:border-gray-800 rounded-lg overflow-hidden bg-gray-100/50 dark:bg-gray-950/50 shadow-sm">
+              <button
+                onClick={() => setViewMode('table')}
+                title="Jadval ko'rinishi"
+                className={clsx('px-3 py-1.5 transition', viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200')}
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                title="Karta ko'rinishi"
+                className={clsx('px-3 py-1.5 transition', viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+
             <button
               onClick={handleExportCSV}
               disabled={!devices.length}
@@ -279,8 +301,8 @@ export default function DevicesPage() {
           <ErrorBlock message={getApiErrorMessage(queryError)} onRetry={() => refetch()} />
         ) : devices.length > 0 ? (
           <div className={clsx('glass-card rounded-xl overflow-hidden shadow-lg transition-opacity', isFetching && 'opacity-70')}>
-            {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
+            {/* Table view */}
+            {viewMode === 'table' && <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
@@ -376,6 +398,7 @@ export default function DevicesPage() {
                             device.utility_type === 'water'       && 'bg-cyan-500/10   text-cyan-600   dark:text-cyan-400   border-cyan-500/20',
                             device.utility_type === 'gas'         && 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
                             device.utility_type === 'soil'        && 'bg-green-500/10  text-green-600  dark:text-green-400  border-green-500/20',
+                            device.utility_type === 'sound'       && 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
                           )}>
                             {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
                           </span>
@@ -404,56 +427,76 @@ export default function DevicesPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
 
-            {/* Mobile cards */}
-            <div className="md:hidden mobile-card-list p-3">
-              {devices.map((device) => (
-                <div key={device.id} className="mobile-data-card">
-                  <div className="flex items-start justify-between gap-3">
-                    <button onClick={() => navigate(`/devices/${device.id}`)} className="text-left min-w-0">
-                      <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{device.name ?? device.id}</p>
-                      <p className="text-xs text-gray-500 font-mono truncate">{device.id}</p>
-                    </button>
-                    <div className="flex items-center gap-2 shrink-0">
-	                      {device.building_id === null && (
-	                        <span className="px-1.5 py-0.5 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded font-semibold border border-yellow-500/25">
-	                          yangi
-	                        </span>
-	                      )}
-	                      {device.is_test_device && (
-	                        <span className="px-1.5 py-0.5 text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded font-semibold border border-blue-500/25">
-	                          test
-	                        </span>
-	                      )}
-                      <span className={clsx('h-2.5 w-2.5 rounded-full', device.online ? 'bg-green-500' : 'bg-red-500')} />
+            {/* Grid/card view */}
+            {viewMode === 'grid' && <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {devices.map((device) => {
+                const utilTab = UTILITY_TABS.find(u => u.key === device.utility_type)
+                const Icon = utilTab?.icon ?? Cpu
+                return (
+                  <div
+                    key={device.id}
+                    onClick={() => device.building_id !== null && navigate(`/devices/${device.id}`)}
+                    className={clsx(
+                      'rounded-xl border p-4 flex flex-col gap-3 transition',
+                      device.building_id === null
+                        ? 'border-yellow-500/25 bg-yellow-500/5 hover:bg-yellow-500/10'
+                        : 'border-gray-300 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:bg-gray-100/40 dark:hover:bg-gray-800/50 cursor-pointer',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className={clsx('p-2 rounded-lg border', utilTab?.bg ?? 'bg-gray-500/10', utilTab?.border ?? 'border-gray-500/20')}>
+                        <Icon className={clsx('w-4 h-4', utilTab?.accent ?? 'text-gray-500')} />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {device.building_id === null && (
+                          <span className="px-1.5 py-0.5 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded font-semibold border border-yellow-500/25">yangi</span>
+                        )}
+                        {device.is_test_device && (
+                          <span className="px-1.5 py-0.5 text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded font-semibold border border-blue-500/25">test</span>
+                        )}
+                        <span className={clsx('h-2.5 w-2.5 rounded-full shrink-0', device.online ? 'bg-green-400 animate-pulse' : 'bg-red-400')} />
+                      </div>
                     </div>
+                    <div className="min-w-0">
+                      <p
+                        className="font-bold text-gray-950 dark:text-gray-100 truncate text-sm leading-tight"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/devices/${device.id}`) }}
+                      >
+                        {device.name ?? device.id}
+                      </p>
+                      {device.name && <p className="text-xs text-gray-500 font-mono truncate mt-0.5">{device.id}</p>}
+                      {device.meter_serial && <p className="text-xs text-gray-400 truncate">{device.meter_serial}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Tur</span>
+                        <span className={clsx('font-semibold', utilTab?.accent)}>
+                          {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>IP</span>
+                        <span className="font-mono">{device.ip ?? '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Firmware</span>
+                        <span className="font-mono">{device.fw_version ?? '—'}</span>
+                      </div>
+                    </div>
+                    {device.building_id === null && !device.is_test_device && isAdmin && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeviceToAssign(device); setAssignName(device.meter_serial || device.name || device.id); setAssignBuildingId('') }}
+                        className="mt-auto w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
+                      >
+                        Biriktirish
+                      </button>
+                    )}
                   </div>
-                  <div className="mobile-data-row">
-                    <span className="mobile-data-label">{translations.devices.type}</span>
-                    <span className="mobile-data-value">
-                      {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
-                    </span>
-                  </div>
-                  <div className="mobile-data-row">
-                    <span className="mobile-data-label">{translations.devices.ip}</span>
-                    <span className="mobile-data-value font-mono">{device.ip ?? '—'}</span>
-                  </div>
-                  <div className="mobile-data-row">
-                    <span className="mobile-data-label">{translations.devices.firmware}</span>
-                    <span className="mobile-data-value font-mono">{device.fw_version ?? '—'}</span>
-                  </div>
-	                  {device.building_id === null && !device.is_test_device && isAdmin && (
-                    <button
-                      onClick={() => { setDeviceToAssign(device); setAssignName(device.meter_serial || device.name || device.id); setAssignBuildingId('') }}
-                      className="mt-3 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
-                    >
-                      Biriktirish
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                )
+              })}
+            </div>}
 
             {/* ── Pagination ── */}
             <div className="border-t border-gray-300 dark:border-gray-800 px-4">
@@ -574,6 +617,7 @@ export default function DevicesPage() {
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
                       <option value="soil">Yerto'la namligi</option>
+                      <option value="sound">Ovoz</option>
                     </select>
                   </div>
                   <div>

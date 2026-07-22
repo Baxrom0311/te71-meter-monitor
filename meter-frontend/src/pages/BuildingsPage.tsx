@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Plus, X, Search, Home, Building2, MapPin, Layers, Navigation,
+  Plus, X, Search, Home, Building2, MapPin, Layers, DoorOpen,
   ArrowRight, Download, LayoutGrid, Table2, Settings2, Check,
 } from 'lucide-react'
 import { RootLayout } from '@/components/layout/RootLayout'
@@ -16,7 +16,7 @@ import { notifySuccess } from '@/lib/toast'
 import type { Building } from '@/types/api'
 import { Pagination } from '@/components/Pagination'
 
-import { GoogleBuildingsMap } from '@/components/GoogleBuildingsMap'
+import { BuildingsMap } from '@/components/BuildingsMap'
 
 const PAGE_SIZE = 12
 
@@ -72,7 +72,6 @@ export default function BuildingsPage() {
   const [page, setPage] = useState(1)
   const [selectedMapBuildingId, setSelectedMapBuildingId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
-  const [mapMode, setMapMode] = useState<'2d' | '3d'>('3d')
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(DEFAULT_COLS)
   const [colPickerOpen, setColPickerOpen] = useState(false)
 
@@ -80,7 +79,6 @@ export default function BuildingsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [mapsUrl, setMapsUrl] = useState('')
   const [floors, setFloors] = useState(4)
   const [entrancesCount, setEntrancesCount] = useState(3)
   const [description, setDescription] = useState('')
@@ -117,13 +115,13 @@ export default function BuildingsPage() {
     setError(null)
     try {
       await apiClient.post('/api/buildings', {
-        name, address: address || null, maps_url: mapsUrl || null,
+        name, address: address || null,
         floors, entrances_count: entrancesCount, description: description || null,
       })
       queryClient.invalidateQueries({ queryKey: qk.buildings() })
       notifySuccess('Bino qo\'shildi', `${name} muvaffaqiyatli yaratildi.`)
       setIsModalOpen(false)
-      setName(''); setAddress(''); setMapsUrl(''); setFloors(4); setEntrancesCount(3); setDescription('')
+      setName(''); setAddress(''); setFloors(4); setEntrancesCount(3); setDescription('')
     } catch (err: any) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -252,34 +250,16 @@ export default function BuildingsPage() {
                 <span className="text-xs text-gray-500">{mappedBuildings.length} ta koordinatali</span>
               </div>
               <div className="flex items-center gap-3 text-xs font-semibold flex-wrap justify-end">
-                <div className="flex items-center gap-1 bg-gray-900/70 rounded-lg p-1 border border-gray-800/70">
-                  <button
-                    type="button"
-                    onClick={() => setMapMode('2d')}
-                    className={`px-2.5 py-1 rounded-md transition ${mapMode === '2d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-                  >
-                    2D
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMapMode('3d')}
-                    className={`px-2.5 py-1 rounded-md transition ${mapMode === '3d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-                  >
-                    3D
-                  </button>
-                </div>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Faol</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Noaniq</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Nofaol</span>
               </div>
             </div>
-              <GoogleBuildingsMap
+              <BuildingsMap
                 buildings={filteredBuildings}
                 selectedId={selectedMapBuildingId}
                 onSelect={setSelectedMapBuildingId}
                 height="520px"
-                mode={mapMode}
-                onModeChange={setMapMode}
               />
           </div>
         )}
@@ -324,7 +304,7 @@ export default function BuildingsPage() {
                       <Layers className="w-3 h-3 text-blue-400" />{building.floors} qavat
                     </span>
                     <span className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-white/8 rounded-lg text-xs font-semibold text-gray-300">
-                      <Navigation className="w-3 h-3 text-purple-400" />{building.entrances_count} kirish
+                      <DoorOpen className="w-3 h-3 text-purple-400" />{building.entrances_count} kirish
                     </span>
                     {building.ext_sensor_temp_out != null && (
                       <span className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-white/8 rounded-lg text-xs font-semibold text-gray-300">
@@ -461,11 +441,6 @@ export default function BuildingsPage() {
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">Manzil</label>
                   <input type="text" value={address} onChange={e => setAddress(e.target.value)}
                     placeholder="Ko'cha, uy raqami" className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">{translations.buildings.mapsUrl}</label>
-                  <input type="url" value={mapsUrl} onChange={e => setMapsUrl(e.target.value)}
-                    placeholder="https://maps.app.goo.gl/..." className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

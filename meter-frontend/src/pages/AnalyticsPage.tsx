@@ -19,7 +19,7 @@ export default function AnalyticsPage() {
 
   // Filters State
   const [buildingId, setBuildingId] = useState<string>('')
-  const [utilityType, setUtilityType] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil'>('all')
+  const [utilityType, setUtilityType] = useState<'all' | 'electricity' | 'water' | 'gas' | 'soil' | 'sound'>('all')
   const [granularity, setGranularity] = useState<'hour' | 'day' | 'month'>('day')
   const [dateRange, setDateRange] = useState<string>('7d')
 
@@ -90,6 +90,7 @@ export default function AnalyticsPage() {
       flow: number
       volume: number
       humidity: number
+      level: number
       samples: number
     }>()
 
@@ -104,6 +105,7 @@ export default function AnalyticsPage() {
         flow: 0,
         volume: 0,
         humidity: 0,
+        level: 0,
         samples: 0,
       }
       const samples = Math.max(row.samples || 1, 1)
@@ -114,6 +116,7 @@ export default function AnalyticsPage() {
       current.flow += (row.avg_flow_rate ?? 0) * samples
       current.volume = Math.max(current.volume, row.max_volume_m3 ?? 0)
       current.humidity += (row.avg_humidity ?? 0) * samples
+      current.level += (row.avg_level ?? 0) * samples
       current.samples += samples
       buckets.set(row.bucket_ts, current)
     })
@@ -127,6 +130,7 @@ export default function AnalyticsPage() {
       flow: row.samples ? Number((row.flow / row.samples).toFixed(3)) : 0,
       volume: Number(row.volume.toFixed(3)),
       humidity: row.samples ? Number((row.humidity / row.samples).toFixed(1)) : 0,
+      level: row.samples ? Number((row.level / row.samples).toFixed(1)) : 0,
     }))
   }, [hourlyStats])
 
@@ -177,6 +181,14 @@ export default function AnalyticsPage() {
         row.humidity.toFixed(1),
         row.samples
       ])
+    } else if (utilityType === 'sound') {
+      headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Ovoz darajasi (%)', 'O\'lchovlar soni']
+      rows = hourlyChartData.map(row => [
+        row.bucket_ts,
+        `"${row.label}"`,
+        row.level.toFixed(1),
+        row.samples
+      ])
     } else {
       headers = ['Vaqt (Timestamp)', 'Sana (Label)', 'Quvvat (W)', 'Kuchlanish (V)', 'Suv pastki bosim (bar)', 'Suv yuqori bosim (bar)', 'Suv/Gaz oqimi', 'Jami hajm (m³)', 'O\'lchovlar soni']
       rows = hourlyChartData.map(row => [
@@ -214,7 +226,7 @@ export default function AnalyticsPage() {
     const buildingName = buildingId
       ? (buildings?.find(b => b.id.toString() === buildingId)?.name ?? buildingId)
       : 'Barcha binolar'
-    const utilLabel = utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : utilityType === 'gas' ? 'Gaz' : "Yerto'la"
+    const utilLabel = utilityType === 'all' ? 'Barchasi' : utilityType === 'electricity' ? 'Elektr' : utilityType === 'water' ? 'Suv' : utilityType === 'gas' ? 'Gaz' : utilityType === 'soil' ? "Yerto'la" : 'Ovoz'
 
     const wb = XLSX.utils.book_new()
 
@@ -249,6 +261,9 @@ export default function AnalyticsPage() {
       } else if (utilityType === 'soil') {
         headers = ['Sana / Vaqt', 'Namlik (%)', "O'lchovlar soni"]
         dataRows = hourlyChartData.map(r => [r.label, r.humidity, r.samples])
+      } else if (utilityType === 'sound') {
+        headers = ['Sana / Vaqt', 'Ovoz darajasi (%)', "O'lchovlar soni"]
+        dataRows = hourlyChartData.map(r => [r.label, r.level, r.samples])
       } else {
         headers = ['Sana / Vaqt', 'Bosim (bar)', 'Oqim (m³/h)', 'Jami hajm (m³)', "O'lchovlar soni"]
         dataRows = hourlyChartData.map(r => [r.label, r.pressure, r.flow, r.volume, r.samples])
@@ -313,6 +328,17 @@ export default function AnalyticsPage() {
         { label: "O'rtacha namlik", value: avgHum.toFixed(1), unit: '%', color: 'text-green-400' },
         { label: 'Eng yuqori', value: maxHum.toFixed(1), unit: '%', color: 'text-blue-400' },
         { label: 'Eng past', value: isFinite(minHum) ? minHum.toFixed(1) : '—', unit: '%', color: 'text-yellow-400' },
+        { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
+      ]
+    } else if (utilityType === 'sound') {
+      if (hourlyChartData.length === 0) return null
+      const avgLvl = hourlyChartData.reduce((s, r) => s + r.level, 0) / hourlyChartData.length
+      const maxLvl = Math.max(...hourlyChartData.map(r => r.level))
+      const minLvl = Math.min(...hourlyChartData.filter(r => r.level > 0).map(r => r.level))
+      return [
+        { label: "O'rtacha daraja", value: avgLvl.toFixed(1), unit: '%', color: 'text-purple-400' },
+        { label: 'Eng yuqori', value: maxLvl.toFixed(1), unit: '%', color: 'text-red-400' },
+        { label: 'Eng past', value: isFinite(minLvl) ? minLvl.toFixed(1) : '—', unit: '%', color: 'text-yellow-400' },
         { label: "O'lchovlar", value: hourlyChartData.reduce((s, r) => s + r.samples, 0).toString(), unit: 'ta', color: 'text-gray-400' },
       ]
     }
@@ -387,7 +413,7 @@ export default function AnalyticsPage() {
             <label className="block text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Kommunal tur</label>
             <select
               value={utilityType}
-              onChange={(e) => setUtilityType(e.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil')}
+              onChange={(e) => setUtilityType(e.target.value as 'all' | 'electricity' | 'water' | 'gas' | 'soil' | 'sound')}
               className="w-full px-3 py-2 rounded-lg glass-input text-sm focus:outline-none"
             >
               <option value="all">Barchasi</option>
@@ -395,6 +421,7 @@ export default function AnalyticsPage() {
               <option value="water">Suv</option>
               <option value="gas">Gaz</option>
               <option value="soil">Yerto'la namligi</option>
+              <option value="sound">Ovoz</option>
             </select>
           </div>
 
@@ -595,6 +622,9 @@ export default function AnalyticsPage() {
                       {(utilityType === 'all' || utilityType === 'soil') && (
                         <Line type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" strokeWidth={2.5} dot={false} />
                       )}
+                      {(utilityType === 'all' || utilityType === 'sound') && (
+                        <Line type="monotone" dataKey="level" name="Ovoz darajasi (%)" stroke="#A855F7" strokeWidth={2.5} dot={false} />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -607,7 +637,7 @@ export default function AnalyticsPage() {
             <div className="glass-card data-table-card rounded-xl overflow-hidden shadow-sm">
               <div className="p-5 border-b border-gray-300 dark:border-gray-800 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">Tahliliy hisobot jadvali</h3>
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Jami: {utilityType === 'water' || utilityType === 'gas' || utilityType === 'soil' ? hourlyChartData.length : formattedData.length} ta yozuv</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Jami: {utilityType === 'water' || utilityType === 'gas' || utilityType === 'soil' || utilityType === 'sound' ? hourlyChartData.length : formattedData.length} ta yozuv</span>
               </div>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm text-left">
@@ -671,6 +701,25 @@ export default function AnalyticsPage() {
                           <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
                             <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
                             <td className="px-6 py-3.5 text-right font-mono text-green-600 dark:text-green-400 font-bold">{row.humidity.toFixed(1)}%</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  ) : utilityType === 'sound' ? (
+                    <>
+                      <thead>
+                        <tr className="border-b border-gray-350 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30 text-gray-655 dark:text-gray-400 font-semibold">
+                          <th className="px-6 py-4">Sana / Vaqt</th>
+                          <th className="px-6 py-4 text-right">Ovoz darajasi (%)</th>
+                          <th className="px-6 py-4 text-right">O'lchovlar soni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-300 dark:divide-gray-800 text-gray-750 dark:text-gray-300">
+                        {hourlyChartData.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-100/30 dark:hover:bg-gray-850/40 transition">
+                            <td className="px-6 py-3.5 font-semibold text-gray-850 dark:text-gray-150">{row.label}</td>
+                            <td className="px-6 py-3.5 text-right font-mono text-purple-600 dark:text-purple-400 font-bold">{row.level.toFixed(1)}%</td>
                             <td className="px-6 py-3.5 text-right font-mono text-gray-650 dark:text-gray-450">{row.samples}</td>
                           </tr>
                         ))}

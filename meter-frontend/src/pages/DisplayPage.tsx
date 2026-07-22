@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts'
-import { Zap, Droplets, Flame, Sprout, RefreshCw } from 'lucide-react'
+import { Zap, Droplets, Flame, Sprout, Volume2, RefreshCw } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/env'
 import type { HourlyUtilityStat } from '@/types/api'
 
@@ -11,6 +11,7 @@ interface DisplayData {
   water: HourlyUtilityStat[]
   gas: HourlyUtilityStat[]
   soil: HourlyUtilityStat[]
+  sound: HourlyUtilityStat[]
 }
 
 interface ChartPoint {
@@ -98,6 +99,19 @@ const CHARTS = [
     gradient: ['rgba(34,197,94,0.28)', 'rgba(34,197,94,0)'],
     bg: 'from-green-950/60 to-slate-950/80',
     border: 'border-green-500/25',
+    nominal: null,
+  },
+  {
+    key: 'sound' as const,
+    dataKey: 'avg_level' as keyof HourlyUtilityStat,
+    label: 'Ovoz darajasi',
+    unit: '%',
+    icon: Volume2,
+    color: '#A855F7',
+    glow: 'rgba(168,85,247,0.35)',
+    gradient: ['rgba(168,85,247,0.28)', 'rgba(168,85,247,0)'],
+    bg: 'from-purple-950/60 to-slate-950/80',
+    border: 'border-purple-500/25',
     nominal: null,
   },
 ]

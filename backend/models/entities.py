@@ -236,6 +236,7 @@ class Reading(Base):
     leak_detected: Mapped[bool | None] = mapped_column(Boolean)
     valve_open: Mapped[bool | None] = mapped_column(Boolean)
     humidity: Mapped[float | None] = mapped_column(Float)
+    level: Mapped[float | None] = mapped_column(Float)   # Ovoz darajasi (0–100%)
     raw_payload: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[int | None] = mapped_column(Integer)
 
@@ -268,6 +269,9 @@ class HourlyUtilityStats(Base):
     max_volume_m3: Mapped[float | None] = mapped_column(Float)
     leak_count: Mapped[int | None] = mapped_column(Integer)
     avg_humidity: Mapped[float | None] = mapped_column(Float)
+    avg_level: Mapped[float | None] = mapped_column(Float)   # Ovoz o'rtachasi
+    min_level: Mapped[float | None] = mapped_column(Float)
+    max_level: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[int | None] = mapped_column(Integer)
 

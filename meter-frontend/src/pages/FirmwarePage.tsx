@@ -7,7 +7,7 @@ import { Ban, Cpu, Key, Layers, PlayCircle, RefreshCw, ShieldCheck, UploadCloud,
 import { useQueryClient } from '@tanstack/react-query'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { useDevices, useFirmwareList, useOtaBatches, useProvisioningTokens, qk } from '@/hooks/queries'
+import { useBuildings, useDevices, useFirmwareList, useOtaBatches, useProvisioningTokens, qk } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
 import apiClient from '@/lib/api'
 import { Device, Firmware, OtaBatch, ProvisioningToken } from '@/types/api'
@@ -34,6 +34,7 @@ export default function FirmwarePage() {
   const { data: devices = [] } = useDevices()
   const { data: provTokenData, refetch: refetchProvTokens } = useProvisioningTokens(false)
   const provTokens: ProvisioningToken[] = provTokenData?.tokens ?? []
+  const { data: buildings = [] } = useBuildings()
   const queryClient = useQueryClient()
 
   const [isUploadOpen, setIsUploadOpen] = useState(false)
@@ -62,6 +63,7 @@ export default function FirmwarePage() {
   // Provisioning token state
   const [isProvTokenOpen, setIsProvTokenOpen] = useState(false)
   const [provUtility, setProvUtility] = useState('electricity')
+  const [provBuildingId, setProvBuildingId] = useState<string>('')
   const [provTtlDays, setProvTtlDays] = useState(1)
   const [provCreating, setProvCreating] = useState(false)
   const [newTokenValue, setNewTokenValue] = useState('')
@@ -218,6 +220,7 @@ export default function FirmwarePage() {
     try {
       const { data } = await apiClient.post('/api/devices/provisioning-tokens', {
         utility_type: provUtility || null,
+        building_id: provBuildingId ? parseInt(provBuildingId) : null,
         ttl_sec: provTtlDays * 86400,
       })
       setNewTokenValue(data.provisioning_token)
@@ -600,7 +603,7 @@ export default function FirmwarePage() {
                   {showAllProvTokens ? 'Faqat faollarni ko\'rsat' : 'Barchasini ko\'rsat'}
                 </button>
                 <button
-                  onClick={() => { setIsProvTokenOpen(true); setNewTokenValue(''); setProvError('') }}
+                  onClick={() => { setIsProvTokenOpen(true); setNewTokenValue(''); setProvError(''); setProvBuildingId('') }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition"
                 >
                   <Key className="w-3.5 h-3.5" />
@@ -736,7 +739,24 @@ export default function FirmwarePage() {
                       <option value="water">💧 Suv</option>
                       <option value="gas">🔥 Gaz</option>
                       <option value="soil">🌱 Yerto'la</option>
+                      <option value="sound">🔊 Ovoz</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Bino <span className="text-gray-400 font-normal">(ixtiyoriy)</span></label>
+                    <select
+                      value={provBuildingId}
+                      onChange={e => setProvBuildingId(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-lg glass-input focus:outline-none text-sm font-medium"
+                    >
+                      <option value="">— Bino tanlanmagan —</option>
+                      {buildings.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                    {provBuildingId && (
+                      <p className="mt-1 text-xs text-green-400">ESP32 ro'yxatdan o'tganda shu binoga avtomatik ulanadi</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -846,6 +866,7 @@ export default function FirmwarePage() {
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
                       <option value="soil">Yerto'la</option>
+                      <option value="sound">Ovoz</option>
                     </select>
                   </div>
                   <div>
@@ -860,6 +881,7 @@ export default function FirmwarePage() {
                       <option value="water">Suv</option>
                       <option value="gas">Gaz</option>
                       <option value="soil">Yerto'la</option>
+                      <option value="sound">Ovoz</option>
                       <option value="lora_gateway">LoRa Gateway</option>
                       <option value="display">Display</option>
                     </select>

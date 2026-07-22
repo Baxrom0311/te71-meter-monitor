@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QLineEdit, QTextEdit, QProgressBar,
     QFrame, QMessageBox, QRadioButton, QButtonGroup, QTabWidget,
-    QCheckBox, QScrollArea,
+    QCheckBox, QScrollArea, QSpinBox,
 )
 from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QFont, QColor, QTextCursor
@@ -18,9 +18,11 @@ from controllers.flash_controller import FlashController
 
 # Firmware turlari
 FIRMWARE_TYPES = [
-    ("electricity", "⚡  Elektr",     "TE71/TE73 RS-485 DLMS hisoblagich"),
-    ("water",       "💧  Suv",        "2x analog bosim sensori"),
-    ("gas",         "🔥  Gaz",        "1x analog bosim sensori"),
+    ("electricity", "⚡  Elektr",        "TE71/TE73 RS-485 DLMS hisoblagich"),
+    ("soil",        "🌱  Tuproq namligi", "Kapasitiv tuproq namligi sensori (ADC)"),
+    ("sound",       "🔊  Ovoz",          "Mikrofon ADC ovoz darajasi sensori"),
+    ("water",       "💧  Suv",           "2x analog bosim sensori"),
+    ("gas",         "🔥  Gaz",           "1x analog bosim sensori"),
 ]
 
 DEFAULT_SERVER  = "https://ss.boos.uz"
@@ -108,6 +110,79 @@ class FlashWindow(QMainWindow):
             left_layout.addWidget(rb)
         self._fw_radios["electricity"].setChecked(True)
 
+        # Connect radio buttons to show/hide soil options
+        for env, rb in self._fw_radios.items():
+            rb.toggled.connect(self._on_fw_type_changed)
+
+        # Soil sensor options widget (only visible when soil is selected)
+        self.soil_opts_widget = QWidget()
+        soil_opts_layout = QVBoxLayout(self.soil_opts_widget)
+        soil_opts_layout.setContentsMargins(0, 0, 0, 0)
+        soil_opts_layout.setSpacing(6)
+
+        soil_opts_layout.addWidget(self._section("Sensor opsiyalari"))
+
+        self.chk_lcd = QCheckBox("LCD 16x2 I2C ekran bor")
+        self.chk_lcd.setToolTip("Yoqilsa: soil_wifi_lcd, o'chirilsa: soil_wifi")
+        soil_opts_layout.addWidget(self.chk_lcd)
+
+        soil_opts_layout.addWidget(self._small_label("ADC GPIO pini (sensor AOUT)"))
+        self.spin_adc_pin = QSpinBox()
+        self.spin_adc_pin.setRange(0, 39)
+        self.spin_adc_pin.setValue(32)
+        self.spin_adc_pin.setSuffix(" (GPIO)")
+        self.spin_adc_pin.setMinimumHeight(32)
+        soil_opts_layout.addWidget(self.spin_adc_pin)
+
+        soil_opts_layout.addWidget(self._small_label("Quruq qiymat (havoda o'lchang)"))
+        self.spin_dry = QSpinBox()
+        self.spin_dry.setRange(1000, 4095)
+        self.spin_dry.setValue(3300)
+        self.spin_dry.setMinimumHeight(32)
+        soil_opts_layout.addWidget(self.spin_dry)
+
+        soil_opts_layout.addWidget(self._small_label("Nam qiymat (suvda o'lchang)"))
+        self.spin_wet = QSpinBox()
+        self.spin_wet.setRange(500, 3000)
+        self.spin_wet.setValue(1400)
+        self.spin_wet.setMinimumHeight(32)
+        soil_opts_layout.addWidget(self.spin_wet)
+
+        left_layout.addWidget(self.soil_opts_widget)
+        self.soil_opts_widget.setVisible(False)
+
+        # Sound sensor options widget (only visible when sound is selected)
+        self.sound_opts_widget = QWidget()
+        sound_opts_layout = QVBoxLayout(self.sound_opts_widget)
+        sound_opts_layout.setContentsMargins(0, 0, 0, 0)
+        sound_opts_layout.setSpacing(6)
+
+        sound_opts_layout.addWidget(self._section("Sensor opsiyalari"))
+
+        self.chk_sound_lcd = QCheckBox("LCD 16x2 I2C ekran bor")
+        self.chk_sound_lcd.setToolTip("Yoqilsa: sound_wifi_lcd, o'chirilsa: sound_wifi")
+        sound_opts_layout.addWidget(self.chk_sound_lcd)
+
+        sound_opts_layout.addWidget(self._small_label("ADC GPIO pini (mikrofon AOUT)"))
+        self.spin_sound_pin = QSpinBox()
+        self.spin_sound_pin.setRange(0, 39)
+        self.spin_sound_pin.setValue(34)
+        self.spin_sound_pin.setSuffix(" (GPIO)")
+        self.spin_sound_pin.setMinimumHeight(32)
+        sound_opts_layout.addWidget(self.spin_sound_pin)
+
+        sound_opts_layout.addWidget(self._small_label("O'qish intervali (ms)"))
+        self.spin_sound_interval = QSpinBox()
+        self.spin_sound_interval.setRange(1000, 60000)
+        self.spin_sound_interval.setSingleStep(1000)
+        self.spin_sound_interval.setValue(10000)
+        self.spin_sound_interval.setSuffix(" ms")
+        self.spin_sound_interval.setMinimumHeight(32)
+        sound_opts_layout.addWidget(self.spin_sound_interval)
+
+        left_layout.addWidget(self.sound_opts_widget)
+        self.sound_opts_widget.setVisible(False)
+
         # Load saved settings values
         saved_server = self.settings_storage.value("flash_server", DEFAULT_SERVER)
         saved_prod_token = self.settings_storage.value("flash_prod_token", DEFAULT_TOKEN)
@@ -115,6 +190,37 @@ class FlashWindow(QMainWindow):
         saved_test_mode = self.settings_storage.value("flash_test_mode", False, type=bool)
         saved_ssid = self.settings_storage.value("flash_wifi_ssid", DEFAULT_WIFI_SSID)
         saved_wifi_pass = self.settings_storage.value("flash_wifi_pass", DEFAULT_WIFI_PASS)
+
+        # Load soil settings and apply to widgets
+        saved_lcd = self.settings_storage.value("soil_lcd", False, type=bool)
+        saved_adc_pin = self.settings_storage.value("soil_adc_pin", 32, type=int)
+        saved_dry = self.settings_storage.value("soil_dry", 3300, type=int)
+        saved_wet = self.settings_storage.value("soil_wet", 1400, type=int)
+
+        self.chk_lcd.setChecked(saved_lcd)
+        self.spin_adc_pin.setValue(saved_adc_pin)
+        self.spin_dry.setValue(saved_dry)
+        self.spin_wet.setValue(saved_wet)
+
+        # Connect soil widgets to save settings
+        self.chk_lcd.toggled.connect(lambda v: self.settings_storage.setValue("soil_lcd", v))
+        self.spin_adc_pin.valueChanged.connect(lambda v: self.settings_storage.setValue("soil_adc_pin", v))
+        self.spin_dry.valueChanged.connect(lambda v: self.settings_storage.setValue("soil_dry", v))
+        self.spin_wet.valueChanged.connect(lambda v: self.settings_storage.setValue("soil_wet", v))
+
+        # Load sound settings and apply to widgets
+        saved_sound_lcd = self.settings_storage.value("sound_lcd", False, type=bool)
+        saved_sound_pin = self.settings_storage.value("sound_adc_pin", 34, type=int)
+        saved_sound_interval = self.settings_storage.value("sound_interval", 10000, type=int)
+
+        self.chk_sound_lcd.setChecked(saved_sound_lcd)
+        self.spin_sound_pin.setValue(saved_sound_pin)
+        self.spin_sound_interval.setValue(saved_sound_interval)
+
+        # Connect sound widgets to save settings
+        self.chk_sound_lcd.toggled.connect(lambda v: self.settings_storage.setValue("sound_lcd", v))
+        self.spin_sound_pin.valueChanged.connect(lambda v: self.settings_storage.setValue("sound_adc_pin", v))
+        self.spin_sound_interval.valueChanged.connect(lambda v: self.settings_storage.setValue("sound_interval", v))
 
         # Server
         left_layout.addWidget(self._section("Server sozlamalari"))
@@ -302,6 +408,12 @@ class FlashWindow(QMainWindow):
         lbl.setStyleSheet("color:#475467; font-size:12px; font-weight:700;")
         return lbl
 
+    def _on_fw_type_changed(self):
+        soil_rb = self._fw_radios.get("soil")
+        sound_rb = self._fw_radios.get("sound")
+        self.soil_opts_widget.setVisible(soil_rb is not None and soil_rb.isChecked())
+        self.sound_opts_widget.setVisible(sound_rb is not None and sound_rb.isChecked())
+
     def _check_pio(self):
         if self.controller.pio_path:
             self.lbl_pio.setText("✓ PlatformIO topildi")
@@ -329,11 +441,18 @@ class FlashWindow(QMainWindow):
         if not ports:
             self.combo_port.addItem("Port topilmadi", "")
 
-    def _selected_firmware(self) -> str:
-        for env, rb in self._fw_radios.items():
+    def _selected_firmware(self) -> tuple[str, str]:
+        """Returns (sensor_name, pio_env)"""
+        for sensor, rb in self._fw_radios.items():
             if rb.isChecked():
-                return env
-        return "electricity"
+                if sensor == "soil":
+                    env = "soil_wifi_lcd" if self.chk_lcd.isChecked() else "soil_wifi"
+                    return sensor, env
+                if sensor == "sound":
+                    env = "sound_wifi_lcd" if self.chk_sound_lcd.isChecked() else "sound_wifi"
+                    return sensor, env
+                return sensor, sensor  # electricity, water, gas
+        return "electricity", "electricity"
 
     def _log(self, text: str, color: str = "#cbd5e1"):
         self.flash_log.moveCursor(QTextCursor.MoveOperation.End)
@@ -361,6 +480,22 @@ class FlashWindow(QMainWindow):
     def _start_build_only(self):
         self._run_pio(port="", build_only=True)
 
+    def _get_sensor_opts(self, sensor: str) -> dict:
+        if sensor == "soil":
+            return {
+                "lcd":     self.chk_lcd.isChecked(),
+                "adc_pin": self.spin_adc_pin.value(),
+                "dry":     self.spin_dry.value(),
+                "wet":     self.spin_wet.value(),
+            }
+        if sensor == "sound":
+            return {
+                "lcd":      self.chk_sound_lcd.isChecked(),
+                "adc_pin":  self.spin_sound_pin.value(),
+                "interval": self.spin_sound_interval.value(),
+            }
+        return {}
+
     def _run_pio(self, port: str, build_only: bool):
         if self.controller.is_flashing():
             return
@@ -368,13 +503,14 @@ class FlashWindow(QMainWindow):
         self.flash_log.clear()
         self.progress_bar.setValue(0)
 
-        fw = self._selected_firmware()
-        self.lbl_status.setText(f"{'Build' if build_only else 'Flash'} qilinmoqda: {fw}...")
+        sensor, fw_env = self._selected_firmware()
+        self.lbl_status.setText(f"{'Build' if build_only else 'Flash'}: {fw_env}...")
         self.lbl_status.setStyleSheet("color:#60a5fa; font-size:12px; font-weight:600;")
 
         self._set_busy(True)
         self.controller.start_flash(
-            env=fw,
+            sensor=sensor,
+            env=fw_env,
             port=port,
             build_only=build_only,
             server=self.txt_server.text().strip() or DEFAULT_SERVER,
@@ -382,6 +518,7 @@ class FlashWindow(QMainWindow):
             ssid=self.txt_ssid.text().strip() or DEFAULT_WIFI_SSID,
             wifi_pass=self.txt_wifi_pass.text() or DEFAULT_WIFI_PASS,
             test_mode=self.chk_test_mode.isChecked(),
+            sensor_opts=self._get_sensor_opts(sensor),
         )
 
     def _cancel(self):

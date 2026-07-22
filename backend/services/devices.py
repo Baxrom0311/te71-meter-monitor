@@ -456,10 +456,16 @@ async def revoke_device_token(device_id: str, admin: dict) -> dict:
 
 
 async def delete_device(device_id: str) -> dict:
+    from sqlalchemy import delete as sa_delete
+    from models.entities import Reading, HourlyUtilityStats, FirmwareInstallEvent
     async with SessionLocal() as session:
         device = await DeviceRepository(session).get(device_id)
         if not device:
             raise HTTPException(404, "Qurilma topilmadi")
+        # device_id NOT NULL bo'lgan bog'liq jadvallarni avval tozalab olamiz
+        await session.execute(sa_delete(Reading).where(Reading.device_id == device_id))
+        await session.execute(sa_delete(HourlyUtilityStats).where(HourlyUtilityStats.device_id == device_id))
+        await session.execute(sa_delete(FirmwareInstallEvent).where(FirmwareInstallEvent.device_id == device_id))
         await session.delete(device)
         await session.commit()
     await ws_manager.broadcast({"type": "device_deleted", "device_id": device_id})

@@ -9,6 +9,7 @@ class UtilityType(StrEnum):
     water = "water"
     gas = "gas"
     soil = "soil"
+    sound = "sound"
 
 
 class MeasurementRole(StrEnum):
@@ -20,6 +21,7 @@ class MeasurementRole(StrEnum):
     gas_flow = "gas_flow"
     gas_leak = "gas_leak"
     soil_moisture = "soil_moisture"
+    sound_level = "sound_level"
 
 
 class DeviceRole(StrEnum):
@@ -27,6 +29,7 @@ class DeviceRole(StrEnum):
     water_node = "water_node"
     gas_node = "gas_node"
     soil_node = "soil_node"
+    sound_node = "sound_node"
 
 
 class FirmwareMode(StrEnum):
@@ -34,6 +37,7 @@ class FirmwareMode(StrEnum):
     water = "water"
     gas = "gas"
     soil = "soil"
+    sound = "sound"
     lora_gateway = "lora_gateway"
     auto = "auto"
 
@@ -939,6 +943,7 @@ class MeterReading(BaseModel):
     valve_open: Optional[bool] = None
 
     humidity: Optional[float] = None
+    level: Optional[float] = None  # Ovoz darajasi (0–100%)
 
 
 class MeterReadingBatch(BaseModel):
@@ -999,6 +1004,7 @@ class ReadingResponse(BaseModel):
     leak_detected: Optional[bool] = None
     valve_open: Optional[bool] = None
     humidity: Optional[float] = None
+    level: Optional[float] = None
     raw_payload: Optional[str] = None
     created_at: Optional[int] = None
 
@@ -1059,6 +1065,9 @@ class HourlyUtilityStatResponse(BaseModel):
     max_volume_m3: Optional[float] = None
     leak_count: Optional[int] = None
     avg_humidity: Optional[float] = None
+    avg_level: Optional[float] = None
+    min_level: Optional[float] = None
+    max_level: Optional[float] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
 
@@ -1111,6 +1120,13 @@ class BuildingSoilAnalyticsResponse(BaseModel):
     max_humidity: Optional[float] = None
 
 
+class BuildingSoundAnalyticsResponse(BaseModel):
+    samples: int
+    avg_level: Optional[float] = None
+    min_level: Optional[float] = None
+    max_level: Optional[float] = None
+
+
 class BuildingAnalyticsResponse(BaseModel):
     building_id: int
     hours: int
@@ -1119,6 +1135,7 @@ class BuildingAnalyticsResponse(BaseModel):
     water: BuildingWaterAnalyticsResponse
     gas: BuildingGasAnalyticsResponse
     soil: BuildingSoilAnalyticsResponse
+    sound: BuildingSoundAnalyticsResponse
 
 
 class DeviceStatus(BaseModel):

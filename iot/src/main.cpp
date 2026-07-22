@@ -6,6 +6,7 @@
  *   pio run -e water          → 2x suv bosim sensori (analog ADC)
  *   pio run -e gas            → 1x gaz bosim sensori (analog ADC)
  *   pio run -e soil           → Yerto'la namligi sensori (kapasitiv ADC, WiFi)
+ *   pio run -e sound          → Ovoz darajasi sensori (mikrofon ADC, WiFi)
  *   pio run -e ads1115_test   → ADS1115 + HY-131 4-20mA test
  *
  * Arxitektura:
@@ -14,6 +15,7 @@
  *   include/sensors/water.h       → 2x analog bosim (suv)
  *   include/sensors/gas.h         → 1x analog bosim (gaz)
  *   include/sensors/soil.h        → Yerto'la namligi (kapasitiv, WiFi)
+ *   include/sensors/sound.h       → Ovoz darajasi (mikrofon ADC, WiFi)
  */
 
 #define FW_VERSION "4.0.0"
@@ -146,8 +148,22 @@ void loop() {
   #include "sensors/gas.h"
 #elif defined(SENSOR_SOIL)
   #include "sensors/soil.h"
+#elif defined(SENSOR_SOUND)
+  #include "sensors/sound.h"
 #else
-  #error "Build flag kerak: -DSENSOR_ELECTRICITY | -DSENSOR_WATER | -DSENSOR_GAS | -DSENSOR_SOIL"
+  #error "Build flag kerak: -DSENSOR_ELECTRICITY | -DSENSOR_WATER | -DSENSOR_GAS | -DSENSOR_SOIL | -DSENSOR_SOUND"
+#endif
+
+// ─── Display moduli ──────────────────────────────────────────────────────────
+//  Yangi sensor qo'shganda: display/disp_SENSOR.h yarating va bu yerga qo'shing
+#if defined(HAVE_LCD) && defined(SENSOR_SOIL)
+  #include "display/disp_soil.h"
+#elif defined(HAVE_LCD) && defined(SENSOR_SOUND)
+  #include "display/disp_sound.h"
+#elif defined(HAVE_LCD) && defined(SENSOR_ELECTRICITY)
+  #include "display/disp_elec.h"
+#else
+  #include "display/disp_none.h"  // HAVE_LCD yo'q yoki sensor uchun display yo'q
 #endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -155,7 +171,9 @@ void loop() {
 // ═══════════════════════════════════════════════════════════════════════════════
 #define WIFI_AP_NAME     "Bakhromdev"
 #define WIFI_AP_PASS     "998935580311"
-#define READ_INTERVAL_MS  30000UL  // Har 30s da o'qish
+#ifndef READ_INTERVAL_MS
+  #define READ_INTERVAL_MS  30000UL  // Har 30s da o'qish (sensor env dan override qilish mumkin)
+#endif
 #define CMD_POLL_MS       60000UL  // Har 60s da command poll
 #define HEALTH_CHECK_MS   60000UL  // Har 60s da server check
 #define OFFLINE_BUF_SIZE  50       // Offline buffer hajmi
@@ -189,13 +207,6 @@ static void lora_check() {
     g_lora_ok = doc["online"] | false;
 }
 
-// LCD 2-qatorini yangilash: "W:OK S:OK L:OK"
-static void lcd_elec_status(bool wok, bool sok, bool lok) {
-    char s[17];
-    snprintf(s, sizeof(s), "W:%-2s S:%-2s L:%-2s",
-             wok ? "OK" : "--", sok ? "OK" : "--", lok ? "OK" : "--");
-    lcd_show_status(s);
-}
 #endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -261,6 +272,8 @@ void setup() {
     LOG_PRINTLN("║       Sensor: Gaz bosimi (1x ADC)        ║");
 #elif defined(SENSOR_SOIL)
     LOG_PRINTLN("║       Sensor: Tuproq namligi (ADC)       ║");
+#elif defined(SENSOR_SOUND)
+    LOG_PRINTLN("║       Sensor: Ovoz (mikrofon ADC)        ║");
 #endif
 
     LOG_PRINTLN("╚══════════════════════════════════════════╝");
@@ -331,7 +344,9 @@ void setup() {
     wifi_resume();
 
 #else
-    // Analog sensor (suv/gaz): WiFi o'chirish shart emas
+    // Analog sensor (suv/gaz/soil/sound): WiFi o'chirish shart emas
+    // disp_init() birinchi — LCD kalibrovka/boshlash vaqtida ko'rinishi uchun
+    disp_init();
     sensor_init();
 #endif
 
@@ -341,9 +356,9 @@ void setup() {
         buf_flush();
     }
 #ifdef SENSOR_ELECTRICITY
-    // LCD 2-qator: WiFi + server + LoRa holati
+    // Display 2-qator: WiFi + server + LoRa holati
     if (server_ok) lora_check();
-    lcd_elec_status(WiFi.status() == WL_CONNECTED, server_ok, g_lora_ok);
+    disp_show_status(WiFi.status() == WL_CONNECTED, server_ok, g_lora_ok);
 #endif
 
     // ── Serial monitor xulosa ───────────────────────────────────────────────
@@ -455,6 +470,8 @@ void loop() {
             return;
         }
 
+        disp_show_reading(d);
+
         // ── Serverga yuborish ────────────────────────────────────────────────
         String json = sensor_build_json(device_id, FW_VERSION, d);
 
@@ -478,9 +495,10 @@ void loop() {
         }
 
 #ifdef SENSOR_ELECTRICITY
-        // LCD 2-qatorni har o'qishdan keyin yangilash
         if (server_ok) lora_check();
-        lcd_elec_status(wifi_ok, server_ok, g_lora_ok);
+        disp_show_status(wifi_ok, server_ok, g_lora_ok);
+#else
+        disp_show_status(wifi_ok, server_ok, false);
 #endif
 
         last_health_ms = millis();

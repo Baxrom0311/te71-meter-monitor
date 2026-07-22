@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Droplets, Flame, Zap, Sprout } from 'lucide-react'
+import { Droplets, Flame, Zap, Sprout, Volume2 } from 'lucide-react'
 import { useHourlyStats } from '@/hooks/queries'
 import { useTheme } from '@/contexts/ThemeContext'
 import { chartTheme } from '@/lib/chartTheme'
 import { ChartSkeleton } from '@/components/Skeleton'
 import type { HourlyUtilityStat } from '@/types/api'
 
-type UtilityKey = 'electricity' | 'water' | 'gas' | 'soil'
+type UtilityKey = 'electricity' | 'water' | 'gas' | 'soil' | 'sound'
 
 interface UtilityChartsPanelProps {
   buildingId?: number
@@ -25,6 +25,7 @@ interface BucketRow {
   pressureTop: number
   flow: number
   humidity: number
+  level: number
 }
 
 const utilityCards = [
@@ -64,6 +65,15 @@ const utilityCards = [
     color: '#22C55E',
     fill: 'url(#soilFill)',
   },
+  {
+    key: 'sound' as const,
+    title: 'Ovoz darajasi',
+    subtitle: 'Ovoz intensivligi (oxirgi 24 soat)',
+    unit: '%',
+    icon: Volume2,
+    color: '#A855F7',
+    fill: 'url(#soundFill)',
+  },
 ]
 
 function formatLabel(ts: number) {
@@ -89,6 +99,7 @@ function createEmptyRows(): BucketRow[] {
       pressureTop: 0,
       flow: 0,
       humidity: 0,
+      level: 0,
     }
   })
 }
@@ -110,6 +121,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
         pressureTop: 0,
         flow: 0,
         humidity: 0,
+        level: 0,
       }
 
       current.power += row.avg_power_w ?? 0
@@ -118,6 +130,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
       current.pressureTop += (row.avg_pressure_top_bar ?? 0) * samples
       current.flow += row.avg_flow_rate ?? 0
       current.humidity += (row.avg_humidity ?? 0) * samples
+      current.level += (row.avg_level ?? 0) * samples
       current.pressureSamples += samples
       buckets.set(row.bucket_ts, current)
     })
@@ -132,6 +145,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
       pressureTop: row.pressureSamples ? Number((row.pressureTop / row.pressureSamples).toFixed(3)) : 0,
       flow: Number(row.flow.toFixed(3)),
       humidity: row.pressureSamples ? Number((row.humidity / row.pressureSamples).toFixed(1)) : 0,
+      level: row.pressureSamples ? Number((row.level / row.pressureSamples).toFixed(1)) : 0,
     }))
 }
 
@@ -148,6 +162,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
       water: aggregateRows(stats, 'water'),
       gas: aggregateRows(stats, 'gas'),
       soil: aggregateRows(stats, 'soil'),
+      sound: aggregateRows(stats, 'sound'),
     }
   }, [data])
 
@@ -158,7 +173,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
           <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{title}</h2>
           <p className="text-sm text-gray-500 dark:text-gray-450">{subtitle}</p>
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
@@ -174,7 +189,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
         <h2 className="text-xl font-bold text-gray-950 dark:text-gray-100">{title}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-450">{subtitle}</p>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {utilityCards.map((card) => {
           const Icon = card.icon
           const rows = chartRows[card.key]
@@ -197,7 +212,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
 
               <div className="relative">
               {card.key === 'electricity' ? (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={displayRows}>
                     <defs>
                       <linearGradient id="electricityFill" x1="0" y1="0" x2="0" y2="1">
@@ -213,7 +228,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
                   </AreaChart>
                 </ResponsiveContainer>
               ) : card.key === 'soil' ? (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={displayRows}>
                     <defs>
                       <linearGradient id="soilFill" x1="0" y1="0" x2="0" y2="1">
@@ -228,8 +243,24 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
                     <Area type="monotone" dataKey="humidity" name="Namlik (%)" stroke="#22C55E" strokeWidth={2.5} dot={false} fill={card.fill} />
                   </AreaChart>
                 </ResponsiveContainer>
+              ) : card.key === 'sound' ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={displayRows}>
+                    <defs>
+                      <linearGradient id="soundFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#A855F7" stopOpacity={0.32} />
+                        <stop offset="95%" stopColor="#A855F7" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 8" stroke={chart.grid} vertical={false} />
+                    <XAxis dataKey="label" stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis stroke={chart.axis} tickLine={false} axisLine={false} fontSize={11} width={42} domain={[0, 100]} unit="%" />
+                    <Tooltip contentStyle={chart.tooltip} labelStyle={{ color: chart.label, fontWeight: 800 }} cursor={chart.cursor} />
+                    <Area type="monotone" dataKey="level" name="Ovoz darajasi (%)" stroke="#A855F7" strokeWidth={2.5} dot={false} fill={card.fill} />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={displayRows}>
                     <defs>
                       <linearGradient id={card.key === 'water' ? 'waterFill' : 'gasFill'} x1="0" y1="0" x2="0" y2="1">

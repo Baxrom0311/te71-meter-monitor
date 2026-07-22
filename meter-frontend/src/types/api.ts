@@ -233,6 +233,9 @@ export interface HourlyUtilityStat {
   max_volume_m3: number | null
   leak_count: number | null
   avg_humidity: number | null
+  avg_level: number | null
+  min_level: number | null
+  max_level: number | null
   created_at: number | null
   updated_at: number | null
 }

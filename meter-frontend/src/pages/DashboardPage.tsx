@@ -1,475 +1,346 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { AlertCircle, Zap, Home, Bell, TrendingUp, PlusCircle, X, Droplets, Flame, Sprout } from 'lucide-react'
+import {
+  AlertCircle, Zap, Home, Bell, TrendingUp,
+  Droplets, Flame, Sprout, Volume2, Activity,
+  ArrowRight, Wifi, WifiOff, Clock,
+} from 'lucide-react'
+import clsx from 'clsx'
 import { RootLayout } from '@/components/layout/RootLayout'
-import { KPICard } from '@/components/KPICard'
-import { useSummary, useDevices, useAlerts, useBuildings } from '@/hooks/queries'
+import { useSummary, useDevices, useAlerts } from '@/hooks/queries'
 import { translations } from '@/i18n/translations'
-import { Device } from '@/types/api'
-import apiClient from '@/lib/api'
-import { EmptyBlock } from '@/components/StateBlock'
-import { notifySuccess } from '@/lib/toast'
 import { KPISkeletonGrid, TableSkeleton } from '@/components/Skeleton'
 import { UtilityChartsPanel } from '@/components/UtilityChartsPanel'
 
 const utilityOverview = [
-  { key: 'electricity', label: 'Elektr', icon: Zap, accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-  { key: 'water', label: 'Suv', icon: Droplets, accent: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
-  { key: 'gas', label: 'Gaz', icon: Flame, accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-  { key: 'soil', label: "Yerto'la", icon: Sprout, accent: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+  { key: 'electricity', label: 'Elektr',    icon: Zap,     accent: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', ring: 'ring-yellow-500/30' },
+  { key: 'water',       label: 'Suv',       icon: Droplets, accent: 'text-cyan-500',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20',   ring: 'ring-cyan-500/30'   },
+  { key: 'gas',         label: 'Gaz',       icon: Flame,   accent: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20', ring: 'ring-orange-500/30' },
+  { key: 'soil',        label: "Yerto'la",  icon: Sprout,  accent: 'text-green-500',  bg: 'bg-green-500/10',  border: 'border-green-500/20',  ring: 'ring-green-500/30'  },
+  { key: 'sound',       label: 'Ovoz',      icon: Volume2, accent: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20', ring: 'ring-purple-500/30' },
 ] as const
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { data: summary, isLoading: summaryLoading } = useSummary()
   const { data: devices, isLoading: devicesLoading } = useDevices()
-  const { data: buildings } = useBuildings()
   const { data: alerts } = useAlerts(false, 5)
-  const [deviceToAssign, setDeviceToAssign] = useState<Device | null>(null)
-  const [assignName, setAssignName] = useState('')
-  const [assignBuildingId, setAssignBuildingId] = useState<number | ''>('')
-
-  const assignMutation = useMutation({
-    mutationFn: async ({ deviceId, name, buildingId }: { deviceId: string; name: string; buildingId: number }) => {
-      await apiClient.put(`/api/devices/${deviceId}`, { name, building_id: buildingId })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
-      queryClient.invalidateQueries({ queryKey: ['summary'] })
-      notifySuccess('Qurilma biriktirildi')
-      setDeviceToAssign(null)
-    },
-  })
-
-  const updatedDevices = useMemo(() => {
-    if (!devices) return []
-    return devices
-  }, [devices])
-
-  const unassignedDevices = useMemo(
-    () => updatedDevices.filter((d) => d.building_id === null),
-    [updatedDevices]
-  )
 
   const assignedDevices = useMemo(
-    () => updatedDevices.filter((d) => d.building_id !== null).slice(0, 10),
-    [updatedDevices]
+    () => (devices ?? []).filter((d) => d.building_id !== null).slice(0, 10),
+    [devices],
   )
 
   const utilityStats = useMemo(() => {
-    return utilityOverview.map((utility) => {
-      const rows = updatedDevices.filter((device) => device.utility_type === utility.key)
-      return {
-        ...utility,
-        total: rows.length,
-        online: rows.filter((device) => device.online).length,
-        offline: rows.filter((device) => !device.online).length,
-      }
+    return utilityOverview.map((u) => {
+      const rows = (devices ?? []).filter((d) => d.utility_type === u.key)
+      return { ...u, total: rows.length, online: rows.filter((d) => d.online).length, offline: rows.filter((d) => !d.online).length }
     })
-  }, [updatedDevices])
+  }, [devices])
 
   const onlinePercent = summary?.devices_total
     ? Math.round(((summary.devices_online || 0) / summary.devices_total) * 100)
     : 0
 
+  const criticalAlerts = (alerts ?? []).filter(a => a.severity === 'critical').length
+
   return (
     <RootLayout>
-      <div className="space-y-8">
-        <section className="relative overflow-hidden rounded-2xl border border-blue-500/15 bg-gradient-to-br from-blue-600/12 via-emerald-500/8 to-transparent p-5 sm:p-6 shadow-2xl shadow-blue-500/5">
-          <div className="absolute inset-0 pointer-events-none bg-dashboard-circuit opacity-50" />
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+      <div className="space-y-6">
+
+        {/* ── Hero ── */}
+        <section className="relative overflow-hidden rounded-2xl border border-blue-500/15 bg-gradient-to-br from-blue-600/12 via-indigo-500/6 to-emerald-500/8 p-6 sm:p-8 shadow-xl shadow-blue-500/5">
+          <div className="absolute inset-0 pointer-events-none bg-dashboard-circuit opacity-40" />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 mb-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-4">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 Live utility command center
               </div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-950 dark:text-gray-100">{translations.dashboard.title}</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-2 font-medium">
-                {new Date().toLocaleDateString('uz-UZ', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-950 dark:text-gray-100 tracking-tight">
+                {translations.dashboard.title}
+              </h1>
+              <p className="text-gray-500 dark:text-gray-400 mt-2 font-medium text-sm">
+                {new Date().toLocaleDateString('uz-UZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-full lg:min-w-[420px]">
-              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
-                <p className="text-[10px] uppercase font-bold text-gray-500">Online</p>
+
+            <div className="grid grid-cols-3 gap-3 min-w-full lg:min-w-[380px]">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-4 text-center">
+                <Wifi className="w-4 h-4 text-emerald-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{onlinePercent}%</p>
+                <p className="text-[10px] uppercase font-bold text-gray-500 mt-0.5">Online</p>
               </div>
-              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
-                <p className="text-[10px] uppercase font-bold text-gray-500">Alerts</p>
+              <div className="rounded-xl border border-red-500/20 bg-red-500/8 p-4 text-center">
+                <Bell className="w-4 h-4 text-red-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-extrabold text-red-600 dark:text-red-400">{summary?.alerts_active || 0}</p>
+                <p className="text-[10px] uppercase font-bold text-gray-500 mt-0.5">Alerts</p>
               </div>
-              <div className="rounded-xl border border-gray-300/60 dark:border-gray-800/70 bg-white/45 dark:bg-gray-950/30 p-3">
-                <p className="text-[10px] uppercase font-bold text-gray-500">Reads/h</p>
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/8 p-4 text-center">
+                <Activity className="w-4 h-4 text-blue-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400">{summary?.reads_last_hour || 0}</p>
+                <p className="text-[10px] uppercase font-bold text-gray-500 mt-0.5">Reads/h</p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Unassigned Devices Banner */}
-        {unassignedDevices.length > 0 && (
-          <div className="glass-card rounded-xl p-5 border border-yellow-500/30 bg-yellow-550/5 dark:bg-yellow-500/5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />
-                <h2 className="text-base font-semibold text-yellow-600 dark:text-yellow-300">
-                  Yangi qurilmalar — binoga biriktirilmagan ({unassignedDevices.length})
-                </h2>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {unassignedDevices.map((device) => (
-                <div
-                  key={device.id}
-                  className="flex items-center justify-between bg-white/50 dark:bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-300 dark:border-gray-700/50"
-                >
-                  <div className="flex items-center gap-3 text-sm min-w-0">
-                    <span
-                      className={`shrink-0 w-2 h-2 rounded-full ${device.online ? 'bg-green-500' : 'bg-gray-450'}`}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-gray-950 dark:text-gray-100 font-bold truncate">{device.id}</p>
-                      <p className="text-gray-600 dark:text-gray-400 text-xs">
-                        {device.meter_serial ? `Serial: ${device.meter_serial}` : device.meter_type || 'Noma\'lum tur'}
-                        {device.ip ? ` · IP: ${device.ip}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setDeviceToAssign(device)
-                      setAssignName(device.meter_serial || device.id)
-                      setAssignBuildingId('')
-                    }}
-                    className="shrink-0 ml-4 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
-                  >
-                    Binoga biriktirish
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Assign Device Modal */}
-        {deviceToAssign && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl border border-gray-700">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-gray-100">Qurilmani binoga biriktirish</h3>
-                <button
-                  onClick={() => setDeviceToAssign(null)}
-                  className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-gray-100 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="mb-4 p-3 rounded-lg bg-gray-100/60 dark:bg-gray-800/50 text-sm text-gray-700 dark:text-gray-400 space-y-1">
-                <p><span className="text-gray-950 dark:text-gray-300 font-semibold">ID:</span> {deviceToAssign.id}</p>
-                {deviceToAssign.meter_serial && (
-                  <p><span className="text-gray-950 dark:text-gray-300 font-semibold">Serial:</span> {deviceToAssign.meter_serial}</p>
-                )}
-                <p><span className="text-gray-950 dark:text-gray-300 font-semibold">Tur:</span> {deviceToAssign.meter_type || deviceToAssign.utility_type}</p>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">Qurilma nomi</label>
-                  <input
-                    type="text"
-                    value={assignName}
-                    onChange={(e) => setAssignName(e.target.value)}
-                    placeholder="Masalan: 3-qavat, 12-xona"
-                    className="w-full px-3 py-2.5 rounded-lg glass-input text-sm focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-750 dark:text-gray-300 mb-1.5">Bino</label>
-                  <select
-                    value={assignBuildingId}
-                    onChange={(e) => setAssignBuildingId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2.5 rounded-lg glass-input text-sm focus:outline-none"
-                  >
-                    <option value="" className="text-gray-900 dark:text-gray-150">— Binoni tanlang —</option>
-                    {buildings?.map((b) => (
-                      <option key={b.id} value={b.id} className="text-gray-900 dark:text-gray-150">{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {assignMutation.isError && (
-                <p className="mt-3 text-xs text-red-400">Xato yuz berdi. Qaytadan urinib ko'ring.</p>
-              )}
-
-              <div className="mt-5 flex gap-3">
-                <button
-                  onClick={() => setDeviceToAssign(null)}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium transition"
-                >
-                  Bekor
-                </button>
-                <button
-                  onClick={() => {
-                    if (!assignBuildingId || !assignName.trim()) return
-                    assignMutation.mutate({
-                      deviceId: deviceToAssign.id,
-                      name: assignName.trim(),
-                      buildingId: assignBuildingId as number,
-                    })
-                  }}
-                  disabled={!assignBuildingId || !assignName.trim() || assignMutation.isPending}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
-                >
-                  {assignMutation.isPending && (
-                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
-                  )}
-                  Saqlash
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* KPI Cards */}
+        {/* ── KPI Cards ── */}
         {summaryLoading ? (
           <KPISkeletonGrid />
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <KPICard
-              title={translations.kpi.totalDevices}
-              value={summary?.devices_total || 0}
-              icon={<Zap className="w-5 h-5" />}
-              subtitle={`${summary?.devices_online || 0} ${translations.dashboard.online}`}
-              color="primary"
-            />
-            <KPICard
-              title={translations.kpi.totalBuildings}
-              value={summary?.buildings || 0}
-              icon={<Home className="w-5 h-5" />}
-              color="green"
-            />
-            <KPICard
-              title={translations.kpi.activeAlerts}
-              value={summary?.alerts_active || 0}
-              icon={<Bell className="w-5 h-5" />}
-              subtitle={`${0} ${translations.alerts.critical}`}
-              color={summary?.alerts_active && summary.alerts_active > 0 ? 'red' : 'green'}
-            />
-            <KPICard
-              title={translations.kpi.readingsToday}
-              value={summary?.reads_last_hour || 0}
-              icon={<TrendingUp className="w-5 h-5" />}
-              color="yellow"
-            />
-          </div>
-        )}
-
-        {!devicesLoading && updatedDevices.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {utilityStats.map((utility) => {
-              const Icon = utility.icon
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                title: translations.kpi.totalDevices,
+                value: summary?.devices_total || 0,
+                sub: `${summary?.devices_online || 0} online`,
+                icon: Zap,
+                iconBg: 'bg-blue-500/10 border-blue-500/20',
+                iconColor: 'text-blue-500',
+                valueColor: 'text-gray-950 dark:text-gray-100',
+                subColor: 'text-blue-500',
+              },
+              {
+                title: translations.kpi.totalBuildings,
+                value: summary?.buildings || 0,
+                sub: "Ro'yxatdagi binolar",
+                icon: Home,
+                iconBg: 'bg-emerald-500/10 border-emerald-500/20',
+                iconColor: 'text-emerald-500',
+                valueColor: 'text-gray-950 dark:text-gray-100',
+                subColor: 'text-emerald-500',
+              },
+              {
+                title: translations.kpi.activeAlerts,
+                value: summary?.alerts_active || 0,
+                sub: `${criticalAlerts} kritik`,
+                icon: AlertCircle,
+                iconBg: summary?.alerts_active ? 'bg-red-500/10 border-red-500/20' : 'bg-gray-500/10 border-gray-500/20',
+                iconColor: summary?.alerts_active ? 'text-red-500' : 'text-gray-400',
+                valueColor: summary?.alerts_active ? 'text-red-600 dark:text-red-400' : 'text-gray-950 dark:text-gray-100',
+                subColor: summary?.alerts_active ? 'text-red-400' : 'text-gray-400',
+              },
+              {
+                title: translations.kpi.readingsToday,
+                value: summary?.reads_last_hour || 0,
+                sub: 'So\'ngi soat',
+                icon: TrendingUp,
+                iconBg: 'bg-yellow-500/10 border-yellow-500/20',
+                iconColor: 'text-yellow-500',
+                valueColor: 'text-gray-950 dark:text-gray-100',
+                subColor: 'text-yellow-500',
+              },
+            ].map((card) => {
+              const Icon = card.icon
               return (
-                <button
-                  key={utility.key}
-                  onClick={() => navigate(`/devices?utility=${utility.key}`)}
-                  className="glass-card rounded-xl p-4 text-left border hover:border-blue-500/35 hover:-translate-y-0.5 transition"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-gray-950 dark:text-gray-100">{utility.label} qurilmalari</p>
-                      <p className="text-2xl font-extrabold text-gray-950 dark:text-gray-100 mt-1">{utility.total}</p>
-                    </div>
-                    <div className={`p-2.5 rounded-lg border ${utility.bg} ${utility.border}`}>
-                      <Icon className={`w-5 h-5 ${utility.accent}`} />
+                <div key={card.title} className="glass-card rounded-xl p-5 shadow flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{card.title}</p>
+                    <div className={clsx('p-2 rounded-lg border', card.iconBg)}>
+                      <Icon className={clsx('w-4 h-4', card.iconColor)} />
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-green-500/10 px-2 py-1.5 text-green-600 dark:text-green-400 font-bold">
-                      {utility.online} online
-                    </div>
-                    <div className="rounded-lg bg-red-500/10 px-2 py-1.5 text-red-600 dark:text-red-400 font-bold">
-                      {utility.offline} offline
-                    </div>
-                  </div>
-                </button>
+                  <p className={clsx('text-3xl font-extrabold tracking-tight', card.valueColor)}>{card.value}</p>
+                  <p className={clsx('text-xs font-semibold', card.subColor)}>{card.sub}</p>
+                </div>
               )
             })}
           </div>
         )}
 
+        {/* ── Utility Stats ── */}
+        {!devicesLoading && (devices ?? []).length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-gray-950 dark:text-gray-100">Kommunal qurilmalar</h2>
+              <button
+                onClick={() => navigate('/devices')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-blue-500 hover:text-blue-400 transition"
+              >
+                Barchasini ko'rish
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              {utilityStats.map((u) => {
+                const Icon = u.icon
+                const pct = u.total ? Math.round((u.online / u.total) * 100) : 0
+                return (
+                  <button
+                    key={u.key}
+                    onClick={() => navigate(`/devices?utility=${u.key}`)}
+                    className={clsx(
+                      'glass-card rounded-xl p-4 text-left border hover:ring-2 hover:-translate-y-0.5 transition-all',
+                      u.border, u.ring,
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={clsx('p-2 rounded-lg border', u.bg, u.border)}>
+                        <Icon className={clsx('w-4 h-4', u.accent)} />
+                      </div>
+                      <span className={clsx('text-xs font-bold', u.accent)}>{pct}%</span>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{u.label}</p>
+                    <p className="text-2xl font-extrabold text-gray-950 dark:text-gray-100 mt-1">{u.total}</p>
+                    <div className="mt-2.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={clsx('h-full rounded-full transition-all', u.online ? u.accent.replace('text-', 'bg-') : 'bg-transparent')}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
+                      <span className="flex items-center gap-1 text-emerald-500"><Wifi className="w-3 h-3" />{u.online}</span>
+                      <span className="flex items-center gap-1 text-red-400"><WifiOff className="w-3 h-3" />{u.offline}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Charts ── */}
         <UtilityChartsPanel
           title="Kommunal monitoring grafiklari"
-          subtitle="Hamma binolar yig‘indisi: elektr jami quvvat, suv/gaz flow yig‘indisi va bosim o‘rtachasi"
+          subtitle="Barcha binolar bo'yicha elektr, suv, gaz, namlik va ovoz — oxirgi 24 soat"
         />
 
-        {/* Devices Table & Alerts Sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Devices Table */}
-          <div className="lg:col-span-2">
-            <div className="glass-card rounded-xl p-6 shadow">
-              <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100 mb-6">{translations.devices.title}</h2>
+        {/* ── Devices + Alerts ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
-              {devicesLoading ? (
-                <TableSkeleton rows={5} />
-              ) : assignedDevices && assignedDevices.length > 0 ? (
-                <>
-                <div className="hidden sm:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
-                        <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-semibold">
-                          {translations.devices.status}
-                        </th>
-                        <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-semibold">
-                          {translations.devices.id}
-                        </th>
-                        <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-semibold">
-                          {translations.devices.type}
-                        </th>
-                        <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-semibold">
-                          {translations.devices.ip}
-                        </th>
-                        <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-400 font-semibold">
-                          {translations.devices.lastSeen}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignedDevices.map((device) => (
+          {/* Devices table */}
+          <div className="lg:col-span-3 glass-card rounded-xl shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-300 dark:border-gray-800 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-950 dark:text-gray-100">{translations.devices.title}</h2>
+              <button
+                onClick={() => navigate('/devices')}
+                className="flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition"
+              >
+                Hammasi <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {devicesLoading ? (
+              <div className="p-5"><TableSkeleton rows={5} /></div>
+            ) : assignedDevices.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-300 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/30">
+                      <th className="text-left px-5 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wide w-10"></th>
+                      <th className="text-left px-5 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wide">Qurilma</th>
+                      <th className="text-left px-5 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wide">Tur</th>
+                      <th className="text-left px-5 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wide">IP</th>
+                      <th className="text-left px-5 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wide">Ko'rilgan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assignedDevices.map((device) => {
+                      const utTab = utilityOverview.find(u => u.key === device.utility_type)
+                      return (
                         <tr
                           key={device.id}
                           onClick={() => navigate(`/devices/${device.id}`)}
-                          className="border-b border-gray-300 dark:border-gray-750 hover:bg-gray-100/30 dark:hover:bg-gray-800/50 transition cursor-pointer"
+                          className="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-100/30 dark:hover:bg-gray-800/40 transition cursor-pointer"
                         >
-                          <td className="px-4 py-3">
-                            <span
-                              className={`inline-block w-2.5 h-2.5 rounded-full ${
-                                device.online ? 'bg-green-500' : 'bg-red-500'
-                              }`}
-                            />
+                          <td className="px-5 py-3.5">
+                            <span className={clsx('inline-block w-2.5 h-2.5 rounded-full', device.online ? 'bg-emerald-400 shadow shadow-emerald-400/50' : 'bg-red-400')} />
                           </td>
-                          <td className="px-4 py-3 text-gray-950 dark:text-gray-100 font-bold">{device.id}</td>
-                          <td className="px-4 py-3 text-gray-700 dark:text-gray-350">
-                            {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                          <td className="px-5 py-3.5">
+                            <p className="font-bold text-gray-950 dark:text-gray-100 truncate max-w-[140px]">{device.name ?? device.id}</p>
+                            {device.name && <p className="text-[11px] text-gray-400 font-mono truncate">{device.id}</p>}
                           </td>
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{device.ip || '—'}</td>
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                            {device.last_seen
-                              ? formatDistanceToNow(new Date(device.last_seen * 1000), {
-                                  addSuffix: false,
-                                })
-                              : '—'}
+                          <td className="px-5 py-3.5">
+                            <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border', utTab?.bg, utTab?.border, utTab?.accent)}>
+                              {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400 font-mono text-xs">{device.ip || '—'}</td>
+                          <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400 text-xs">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 shrink-0" />
+                              {device.last_seen ? formatDistanceToNow(new Date(device.last_seen * 1000), { addSuffix: false }) : '—'}
+                            </span>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="sm:hidden mobile-card-list">
-                  {assignedDevices.map((device) => (
-                    <button
-                      key={device.id}
-                      onClick={() => navigate(`/devices/${device.id}`)}
-                      className="mobile-data-card text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-950 dark:text-gray-100 truncate">{device.name ?? device.id}</p>
-                          <p className="text-xs text-gray-500 font-mono truncate">{device.id}</p>
-                        </div>
-                        <span className={`shrink-0 mt-1 h-2.5 w-2.5 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
-                      </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">{translations.devices.type}</span>
-                        <span className="mobile-data-value">
-                          {translations.deviceTypes[device.utility_type as keyof typeof translations.deviceTypes] || device.utility_type}
-                        </span>
-                      </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">{translations.devices.ip}</span>
-                        <span className="mobile-data-value font-mono">{device.ip || '—'}</span>
-                      </div>
-                      <div className="mobile-data-row">
-                        <span className="mobile-data-label">{translations.devices.lastSeen}</span>
-                        <span className="mobile-data-value">
-                          {device.last_seen
-                            ? formatDistanceToNow(new Date(device.last_seen * 1000), { addSuffix: false })
-                            : '—'}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                </>
-              ) : (
-                <EmptyBlock
-                  title={translations.common.noData}
-                  message={
-                    unassignedDevices.length > 0
-                      ? 'Binoga biriktirilgan qurilmalar yo‘q — yuqoridagi qurilmalarni biriktiring'
-                      : 'Hozircha qurilmalar mavjud emas.'
-                  }
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Alerts Sidebar */}
-          <div className="glass-card rounded-xl p-6 shadow">
-            <h2 className="text-xl font-semibold text-gray-950 dark:text-gray-100 mb-6 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-blue-500" />
-              {translations.dashboard.activeAlerts}
-            </h2>
-
-            {alerts && alerts.length > 0 ? (
-              <div className="space-y-3">
-                {alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`p-3 rounded-lg border ${
-                      alert.severity === 'critical'
-                        ? 'bg-red-500/10 border-red-500/20'
-                        : alert.severity === 'warning'
-                          ? 'bg-yellow-500/10 border-yellow-500/20'
-                          : 'bg-blue-500/10 border-blue-500/20'
-                    }`}
-                  >
-                    <p
-                      className={`text-xs font-bold mb-1 ${
-                        alert.severity === 'critical'
-                          ? 'text-red-550 dark:text-red-400'
-                          : alert.severity === 'warning'
-                            ? 'text-yellow-600 dark:text-yellow-400'
-                            : 'text-blue-600 dark:text-blue-400'
-                      }`}
-                    >
-                      {alert.kind}
-                    </p>
-                    <p className="text-sm text-gray-800 dark:text-gray-300 font-medium">{alert.message}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-450 mt-2 font-mono">
-                      {formatDistanceToNow(new Date(alert.ts * 1000), {
-                        addSuffix: true,
-                      })}
-                    </p>
-                  </div>
-                ))}
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <div className="flex justify-center py-8 text-gray-500 dark:text-gray-400 text-sm italic">
-                {translations.common.noData}
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                <Home className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p>Binoga biriktirilgan qurilmalar yo'q</p>
+                <button onClick={() => navigate('/devices')} className="mt-3 text-xs text-blue-500 hover:text-blue-400 font-semibold transition">
+                  Qurilmalar sahifasiga o'tish →
+                </button>
               </div>
             )}
           </div>
+
+          {/* Alerts sidebar */}
+          <div className="lg:col-span-2 glass-card rounded-xl shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-300 dark:border-gray-800 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-950 dark:text-gray-100 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                {translations.dashboard.activeAlerts}
+              </h2>
+              <button
+                onClick={() => navigate('/alerts')}
+                className="flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition"
+              >
+                Hammasi <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2.5 max-h-[480px] overflow-y-auto">
+              {alerts && alerts.length > 0 ? (
+                alerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className={clsx(
+                      'rounded-xl border p-3.5 transition',
+                      alert.severity === 'critical'
+                        ? 'bg-red-500/8 border-red-500/20'
+                        : alert.severity === 'warning'
+                          ? 'bg-yellow-500/8 border-yellow-500/20'
+                          : 'bg-blue-500/8 border-blue-500/20',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className={clsx(
+                        'text-[11px] font-extrabold uppercase tracking-wide',
+                        alert.severity === 'critical' ? 'text-red-500' : alert.severity === 'warning' ? 'text-yellow-500' : 'text-blue-500',
+                      )}>
+                        {alert.kind}
+                      </span>
+                      <span className={clsx(
+                        'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
+                        alert.severity === 'critical' ? 'bg-red-500/15 text-red-500' : alert.severity === 'warning' ? 'bg-yellow-500/15 text-yellow-500' : 'bg-blue-500/15 text-blue-500',
+                      )}>
+                        {alert.severity}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-snug">{alert.message}</p>
+                    <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {formatDistanceToNow(new Date(alert.ts * 1000), { addSuffix: true })}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                  <Bell className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">{translations.common.noData}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
       </div>
     </RootLayout>
   )

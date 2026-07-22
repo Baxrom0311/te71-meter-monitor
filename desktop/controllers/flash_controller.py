@@ -21,6 +21,8 @@ class FlashWorker(QThread):
         self.pio_path = None
         self.project_root = None
         self.firmware_env = "electricity"
+        self.sensor_name = ""
+        self.sensor_opts: dict = {}
         self.upload_port = ""
         self.server_url = ""
         self.device_token = ""
@@ -57,12 +59,13 @@ class FlashWorker(QThread):
 
         # Build flags (server, token, wifi)
         build_flags = FlashService.make_build_flags(
-            self.firmware_env,
+            self.sensor_name or self.firmware_env,
             self.server_url,
             self.device_token,
             self.wifi_ssid,
             self.wifi_pass,
             self.test_mode,
+            sensor_opts=self.sensor_opts,
         )
         self.log_line.emit("Build flags:", "#94a3b8")
         for f in build_flags.splitlines():
@@ -233,10 +236,14 @@ class FlashController(QObject):
         ssid: str,
         wifi_pass: str,
         test_mode: bool = False,
+        sensor: str = "",
+        sensor_opts: dict | None = None,
     ):
         if self._flash_worker.isRunning():
             return
         self._flash_worker.firmware_env = env
+        self._flash_worker.sensor_name = sensor or env
+        self._flash_worker.sensor_opts = sensor_opts or {}
         self._flash_worker.upload_port = port
         self._flash_worker.build_only = build_only
         self._flash_worker.server_url = server

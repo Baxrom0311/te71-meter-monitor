@@ -15,8 +15,8 @@ export const translations = {
 
   // Login
   login: {
-    title: 'SmartBino',
-    subtitle: 'Kommunal monitoring tizimi',
+    title: 'Xush kelibsiz',
+    subtitle: 'Hisobingizga kiring',
     username: 'Foydalanuvchi nomi',
     password: 'Parol',
     signIn: 'Kirish',
@@ -88,6 +88,7 @@ export const translations = {
     water: 'Suv',
     gas: 'Gaz',
     soil: "Yerto'la namligi",
+    sound: 'Ovoz',
   },
 
   // Alerts
