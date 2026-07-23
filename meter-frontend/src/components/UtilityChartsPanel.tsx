@@ -149,7 +149,7 @@ function aggregateRows(rows: HourlyUtilityStat[], utilityType: UtilityKey): Buck
     }))
 }
 
-export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = "Elektr, suv, gaz va yerto'la namligi — oxirgi 24 soat" }: UtilityChartsPanelProps) {
+export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', subtitle = "Elektr, suv, gaz, namlik va ovoz — oxirgi 24 soat" }: UtilityChartsPanelProps) {
   const { isDark } = useTheme()
   const chart = chartTheme(isDark)
   const { data, isLoading, isError } = useHourlyStats(24, buildingId)
@@ -174,6 +174,7 @@ export function UtilityChartsPanel({ buildingId, title = 'Kommunal grafiklar', s
           <p className="text-sm text-gray-500 dark:text-gray-450">{subtitle}</p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />
           <ChartSkeleton titleWidth="w-36" />

@@ -95,8 +95,7 @@ static void sensor_init() {
     g_last_read_pulses = g_gas_pulse_count;
     g_last_read_time_ms = millis();
 
-    analogRead(PIN_PRESSURE_GAS);  // isitib olish
-    delay(100);
+    analogRead(PIN_PRESSURE_GAS);
     LOG_PRINTLN("Gaz bosim va impuls sensorlari tayyor");
     LOG_PRINTF("  Pin: GPIO%d | Impuls: GPIO%d | Max: %.1f bar\n", PIN_PRESSURE_GAS, PIN_GAS_PULSE, SENSOR_MAX_BAR);
 }
@@ -162,6 +161,7 @@ static bool sensor_read(SensorData& d) {
     return true;
 }
 
+#ifndef LORA_NODE
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
     const char* s_type = "gas_pulse_flow";
     return app_register(device_id, "gas", s_type, "", fw_version, 0);
@@ -186,6 +186,7 @@ static String sensor_build_json(const char* device_id,
     serializeJson(doc, out);
     return out;
 }
+#endif  // !LORA_NODE
 
 void sensor_set_volume(float val) {
     Preferences prefs;

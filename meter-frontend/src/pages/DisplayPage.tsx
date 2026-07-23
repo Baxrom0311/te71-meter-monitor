@@ -221,7 +221,7 @@ export default function DisplayPage() {
       </header>
 
       {/* Charts — 4 teng qism */}
-      <div className="flex-1 grid grid-rows-4 gap-0 overflow-hidden">
+      <div className="flex-1 grid grid-rows-5 gap-0 overflow-hidden">
         {charts.map((cfg) => {
           const Icon = cfg.icon
           const hasData = cfg.points.some((p) => p.value != null)

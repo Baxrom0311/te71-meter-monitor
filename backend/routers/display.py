@@ -43,11 +43,13 @@ async def display_kpi():
     water = await analytics_service.list_hourly_stats(utility_type="water",       hours=2, limit=10)
     gas   = await analytics_service.list_hourly_stats(utility_type="gas",         hours=2, limit=10)
     soil  = await analytics_service.list_hourly_stats(utility_type="soil",        hours=2, limit=10)
+    sound = await analytics_service.list_hourly_stats(utility_type="sound",       hours=2, limit=10)
 
     e = _latest(elec["stats"])
     w = _latest(water["stats"])
     g = _latest(gas["stats"])
     s = _latest(soil["stats"])
+    sn = _latest(sound["stats"])
 
     return {
         "electricity": {
@@ -65,5 +67,8 @@ async def display_kpi():
         },
         "soil": {
             "humidity": s.get("avg_humidity"),
+        },
+        "sound": {
+            "level": sn.get("avg_level"),
         },
     }

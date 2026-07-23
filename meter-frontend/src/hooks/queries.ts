@@ -15,6 +15,7 @@ import {
   BuildingsEnergySummaryResponse,
   HourlyUtilityStatsResponse,
   ProvisioningTokenListResponse,
+  BackupListResponse,
 } from '@/types/api'
 
 const REALTIME_FALLBACK_INTERVAL_MS = 5 * 60 * 1000
@@ -54,6 +55,7 @@ export const qk = {
   firmware:     () => ['firmware'] as const,
   otaBatches:   () => ['ota-batches'] as const,
   provisioningTokens: () => ['provisioning-tokens'] as const,
+  backups:      () => ['backups'] as const,
   auditLogs:    (limit: number, page: number, filters?: object) => ['audit-logs', limit, page, filters] as const,
 }
 
@@ -382,3 +384,15 @@ export function useProvisioningTokens(activeOnly = true): UseQueryResult<Provisi
     refetchInterval: OPERATIONS_FALLBACK_INTERVAL_MS,
   })
 }
+
+export function useBackups(): UseQueryResult<BackupListResponse> {
+  return useQuery({
+    queryKey: qk.backups(),
+    queryFn: async () => {
+      const { data } = await apiClient.get('/api/backups')
+      return data as BackupListResponse
+    },
+    refetchInterval: OPERATIONS_FALLBACK_INTERVAL_MS,
+  })
+}
+

@@ -104,7 +104,6 @@ static void sensor_init() {
     // Birinchi ADC o'qish
     analogRead(PIN_PRESSURE_BOTTOM);
     analogRead(PIN_PRESSURE_TOP);
-    delay(100);
     LOG_PRINTLN("Suv bosim va impuls sensorlari tayyor");
     LOG_PRINTF("  Pastki: GPIO%d | Yuqori: GPIO%d | Impuls: GPIO%d\n",
                   PIN_PRESSURE_BOTTOM, PIN_PRESSURE_TOP, PIN_WATER_PULSE);
@@ -173,6 +172,7 @@ static bool sensor_read(SensorData& d) {
     return true;
 }
 
+#ifndef LORA_NODE
 static bool sensor_do_register(const char* device_id, const char* fw_version) {
     const char* s_type = "water_pulse_flow";
     return app_register(device_id, "water", s_type, "", fw_version, 0);
@@ -198,6 +198,7 @@ static String sensor_build_json(const char* device_id,
     serializeJson(doc, out);
     return out;
 }
+#endif  // !LORA_NODE
 
 void sensor_set_volume(float val) {
     Preferences prefs;

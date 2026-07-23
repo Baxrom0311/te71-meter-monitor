@@ -30,10 +30,35 @@
 #define LORA_TX_PWR   2       // TX power dBm (test: 2dBm, antena yoq; production: 17)
 #define LORA_SYNC     0xAB    // Sync word (tarmoq ajratuvchi, 0x12 = LoRaWAN)
 
+// ─── Mesh TTL (flags baytida, bit 4-6) ────────────────────────────────────────
+// flags: bit0=test_mode, bit4-6=TTL (0-7 hop)
+// TTL=0: relay qilinmaydi, TTL>0: har bir relay TTL ni kamaytiradi
+#define LORA_TTL_MASK    0x70   // bit 4,5,6
+#define LORA_TTL_SHIFT   4
+#ifndef LORA_TTL_DEFAULT
+  #define LORA_TTL_DEFAULT 3    // 3 hop (ko'p bino uchun yetarli)
+#endif
+#define LORA_RELAY_LISTEN_MS  2000  // TX dan keyin relay tinglash vaqti (ms)
+
+static inline uint8_t lora_flags_make(bool test_mode) {
+    return (test_mode ? 0x01 : 0x00) | (LORA_TTL_DEFAULT << LORA_TTL_SHIFT);
+}
+static inline uint8_t lora_ttl_get(uint8_t flags) {
+    return (flags & LORA_TTL_MASK) >> LORA_TTL_SHIFT;
+}
+static inline uint8_t lora_ttl_dec(uint8_t flags) {
+    uint8_t ttl = lora_ttl_get(flags);
+    if (ttl == 0) return flags;
+    return (flags & ~LORA_TTL_MASK) | ((ttl - 1) << LORA_TTL_SHIFT);
+}
+
 // ─── Paket turlari ────────────────────────────────────────────────────────────
 #define PKT_UPLINK        0x01   // Node → Gateway: elektr hisoblagich
 #define PKT_DOWNLINK      0x02   // Gateway → Node: relay buyruq
 #define PKT_UPLINK_SOIL   0x03   // Node → Gateway: tuproq namligi
+#define PKT_UPLINK_SOUND  0x04   // Node → Gateway: ovoz darajasi
+#define PKT_UPLINK_WATER  0x05   // Node → Gateway: suv bosim/oqim
+#define PKT_UPLINK_GAS    0x06   // Node → Gateway: gaz bosim/oqim
 
 // ─── Soil uplink: Node → Gateway ──────────────────────────────────────────────
 // Jami: 12 bayt
@@ -45,9 +70,46 @@ struct __attribute__((packed)) LoRaSoilUplink {
     uint16_t crc;
 };
 
+// ─── Sound uplink: Node → Gateway ────────────────────────────────────────────
+// Jami: 12 bayt (soil bilan bir xil hajm — pkt_type orqali farqlanadi)
+struct __attribute__((packed)) LoRaSoundUplink {
+    uint8_t  pkt_type;   // PKT_UPLINK_SOUND = 0x04
+    uint8_t  mac[6];
+    uint8_t  flags;      // bit0=test_mode
+    int16_t  level;      // Ovoz: %×100  (5530 = 55.30%)
+    uint16_t crc;
+};
+
+// ─── Water uplink: Node → Gateway ───────────────────────────────────────────
+// Jami: 22 bayt
+struct __attribute__((packed)) LoRaWaterUplink {
+    uint8_t  pkt_type;   // PKT_UPLINK_WATER = 0x05
+    uint8_t  mac[6];
+    uint8_t  flags;      // bit0=test_mode
+    int16_t  p_bottom;   // Pastki bosim: bar×1000  (3200 = 3.200 bar)
+    int16_t  p_top;      // Yuqori bosim: bar×1000
+    int16_t  flow;       // Oqim: L/min×100  (1250 = 12.50 L/min)
+    int32_t  volume;     // Hajm: litr  (m3×1000) (48250 = 48.250 m3)
+    int16_t  temp;       // Harorat: °C×100  (1850 = 18.50°C)
+    uint16_t crc;
+};
+
+// ─── Gas uplink: Node → Gateway ─────────────────────────────────────────────
+// Jami: 20 bayt
+struct __attribute__((packed)) LoRaGasUplink {
+    uint8_t  pkt_type;   // PKT_UPLINK_GAS = 0x06
+    uint8_t  mac[6];
+    uint8_t  flags;      // bit0=test_mode
+    int16_t  pressure;   // Bosim: bar×1000  (20 = 0.020 bar)
+    int16_t  flow;       // Oqim: m3/h×1000  (1500 = 1.500 m3/h)
+    int32_t  volume;     // Hajm: litr  (m3×1000) (1250450 = 1250.450 m3)
+    int16_t  temp;       // Harorat: °C×100
+    uint16_t crc;
+};
+
 // ─── Electricity uplink: Node → Gateway ──────────────────────────────────────
 // Qiymatlar fixed-point (float overhead va NaN muammosi yo'q)
-// Jami: 46 bayt — LoRa uchun ideal hajm
+// Jami: 47 bayt
 struct __attribute__((packed)) LoRaUplink {
     uint8_t  pkt_type;          // PKT_UPLINK = 0x01
     uint8_t  mac[6];            // Node WiFi MAC adresi (qurilma ID)
@@ -62,7 +124,7 @@ struct __attribute__((packed)) LoRaUplink {
     int32_t  power_w;           // Aktiv quvvat: W
     int16_t  freq_chz;          // Chastota: Hz×100  (5000 = 50.00 Hz)
     int32_t  energy_wh;         // Energiya: Wh  (319830 = 319.830 kWh)
-    int8_t   pf_pct;            // Power factor: ×100  (98 = 0.98)
+    int16_t  pf_pct;            // Power factor: ×100  (98 = 0.98) — int16 chunki int8 overflow bo'ladi
     uint16_t crc;               // CRC16-CCITT (oxirgi 2 bayt, MAC dan hisob)
 };
 
@@ -98,6 +160,9 @@ static bool lora_crc_ok(const uint8_t* buf, size_t total) {
     uint16_t calc = lora_crc16(buf, total - 2);
     return rx == calc;
 }
+
+// ─── LoRa kripto (CRC funksiyalaridan keyin) ─────────────────────────────────
+#include "lora_crypto.h"
 
 // ─── LoRa init (ham node, ham gateway) ───────────────────────────────────────
 static bool lora_init() {

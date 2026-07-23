@@ -1,263 +1,248 @@
-"""FlashController — ESP32 firmware build/upload va serial monitor workerlarni boshqarish.
+"""FlashController — ESP32 to'g'ridan-to'g'ri esptool va PlatformIO thread boshqaruvchisi.
 
-QThread'lar yordamida jarayonlarni fonda bajaradi va natijalarni pyqtSignal orqali uzatadi.
+QThread'lar yordamida esptool flashing, chip diagnostikasi va serial monitor jarayonlarini bajaradi.
 """
 import os
+import re
+import time
 import subprocess
 import serial
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from services.flash_service import FlashService
+from services.esptool_service import EsptoolService
 
 
-class FlashWorker(QThread):
-    """PlatformIO orqali build va flash/upload ishlarini bajaruvchi background thread."""
+class DirectFlashWorker(QThread):
+    """esptool.py orqali to'g'ridan-to me .bin faylni ESP32 ga uruvchi background thread."""
     log_line = pyqtSignal(str, str)   # (text, color)
     progress = pyqtSignal(int)        # 0-100
     finished = pyqtSignal(bool, str)  # (success, message)
 
-    def __init__(self):
+    def __init__(self, port: str, bin_path: str, offset: str = "0x10000", baud: int = 460800, chip: str = "auto", erase_first: bool = False):
         super().__init__()
-        self.pio_path = None
-        self.project_root = None
-        self.firmware_env = "electricity"
-        self.sensor_name = ""
-        self.sensor_opts: dict = {}
-        self.upload_port = ""
-        self.server_url = ""
-        self.device_token = ""
-        self.wifi_ssid = ""
-        self.wifi_pass = ""
-        self.test_mode = False
-        self.build_only = False
+        self.port = port
+        self.bin_path = bin_path
+        self.offset = offset
+        self.baud = baud
+        self.chip = chip
+        self.erase_first = erase_first
         self._cancelled = False
+        self._proc = None
 
     def cancel(self):
         self._cancelled = True
+        if self._proc:
+            try:
+                self._proc.terminate()
+            except Exception:
+                pass
 
     def run(self):
         self._cancelled = False
-        try:
-            self._do_flash()
-        except Exception as e:
-            self.finished.emit(False, str(e))
-
-    def _do_flash(self):
-        if not self.pio_path:
-            self.finished.emit(False, "PlatformIO topilmadi! Iltimos, PlatformIO ni o'rnating.")
-            return
-        if not self.project_root:
-            self.finished.emit(False, "platformio.ini topilmadi! Loyiha papkasini tekshiring.")
+        if not os.path.exists(self.bin_path):
+            self.finished.emit(False, f"Firmware binary topilmadi: {self.bin_path}")
             return
 
-        self.log_line.emit(f"PlatformIO: {self.pio_path}", "#94a3b8")
-        self.log_line.emit(f"Loyiha: {self.project_root}", "#94a3b8")
-        self.log_line.emit(f"Firmware: {self.firmware_env}", "#94a3b8")
-        if not self.build_only:
-            self.log_line.emit(f"Port: {self.upload_port}", "#94a3b8")
-        self.log_line.emit("─" * 60, "#334155")
-
-        # Build flags (server, token, wifi)
-        build_flags = FlashService.make_build_flags(
-            self.sensor_name or self.firmware_env,
-            self.server_url,
-            self.device_token,
-            self.wifi_ssid,
-            self.wifi_pass,
-            self.test_mode,
-            sensor_opts=self.sensor_opts,
-        )
-        self.log_line.emit("Build flags:", "#94a3b8")
-        for f in build_flags.splitlines():
-            if f.strip():
-                display_flag = f.strip()
-                if "DEFAULT_DEVICE_TOKEN" in display_flag:
-                    display_flag = "'-DDEFAULT_DEVICE_TOKEN=\"***\"'"
-                self.log_line.emit(f"  {display_flag}", "#64748b")
-        self.log_line.emit("─" * 60, "#334155")
-
-        # PlatformIO command
-        cmd = [self.pio_path, "run", "-e", self.firmware_env]
-        if not self.build_only:
-            cmd += ["-t", "upload", "--upload-port", self.upload_port]
-        cmd += ["-O", f"build_flags={build_flags}"]
-
-        self.log_line.emit(f"▶  {' '.join(cmd)}", "#60a5fa")
+        self.log_line.emit(f"🚀 ESP32 Flashing boshlandi...", "#38bdf8")
+        self.log_line.emit(f"Port: {self.port} | Baud Rate: {self.baud}", "#94a3b8")
+        self.log_line.emit(f"Firmware: {os.path.basename(self.bin_path)} | Offset: {self.offset}", "#94a3b8")
         self.progress.emit(5)
 
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        env["PLATFORMIO_DISABLE_PROGRESSBAR"] = "true"
-
         try:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=self.project_root,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=env,
+            self._proc = EsptoolService.flash_binary(
+                port=self.port,
+                bin_path=self.bin_path,
+                offset=self.offset,
+                baud=self.baud,
+                chip=self.chip,
+                erase_first=self.erase_first
             )
-        except FileNotFoundError:
-            self.finished.emit(False, f"PlatformIO ishga tushmadi: {self.pio_path}")
-            return
 
-        pct = 5
-        for line in proc.stdout:
-            if self._cancelled:
-                proc.kill()
-                self.finished.emit(False, "Bekor qilindi.")
-                return
-            line = line.rstrip()
-            if not line:
-                continue
-            color = self._line_color(line)
-            self.log_line.emit(line, color)
+            # Regex for progress matching e.g. Writing at 0x00010000... (25 %)
+            prog_re = re.compile(r"\((\d+)\s*%\)")
 
-            # Progress estimation
-            if "Compiling" in line or "Building" in line:
-                pct = min(pct + 2, 60)
-                self.progress.emit(pct)
-            elif "Linking" in line:
-                self.progress.emit(65)
-            elif "Uploading" in line or "Writing" in line or "Flashing" in line:
-                pct = max(pct, 70)
-                pct = min(pct + 3, 95)
-                self.progress.emit(pct)
-            elif "Hard resetting" in line or "Leaving" in line:
-                self.progress.emit(98)
+            for line in iter(self._proc.stdout.readline, ''):
+                if self._cancelled:
+                    break
+                line_str = line.strip()
+                if not line_str:
+                    continue
 
-        proc.wait()
-        if proc.returncode == 0:
-            self.progress.emit(100)
-            action = "Build" if self.build_only else "Flash"
-            self.finished.emit(True, f"{action} muvaffaqiyatli tugadi!")
-        else:
-            self.finished.emit(False, f"PlatformIO xatosi (kod {proc.returncode})")
+                color = "#cbd5e1"
+                if "error" in line_str.lower() or "fatal" in line_str.lower():
+                    color = "#f87171"
+                elif "writing at" in line_str.lower():
+                    color = "#38bdf8"
+                    match = prog_re.search(line_str)
+                    if match:
+                        pct = int(match.group(1))
+                        self.progress.emit(pct)
+                elif "hash of data verified" in line_str.lower() or "leaving..." in line_str.lower():
+                    color = "#4ade80"
+                    self.progress.emit(100)
 
-    def _line_color(self, line: str) -> str:
-        l = line.lower()
-        if any(w in l for w in ("error", "failed", "xato", "critical")):
-            return "#f87171"
-        if any(w in l for w in ("warning", "warn")):
-            return "#fbbf24"
-        if any(w in l for w in ("success", "done", "finished", "muvaffaqiyat", "uploading", "writing")):
-            return "#86efac"
-        if line.startswith("▶") or "compiling" in l or "linking" in l or "building" in l:
-            return "#60a5fa"
-        return "#cbd5e1"
+                self.log_line.emit(line_str, color)
+
+            self._proc.stdout.close()
+            return_code = self._proc.wait()
+
+            if return_code == 0 and not self._cancelled:
+                self.progress.emit(100)
+                self.finished.emit(True, "Firmware ESP32 ga muvaffaqiyatli yuklandi! ✨")
+            else:
+                self.finished.emit(False, f"Flashing xatosi bilan tugadi (exit code {return_code}). Port va boot mode ni tekshiring.")
+
+        except Exception as e:
+            self.finished.emit(False, f"Xatolik yuz berdi: {str(e)}")
+
+
+class ChipInfoWorker(QThread):
+    """ESP32 chip ma'lumotlarini (MAC, Chip turi, Flash) oluvchi background thread."""
+    info_signal = pyqtSignal(dict)
+
+    def __init__(self, port: str, baud: int = 115200):
+        super().__init__()
+        self.port = port
+        self.baud = baud
+
+    def run(self):
+        info = EsptoolService.get_chip_info(self.port, self.baud)
+        self.info_signal.emit(info)
 
 
 class SerialMonitorWorker(QThread):
-    """Serial port loglarini o'qish uchun background thread."""
-    line_received = pyqtSignal(str)
-    error = pyqtSignal(str)
+    """Kiritilgan serial portdan ma'lumotlarni o'quvchi va yuboruvchi background thread."""
+    data_received = pyqtSignal(str, str)  # (port, line_text)
+    status_changed = pyqtSignal(str, bool, str)  # (port, is_connected, status_msg)
 
-    def __init__(self):
+    def __init__(self, port: str, baud: int = 115200):
         super().__init__()
-        self._port = ""
-        self._baud = 115200
+        self.port = port
+        self.baud = baud
         self._running = False
         self._ser = None
 
-    def start_monitor(self, port: str, baud: int = 115200):
-        self._port = port
-        self._baud = baud
-        self._running = True
-        self.start()
-
-    def stop_monitor(self):
+    def stop(self):
         self._running = False
-        if self._ser:
+        if self._ser and self._ser.is_open:
             try:
                 self._ser.close()
             except Exception:
                 pass
 
-    def run(self):
-        try:
-            self._ser = serial.Serial(self._port, self._baud, timeout=1)
-        except serial.SerialException as e:
-            self.error.emit(str(e))
-            return
-        while self._running:
+    def send_command(self, cmd: str):
+        """Serial portga buyruq yuboradi."""
+        if self._ser and self._ser.is_open:
             try:
-                line = self._ser.readline()
-                if line:
-                    self.line_received.emit(line.decode("utf-8", errors="replace").rstrip())
-            except serial.SerialException as e:
-                if self._running:
-                    self.error.emit(str(e))
-                break
+                self._ser.write((cmd + "\r\n").encode("utf-8"))
+            except Exception as e:
+                self.data_received.emit(self.port, f"[ERR] Send failed: {str(e)}")
+
+    def run(self):
+        self._running = True
         try:
-            self._ser.close()
-        except Exception:
-            pass
+            self._ser = serial.Serial(self.port, self.baud, timeout=0.1)
+            self.status_changed.emit(self.port, True, f"Ulandi: {self.port} @ {self.baud}")
+
+            buf = ""
+            while self._running:
+                if self._ser.in_waiting > 0:
+                    raw = self._ser.read(self._ser.in_waiting).decode("utf-8", errors="replace")
+                    buf += raw
+                    while "\n" in buf:
+                        line, buf = buf.split("\n", 1)
+                        line_clean = line.strip("\r")
+                        if line_clean:
+                            self.data_received.emit(self.port, line_clean)
+                else:
+                    time.sleep(0.05)
+
+        except Exception as e:
+            self.status_changed.emit(self.port, False, f"Port xatosi: {str(e)}")
+        finally:
+            if self._ser and self._ser.is_open:
+                try:
+                    self._ser.close()
+                except Exception:
+                    pass
+            self.status_changed.emit(self.port, False, f"Ulanish uzildi: {self.port}")
 
 
 class FlashController(QObject):
-    """UI va FlashService o'rtasidagi controller."""
-    log_line = pyqtSignal(str, str)
-    progress = pyqtSignal(int)
-    flash_finished = pyqtSignal(bool, str)
-    monitor_line = pyqtSignal(str)
-    monitor_error = pyqtSignal(str)
+    """Barcha flashing va serial workerlarni koordinatsiya qiluvchi controller."""
 
     def __init__(self):
         super().__init__()
         self.pio_path = FlashService.find_pio()
         self.project_root = FlashService.find_project_root()
+        self._active_flash_worker = None
+        self._active_chip_worker = None
+        self._serial_workers = {}
 
-        self._flash_worker = FlashWorker()
-        self._flash_worker.pio_path = self.pio_path
-        self._flash_worker.project_root = self.project_root
-        self._flash_worker.log_line.connect(self.log_line.emit)
-        self._flash_worker.progress.connect(self.progress.emit)
-        self._flash_worker.finished.connect(self.flash_finished.emit)
-
-        self._monitor_worker = SerialMonitorWorker()
-        self._monitor_worker.line_received.connect(self.monitor_line.emit)
-        self._monitor_worker.error.connect(self.monitor_error.emit)
-
-    def is_flashing(self) -> bool:
-        return self._flash_worker.isRunning()
-
-    def is_monitoring(self) -> bool:
-        return self._monitor_worker.isRunning()
-
-    def start_flash(
+    def start_direct_flash(
         self,
-        env: str,
         port: str,
-        build_only: bool,
-        server: str,
-        token: str,
-        ssid: str,
-        wifi_pass: str,
-        test_mode: bool = False,
-        sensor: str = "",
-        sensor_opts: dict | None = None,
+        bin_path: str,
+        offset: str = "0x10000",
+        baud: int = 460800,
+        chip: str = "auto",
+        erase_first: bool = False,
+        log_cb=None,
+        prog_cb=None,
+        finish_cb=None
     ):
-        if self._flash_worker.isRunning():
-            return
-        self._flash_worker.firmware_env = env
-        self._flash_worker.sensor_name = sensor or env
-        self._flash_worker.sensor_opts = sensor_opts or {}
-        self._flash_worker.upload_port = port
-        self._flash_worker.build_only = build_only
-        self._flash_worker.server_url = server
-        self._flash_worker.device_token = token
-        self._flash_worker.wifi_ssid = ssid
-        self._flash_worker.wifi_pass = wifi_pass
-        self._flash_worker.test_mode = test_mode
-        self._flash_worker.start()
+        """To'g'ridan-to'g'ri .bin flashing jarayonini boshlaydi."""
+        if self._active_flash_worker and self._active_flash_worker.isRunning():
+            return False, "Flashing jarayoni allaqachon bajarilmoqda!"
+
+        # Close serial monitor if open on this port
+        self.stop_serial_monitor(port)
+
+        worker = DirectFlashWorker(
+            port=port,
+            bin_path=bin_path,
+            offset=offset,
+            baud=baud,
+            chip=chip,
+            erase_first=erase_first
+        )
+
+        if log_cb:
+            worker.log_line.connect(log_cb)
+        if prog_cb:
+            worker.progress.connect(prog_cb)
+        if finish_cb:
+            worker.finished.connect(finish_cb)
+
+        self._active_flash_worker = worker
+        worker.start()
+        return True, "Flashing boshlandi"
 
     def cancel_flash(self):
-        self._flash_worker.cancel()
+        if self._active_flash_worker and self._active_flash_worker.isRunning():
+            self._active_flash_worker.cancel()
 
-    def start_monitor(self, port: str, baud: int = 115200):
-        self._monitor_worker.start_monitor(port, baud)
+    def fetch_chip_info(self, port: str, baud: int, callback):
+        """Chip diagnostikasini background workerda ishga tushiradi."""
+        worker = ChipInfoWorker(port, baud)
+        worker.info_signal.connect(callback)
+        self._active_chip_worker = worker
+        worker.start()
 
-    def stop_monitor(self):
-        self._monitor_worker.stop_monitor()
+    def start_serial_monitor(self, port: str, baud: int, data_cb, status_cb) -> SerialMonitorWorker:
+        """Serial monitorni ishga tushiradi."""
+        self.stop_serial_monitor(port)
+
+        worker = SerialMonitorWorker(port, baud)
+        worker.data_received.connect(data_cb)
+        worker.status_changed.connect(status_cb)
+        self._serial_workers[port] = worker
+        worker.start()
+        return worker
+
+    def stop_serial_monitor(self, port: str):
+        if port in self._serial_workers:
+            w = self._serial_workers.pop(port)
+            w.stop()
+            w.wait(500)

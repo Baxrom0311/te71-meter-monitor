@@ -127,6 +127,7 @@ export interface Reading {
   leak_detected: boolean | null
   valve_open: boolean | null
   humidity: number | null
+  level?: number | null
   raw_payload: string | null
   created_at: number | null
 }
@@ -233,6 +234,8 @@ export interface HourlyUtilityStat {
   max_volume_m3: number | null
   leak_count: number | null
   avg_humidity: number | null
+  min_humidity: number | null
+  max_humidity: number | null
   avg_level: number | null
   min_level: number | null
   max_level: number | null
@@ -386,3 +389,17 @@ export interface ProvisioningTokenCreateResponse {
 export interface ProvisioningTokenListResponse {
   tokens: ProvisioningToken[]
 }
+
+// Database Backups
+export interface BackupItem {
+  filename: string
+  size: number
+  created_at: number
+  reason?: string
+}
+
+export interface BackupListResponse {
+  backups: BackupItem[]
+  total: number
+}
+

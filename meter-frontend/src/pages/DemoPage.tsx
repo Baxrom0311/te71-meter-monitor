@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Droplets, Flame, Zap } from 'lucide-react'
+import { Droplets, Flame, Zap, Sprout, Volume2 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,6 @@ function generateVoltage(): DataPoint[] {
     const isPeak = (h >= 7 && h <= 9) || (h >= 18 && h <= 22)
     const base = isPeak ? 211 : 221
     let value = base + noise(i) * 7
-    // Insert one warning-high and one warning-low to show zones
     if (i === 5) value = 244.5
     if (i === 14) value = 196.8
     if (i === 21) value = 252.1
@@ -72,6 +71,33 @@ function generateGas(): DataPoint[] {
     if (i === 18) value = 0.0085
     if (i === 22) value = 0.038
     return { label, value: +Math.max(0.001, Math.min(0.062, value)).toFixed(4) }
+  })
+}
+
+function generateSoil(): DataPoint[] {
+  const now = Date.now()
+  return Array.from({ length: 24 }, (_, i) => {
+    const ts = now - (23 - i) * 3_600_000
+    const label = new Date(ts).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+    let value = 48.5 + noise(i + 150) * 12.0
+    if (i === 6) value = 82.0
+    if (i === 15) value = 18.5
+    return { label, value: +Math.max(10.0, Math.min(95.0, value)).toFixed(1) }
+  })
+}
+
+function generateSound(): DataPoint[] {
+  const now = Date.now()
+  return Array.from({ length: 24 }, (_, i) => {
+    const ts = now - (23 - i) * 3_600_000
+    const h = new Date(ts).getHours()
+    const label = new Date(ts).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+    const isBusy = (h >= 8 && h <= 19)
+    const base = isBusy ? 48.0 : 28.0
+    let value = base + noise(i + 200) * 14.0
+    if (i === 10) value = 72.5
+    if (i === 17) value = 88.2
+    return { label, value: +Math.max(0.0, Math.min(100.0, value)).toFixed(1) }
   })
 }
 
@@ -162,6 +188,62 @@ const CHARTS = [
       { label: '> 0.050 bar', color: '#ef4444' },
     ],
   },
+  {
+    key: 'soil',
+    label: "Yerto'la namligi",
+    unit: '%',
+    icon: Sprout,
+    color: '#34D399',
+    glow: 'rgba(52,211,153,0.28)',
+    bg: 'from-emerald-950/70 to-slate-950',
+    border: 'border-emerald-500/25',
+    gradientId: 'grad_soil',
+    nominal: 45,
+    domain: [0, 100] as [number, number],
+    dangerLow: 15,
+    warnLow: 25,
+    warnHigh: 75,
+    dangerHigh: 85,
+    decimals: 1,
+    liveBase: 48.5,
+    liveAmp: 2.0,
+    getPoints: generateSoil,
+    legendRanges: [
+      { label: '< 15 %', color: '#ef4444' },
+      { label: '15 – 25 %', color: '#eab308' },
+      { label: '25 – 75 %', color: '#22c55e' },
+      { label: '75 – 85 %', color: '#eab308' },
+      { label: '> 85 %', color: '#ef4444' },
+    ],
+  },
+  {
+    key: 'sound',
+    label: 'Shovqin darajasi',
+    unit: '%',
+    icon: Volume2,
+    color: '#C084FC',
+    glow: 'rgba(192,132,252,0.28)',
+    bg: 'from-purple-950/70 to-slate-950',
+    border: 'border-purple-500/25',
+    gradientId: 'grad_sound',
+    nominal: 40,
+    domain: [0, 100] as [number, number],
+    dangerLow: 5,
+    warnLow: 10,
+    warnHigh: 70,
+    dangerHigh: 85,
+    decimals: 1,
+    liveBase: 43.2,
+    liveAmp: 3.5,
+    getPoints: generateSound,
+    legendRanges: [
+      { label: '< 5 %', color: '#ef4444' },
+      { label: '5 – 10 %', color: '#eab308' },
+      { label: '10 – 70 %', color: '#22c55e' },
+      { label: '70 – 85 %', color: '#eab308' },
+      { label: '> 85 %', color: '#ef4444' },
+    ],
+  },
 ]
 
 // ── Status helper ─────────────────────────────────────────────────────────────
@@ -203,10 +285,10 @@ function Clock() {
   }, [])
   return (
     <div className="text-right leading-none">
-      <div className="text-3xl font-mono font-black text-white tabular-nums tracking-tight">
+      <div className="text-2xl lg:text-3xl font-mono font-black text-white tabular-nums tracking-tight">
         {now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </div>
-      <div className="text-xs text-slate-400 mt-1">
+      <div className="text-[11px] text-slate-400 mt-1">
         {now.toLocaleDateString('uz-UZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       </div>
     </div>
@@ -241,28 +323,27 @@ export default function DemoPage() {
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-slate-950 text-white select-none">
       {/* ── Header ── */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur shrink-0">
+      <header className="flex items-center justify-between px-6 py-2.5 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur shrink-0">
         <div className="flex items-center gap-4">
-          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 shrink-0">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 shrink-0">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-extrabold tracking-tight text-white">
+              <span className="text-base font-extrabold tracking-tight text-white">
                 Turar-joy binosi №23
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 tracking-wider">
                 DEMO
               </span>
             </div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              Xorazm viloyati, Urganch shahri · Kommunal monitoring tizimi
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              Xorazm viloyati, Urganch shahri · Yagona 5-in-1 Kommunal Monitoring Ekran
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-          {/* Live indicator */}
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
@@ -275,228 +356,215 @@ export default function DemoPage() {
       </header>
 
       {/* ── Chart rows ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-y-auto min-h-0 divide-y divide-slate-800/40">
         {CHARTS.map((cfg, ci) => {
           const Icon = cfg.icon
           const pts = baseData.find((d) => d.key === cfg.key)?.points ?? []
           const liveVal = liveValues.find((v) => v.key === cfg.key)?.live ?? cfg.liveBase
 
-          // Replace last data point with animated live value
           const chartData: DataPoint[] = pts.map((p, i) =>
             i === pts.length - 1 ? { ...p, value: liveVal } : p,
           )
 
           const status = getStatus(liveVal, cfg)
           const gradId = cfg.gradientId
-          const isLast = ci === CHARTS.length - 1
 
           return (
             <div
               key={cfg.key}
-              className={`flex-1 flex min-h-0 bg-gradient-to-r ${cfg.bg} ${
-                isLast ? '' : 'border-b border-slate-800/50'
-              } relative overflow-hidden`}
+              className={`flex-1 flex min-h-[140px] bg-gradient-to-r ${cfg.bg} relative overflow-hidden`}
             >
               {/* Ambient glow */}
               <div
-                className="pointer-events-none absolute inset-0 opacity-15"
+                className="absolute inset-0 pointer-events-none opacity-20 transition-opacity duration-1000"
                 style={{
-                  background: `radial-gradient(ellipse 55% 80% at 8% 50%, ${cfg.glow}, transparent)`,
+                  background: `radial-gradient(ellipse at 80% 50%, ${cfg.glow}, transparent 70%)`,
                 }}
               />
 
-              {/* ── Left status panel ── */}
-              <div className="w-52 shrink-0 flex flex-col justify-center px-5 gap-3 relative z-10">
-                {/* Icon + label */}
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: cfg.glow, border: `1px solid ${cfg.color}35` }}
-                  >
-                    <Icon className="w-4.5 h-4.5" style={{ color: cfg.color }} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-extrabold text-white leading-tight">{cfg.label}</p>
-                    <p className="text-[10px] text-slate-500 leading-none mt-0.5">Oxirgi 24 soat</p>
-                  </div>
-                </div>
-
-                {/* Live value */}
+              {/* ── Left stats panel ── */}
+              <div className="w-64 lg:w-72 shrink-0 p-3.5 flex flex-col justify-between border-r border-slate-800/40 z-10 bg-slate-950/40 backdrop-blur-sm">
                 <div>
-                  <div
-                    className="text-4xl font-mono font-black tabular-nums leading-none transition-all duration-700"
-                    style={{ color: STATUS_COLORS[status] }}
-                  >
-                    {liveVal.toFixed(cfg.decimals)}
-                    <span className="text-lg font-bold ml-1 text-slate-400">{cfg.unit}</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    nominal: {cfg.nominal} {cfg.unit}
-                  </div>
-                </div>
-
-                {/* Status badge */}
-                <div
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black tracking-wider w-fit"
-                  style={{
-                    background: STATUS_BG[status],
-                    border: `1px solid ${STATUS_COLORS[status]}35`,
-                    color: STATUS_COLORS[status],
-                  }}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: STATUS_COLORS[status] }}
-                  />
-                  {STATUS_LABELS[status]}
-                </div>
-
-                {/* Threshold legend */}
-                <div className="space-y-0.5 mt-1">
-                  {cfg.legendRanges.map((r) => (
-                    <div key={r.label} className="flex items-center gap-1.5">
-                      <span
-                        className="w-2 h-2 rounded-sm shrink-0"
-                        style={{ background: r.color, opacity: 0.75 }}
-                      />
-                      <span className="text-[9px] text-slate-500 leading-none">{r.label}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${cfg.color}18`, color: cfg.color }}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-200 tracking-wide uppercase">
+                        {cfg.label}
+                      </span>
                     </div>
-                  ))}
+
+                    {/* Status badge */}
+                    <span
+                      className="text-[10px] font-black px-2 py-0.5 rounded-full tracking-wider shadow-sm transition-colors duration-500"
+                      style={{
+                        color: STATUS_COLORS[status],
+                        backgroundColor: STATUS_BG[status],
+                        border: `1px solid ${STATUS_COLORS[status]}40`,
+                      }}
+                    >
+                      {STATUS_LABELS[status]}
+                    </span>
+                  </div>
+
+                  {/* Main live value */}
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <span
+                      className="text-2xl lg:text-3xl font-mono font-black tracking-tight tabular-nums transition-all duration-700"
+                      style={{ color: cfg.color, textShadow: `0 0 16px ${cfg.glow}` }}
+                    >
+                      {liveVal.toFixed(cfg.decimals)}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">{cfg.unit}</span>
+                  </div>
+                </div>
+
+                {/* Legend / Range bar */}
+                <div className="space-y-1 mt-2">
+                  <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                    Me'yoriy zonalar:
+                  </div>
+                  <div className="flex gap-1">
+                    {cfg.legendRanges.map((r, ri) => (
+                      <div
+                        key={ri}
+                        className="flex-1 h-1.5 rounded-full transition-all duration-300"
+                        style={{ backgroundColor: r.color, opacity: 0.8 }}
+                        title={r.label}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-[9px] text-slate-400 font-mono">
+                    <span>{cfg.domain[0]} {cfg.unit}</span>
+                    <span>{cfg.domain[1]} {cfg.unit}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* ── Chart ── */}
-              <div className="flex-1 min-w-0 py-3 pr-5 relative z-10">
+              {/* ── Chart area ── */}
+              <div className="flex-1 min-w-0 p-2 z-10 relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 16, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={cfg.color} stopOpacity={0.32} />
-                        <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
+                        <stop offset="5%" stopColor={cfg.color} stopOpacity={0.35} />
+                        <stop offset="95%" stopColor={cfg.color} stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
 
-                    <CartesianGrid
-                      strokeDasharray="3 8"
-                      stroke="rgba(148,163,184,0.07)"
-                      vertical={false}
-                    />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
 
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: '#475569' }}
+                      stroke="#475569"
+                      tick={{ fill: '#64748b', fontSize: 10 }}
                       tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
+                      axisLine={{ stroke: '#334155' }}
                     />
                     <YAxis
                       domain={cfg.domain}
-                      tick={{ fontSize: 10, fill: '#475569' }}
+                      stroke="#475569"
+                      tick={{ fill: '#64748b', fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
-                      width={52}
-                      tickFormatter={(v: number) =>
-                        cfg.decimals >= 3 ? v.toFixed(3) : String(v)
-                      }
+                      width={45}
                     />
 
-                    <Tooltip
-                      contentStyle={{
-                        background: '#0f172a',
-                        border: `1px solid ${cfg.color}40`,
-                        borderRadius: 10,
-                        fontSize: 12,
-                        color: '#f1f5f9',
-                      }}
-                      labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}
-                      formatter={(v) => [`${Number(v ?? 0).toFixed(cfg.decimals)} ${cfg.unit}`, cfg.label]}
-                      cursor={{ stroke: cfg.color, strokeWidth: 1, strokeOpacity: 0.35 }}
-                    />
-
-                    {/* ── Reference zones: danger (red) ── */}
+                    {/* Zone background overlays */}
                     <ReferenceArea
                       y1={cfg.domain[0]}
                       y2={cfg.dangerLow}
-                      fill="rgba(239,68,68,0.13)"
-                      stroke="none"
+                      fill="#ef4444"
+                      fillOpacity={0.06}
                     />
-                    <ReferenceArea
-                      y1={cfg.dangerHigh}
-                      y2={cfg.domain[1]}
-                      fill="rgba(239,68,68,0.13)"
-                      stroke="none"
-                    />
-
-                    {/* ── Reference zones: warning (yellow) ── */}
                     <ReferenceArea
                       y1={cfg.dangerLow}
                       y2={cfg.warnLow}
-                      fill="rgba(234,179,8,0.10)"
-                      stroke="none"
+                      fill="#eab308"
+                      fillOpacity={0.05}
+                    />
+                    <ReferenceArea
+                      y1={cfg.warnLow}
+                      y2={cfg.warnHigh}
+                      fill="#22c55e"
+                      fillOpacity={0.03}
                     />
                     <ReferenceArea
                       y1={cfg.warnHigh}
                       y2={cfg.dangerHigh}
-                      fill="rgba(234,179,8,0.10)"
-                      stroke="none"
+                      fill="#eab308"
+                      fillOpacity={0.05}
+                    />
+                    <ReferenceArea
+                      y1={cfg.dangerHigh}
+                      y2={cfg.domain[1]}
+                      fill="#ef4444"
+                      fillOpacity={0.06}
                     />
 
-                    {/* ── Threshold lines ── */}
-                    <ReferenceLine
-                      y={cfg.dangerLow}
-                      stroke="#ef4444"
-                      strokeDasharray="4 4"
-                      strokeOpacity={0.55}
-                      strokeWidth={1.5}
-                    />
+                    {/* Reference threshold lines */}
                     <ReferenceLine
                       y={cfg.dangerHigh}
                       stroke="#ef4444"
-                      strokeDasharray="4 4"
-                      strokeOpacity={0.55}
-                      strokeWidth={1.5}
-                    />
-                    <ReferenceLine
-                      y={cfg.warnLow}
-                      stroke="#eab308"
-                      strokeDasharray="5 4"
-                      strokeOpacity={0.5}
-                      strokeWidth={1}
+                      strokeDasharray="2 2"
+                      strokeOpacity={0.6}
                     />
                     <ReferenceLine
                       y={cfg.warnHigh}
                       stroke="#eab308"
-                      strokeDasharray="5 4"
+                      strokeDasharray="2 2"
                       strokeOpacity={0.5}
-                      strokeWidth={1}
+                    />
+                    <ReferenceLine
+                      y={cfg.warnLow}
+                      stroke="#eab308"
+                      strokeDasharray="2 2"
+                      strokeOpacity={0.5}
+                    />
+                    <ReferenceLine
+                      y={cfg.dangerLow}
+                      stroke="#ef4444"
+                      strokeDasharray="2 2"
+                      strokeOpacity={0.6}
                     />
 
-                    {/* ── Nominal line ── */}
-                    <ReferenceLine
-                      y={cfg.nominal}
-                      stroke={cfg.color}
-                      strokeDasharray="6 4"
-                      strokeOpacity={0.35}
-                      strokeWidth={1.5}
-                      label={{
-                        value: `${cfg.nominal}${cfg.unit}`,
-                        fill: cfg.color,
-                        fontSize: 9,
-                        opacity: 0.5,
-                        position: 'insideTopRight',
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload as DataPoint
+                        const st = getStatus(d.value, cfg)
+                        return (
+                          <div className="bg-slate-900/95 border border-slate-700/80 rounded-lg p-2.5 shadow-xl backdrop-blur text-xs font-mono">
+                            <div className="text-slate-400 font-sans mb-1">{d.label}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm" style={{ color: cfg.color }}>
+                                {d.value.toFixed(cfg.decimals)} {cfg.unit}
+                              </span>
+                              <span
+                                className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                                style={{
+                                  color: STATUS_COLORS[st],
+                                  backgroundColor: STATUS_BG[st],
+                                }}
+                              >
+                                {STATUS_LABELS[st]}
+                              </span>
+                            </div>
+                          </div>
+                        )
                       }}
                     />
 
-                    {/* ── Data area ── */}
                     <Area
                       type="monotone"
                       dataKey="value"
                       stroke={cfg.color}
                       strokeWidth={2.5}
                       fill={`url(#${gradId})`}
-                      dot={false}
-                      activeDot={{ r: 4, fill: cfg.color, stroke: '#0f172a', strokeWidth: 2 }}
-                      connectNulls
                       isAnimationActive={false}
                     />
                   </AreaChart>
@@ -506,31 +574,6 @@ export default function DemoPage() {
           )
         })}
       </div>
-
-      {/* ── Footer ── */}
-      <footer className="px-6 py-1.5 border-t border-slate-800/50 flex items-center justify-between shrink-0">
-        <span className="text-[10px] text-slate-600">
-          SmartBino · Demo rejim · Haqiqiy ma'lumotlar emas
-        </span>
-        <div className="flex items-center gap-4">
-          {CHARTS.map((cfg) => {
-            const liveVal = liveValues.find((v) => v.key === cfg.key)?.live ?? cfg.liveBase
-            const status = getStatus(liveVal, cfg)
-            const Icon = cfg.icon
-            return (
-              <div key={cfg.key} className="flex items-center gap-1.5">
-                <Icon className="w-3 h-3" style={{ color: cfg.color, opacity: 0.7 }} />
-                <span
-                  className="text-[10px] font-bold"
-                  style={{ color: STATUS_COLORS[status] }}
-                >
-                  {STATUS_LABELS[status]}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </footer>
     </div>
   )
 }

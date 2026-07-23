@@ -47,7 +47,7 @@ static void sensor_init() {
     pinMode(PIN_SOIL_ADC, INPUT);
 
     // Isitish (warming-up) o'qishlari
-    for (int i = 0; i < 5; i++) { analogRead(PIN_SOIL_ADC); delay(10); }
+    for (int i = 0; i < 5; i++) { analogRead(PIN_SOIL_ADC); }
 
     LOG_PRINTF("Tuproq namligi sensori tayyor (GPIO%d)\n", PIN_SOIL_ADC);
     LOG_PRINTF("  Kalibrovka: quruq=%d, nam=%d\n", SOIL_ADC_DRY, SOIL_ADC_WET);

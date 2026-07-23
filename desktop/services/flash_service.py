@@ -1,6 +1,6 @@
 """Flash service — PlatformIO build va firmware fayllari bilan ishlash.
 
-UI yoki Qt haqida hech narsa bilmaydi.
+Cross-platform (macOS, Windows, Linux) qo'llab-quvvatlaydi.
 """
 import os
 import sys
@@ -14,15 +14,13 @@ class FlashService:
     def find_pio() -> str | None:
         """PlatformIO CLI yo'lini topadi."""
         candidates = ["pio", "platformio"]
-        # Windows: check common install paths
+        home = os.path.expanduser("~")
         if sys.platform == "win32":
-            home = os.path.expanduser("~")
             candidates += [
                 os.path.join(home, ".platformio", "penv", "Scripts", "pio.exe"),
                 r"C:\Users\%s\.platformio\penv\Scripts\pio.exe" % os.getenv("USERNAME", ""),
             ]
         else:
-            home = os.path.expanduser("~")
             candidates += [
                 os.path.join(home, ".platformio", "penv", "bin", "pio"),
                 "/usr/local/bin/pio",
@@ -36,7 +34,7 @@ class FlashService:
                 )
                 if result.returncode == 0:
                     return c
-            except (FileNotFoundError, subprocess.TimeoutExpired):
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
                 continue
         return None
 
@@ -47,11 +45,24 @@ class FlashService:
         for _ in range(6):
             if os.path.exists(os.path.join(cur, "platformio.ini")):
                 return cur
-            # Search parent directories
             parent = os.path.dirname(cur)
             if parent == cur:
                 break
             cur = parent
+
+        # Check relative to repo root
+        repo_iot = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "iot"))
+        if os.path.exists(os.path.join(repo_iot, "platformio.ini")):
+            return repo_iot
+
+        return None
+
+    @staticmethod
+    def find_compiled_bin(project_root: str, env_name: str) -> str | None:
+        """PlatformIO tomonidan yig'ilgan firmware.bin faylini topadi."""
+        bin_path = os.path.join(project_root, ".pio", "build", env_name, "firmware.bin")
+        if os.path.exists(bin_path):
+            return bin_path
         return None
 
     @staticmethod
@@ -66,7 +77,6 @@ class FlashService:
     ) -> str:
         """Barcha build flaglarini PlatformIO ini formatida yig'adi."""
         sensor_flag = f"-DSENSOR_{sensor.upper()}"
-        # Escape any single quotes inside values (edge case)
         server = server_url.replace("'", "\\'")
         token = device_token.replace("'", "\\'")
         ssid = wifi_ssid.replace("'", "\\'")
