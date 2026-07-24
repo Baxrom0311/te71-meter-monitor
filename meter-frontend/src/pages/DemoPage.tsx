@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Droplets, Flame, Zap, Sprout, Volume2 } from 'lucide-react'
+import { Zap, Sprout, Volume2 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,38 +39,6 @@ function generateVoltage(): DataPoint[] {
     if (i === 21) value = 252.1
     if (i === 3) value = 187.4
     return { label, value: +Math.max(183, Math.min(258, value)).toFixed(1) }
-  })
-}
-
-function generateWater(): DataPoint[] {
-  const now = Date.now()
-  return Array.from({ length: 24 }, (_, i) => {
-    const ts = now - (23 - i) * 3_600_000
-    const h = new Date(ts).getHours()
-    const label = new Date(ts).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
-    const isPeak = (h >= 6 && h <= 9) || (h >= 18 && h <= 21)
-    const base = isPeak ? 2.1 : 3.0
-    let value = base + noise(i + 50) * 0.45
-    if (i === 7) value = 1.3
-    if (i === 19) value = 1.2
-    if (i === 11) value = 4.8
-    return { label, value: +Math.max(0.4, Math.min(6.0, value)).toFixed(2) }
-  })
-}
-
-function generateGas(): DataPoint[] {
-  const now = Date.now()
-  return Array.from({ length: 24 }, (_, i) => {
-    const ts = now - (23 - i) * 3_600_000
-    const h = new Date(ts).getHours()
-    const label = new Date(ts).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
-    const isPeak = (h >= 6 && h <= 9) || (h >= 18 && h <= 21)
-    const base = isPeak ? 0.013 : 0.022
-    let value = base + noise(i + 100) * 0.005
-    if (i === 8) value = 0.0075
-    if (i === 18) value = 0.0085
-    if (i === 22) value = 0.038
-    return { label, value: +Math.max(0.001, Math.min(0.062, value)).toFixed(4) }
   })
 }
 
@@ -130,62 +98,6 @@ const CHARTS = [
       { label: '200 – 240 V', color: '#22c55e' },
       { label: '240 – 250 V', color: '#eab308' },
       { label: '> 250 V', color: '#ef4444' },
-    ],
-  },
-  {
-    key: 'water',
-    label: 'Suv bosimi',
-    unit: 'bar',
-    icon: Droplets,
-    color: '#22D3EE',
-    glow: 'rgba(34,211,238,0.28)',
-    bg: 'from-cyan-950/70 to-slate-950',
-    border: 'border-cyan-500/25',
-    gradientId: 'grad_water',
-    nominal: 2.8,
-    domain: [0.4, 6.2] as [number, number],
-    dangerLow: 1.0,
-    warnLow: 1.5,
-    warnHigh: 4.5,
-    dangerHigh: 5.5,
-    decimals: 2,
-    liveBase: 2.85,
-    liveAmp: 0.1,
-    getPoints: generateWater,
-    legendRanges: [
-      { label: '< 1.0 bar', color: '#ef4444' },
-      { label: '1.0 – 1.5 bar', color: '#eab308' },
-      { label: '1.5 – 4.5 bar', color: '#22c55e' },
-      { label: '4.5 – 5.5 bar', color: '#eab308' },
-      { label: '> 5.5 bar', color: '#ef4444' },
-    ],
-  },
-  {
-    key: 'gas',
-    label: 'Gaz bosimi',
-    unit: 'bar',
-    icon: Flame,
-    color: '#FB923C',
-    glow: 'rgba(251,146,60,0.28)',
-    bg: 'from-orange-950/70 to-slate-950',
-    border: 'border-orange-500/25',
-    gradientId: 'grad_gas',
-    nominal: 0.02,
-    domain: [0.001, 0.062] as [number, number],
-    dangerLow: 0.005,
-    warnLow: 0.010,
-    warnHigh: 0.035,
-    dangerHigh: 0.050,
-    decimals: 3,
-    liveBase: 0.021,
-    liveAmp: 0.002,
-    getPoints: generateGas,
-    legendRanges: [
-      { label: '< 0.005 bar', color: '#ef4444' },
-      { label: '0.005 – 0.010 bar', color: '#eab308' },
-      { label: '0.010 – 0.035 bar', color: '#22c55e' },
-      { label: '0.035 – 0.050 bar', color: '#eab308' },
-      { label: '> 0.050 bar', color: '#ef4444' },
     ],
   },
   {
